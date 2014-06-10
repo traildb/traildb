@@ -1,0 +1,70 @@
+
+#include <unistd.h>
+#include <sys/types.h>
+
+#include "breadcrumbs_encoder.h"
+
+static uint32_t lexicon_size(const Pvoid_t lexicon, uint64_t *size){
+    uint8_t token[MAX_FIELD_SIZE];
+    Word_t *ptr;
+    uint32_t count = 0;
+
+    token[0] = 0;
+    JSLF(ptr, lexicon, token);
+    while (ptr){
+        *size += strlen((char*)token);
+        ++count;
+        JSLN(ptr, lexicon, token);
+    }
+    return count;
+}
+
+void encode_lexicon(Pvoid_t lexicon, const char *path)
+{
+    uint8_t token[MAX_FIELD_SIZE];
+    uint64_t size = 0;
+    uint32_t count = lexicon_size(lexicon, &size);
+    uint64_t offset;
+    FILE *out;
+    Word_t *token_id;
+
+    size += (count + 2) * 4;
+
+    if (size > UINT32_MAX)
+        DIE("Lexicon %s would be huge! %llu bytes > 4GB\n",
+            path,
+            (long long unsigned int)size);
+
+    if (!(out = fopen(path, "w+")))
+        DIE("Could not create lexicon file: %s\n", path);
+
+    if (ftruncate(fileno(out), size))
+        DIE("Could not initialize lexicon file (%llu bytes): %s\n",
+            (long long unsigned int)size,
+            path);
+
+    SAFE_WRITE(&count, 4, path, out);
+
+    token[0] = 0;
+    offset = (count + 2) * 4;
+    JSLF(token_id, lexicon, token);
+    while (token_id){
+        uint32_t len = strlen((char*)token);
+
+        /* note: token IDs start 1, otherwise we would need to +1 */
+        fseek(out, *token_id * 4, SEEK_SET);
+        SAFE_WRITE(&offset, 4, path, out);
+
+        fseek(out, offset, SEEK_SET);
+        SAFE_WRITE(token, len, path, out);
+
+        offset += len;
+        JSLN(token_id, lexicon, token);
+    }
+    /* write the redundant last offset in the TOC, so we can determine
+       token length with toc[i + 1] - toc[i]. */
+    fseek(out, (count + 1) * 4, SEEK_SET);
+    SAFE_WRITE(&offset, 4, path, out);
+
+    fclose(out);
+}
