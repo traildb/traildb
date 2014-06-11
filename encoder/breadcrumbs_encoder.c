@@ -3,14 +3,21 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <stdarg.h>
 
 #include "breadcrumbs_encoder.h"
 
 #define MAX_NUM_FIELDS 255
 #define MAX_NUM_INPUTS 10000000
-#define TSTAMP_MAX (UINT32_MAX - 1)
 #define ARENA_INCREMENT 10000000
-#define INVALID_RATIO 0.01
+#define INVALID_RATIO 0.001
+#define MAX_PATH_SIZE 1024
+
+/* We want to filter out all corrupted and invalid timestamps
+   but we don't know the exact timerange we should be getting.
+   Hence, we assume a reasonable range. */
+#define TSTAMP_MIN 1325404800 /* 2012-01-01 */
+#define TSTAMP_MAX 1483257600 /* 2017-01-01 */
 
 struct arena{
     void *data;
@@ -25,7 +32,7 @@ static Word_t *lexicon_counters;
 
 static struct arena cookies = {.item_size = sizeof(struct cookie)};
 static struct arena loglines = {.item_size = sizeof(struct logline)};
-static struct arena fields = {.item_size = 4};
+static struct arena values = {.item_size = 4};
 
 static inline void *get_item(struct arena *a, uint32_t idx)
 {
@@ -68,7 +75,7 @@ static int parse_line(char *line, long num_fields)
 
     tstamp = strtoll(strsep(&line, " "), &tmp, 10);
 
-    if (tstamp < 0 || tstamp > TSTAMP_MAX)
+    if (tstamp < TSTAMP_MIN || tstamp > TSTAMP_MAX)
         return 1;
 
     JSLI(cookie_ptr, cookie_index, (uint8_t*)cookie_str);
@@ -79,12 +86,12 @@ static int parse_line(char *line, long num_fields)
     }
     cookie = (struct cookie*)get_item(&cookies, *cookie_ptr - 1);
     logline = (struct logline*)add_item(&loglines);
-    cookie->last = logline;
 
-    logline->fields_offset = fields.next;
-    logline->num_fields = 0;
+    logline->values_offset = values.next;
+    logline->num_values = 0;
     logline->timestamp = (uint32_t)tstamp;
     logline->prev = cookie->last;
+    cookie->last = logline;
 
     for (i = 0; line && i < num_fields - 2; i++){
         char *field = strsep(&line, " ");
@@ -106,9 +113,9 @@ static int parse_line(char *line, long num_fields)
         }
 
         if (cookie->previous_values[i] != value){
-            *((uint32_t*)add_item(&fields)) = value;
+            *((uint32_t*)add_item(&values)) = value;
             cookie->previous_values[i] = value;
-            ++logline->num_fields;
+            ++logline->num_values;
         }
     }
 
@@ -156,18 +163,28 @@ static void read_inputs(long num_fields, long num_inputs)
                 num_invalid);
 }
 
-static void encode_lexicons(int num_lexicons, const char *root)
+static const char *make_path(char *fmt, ...)
 {
-    char *path;
+    static char path[MAX_PATH_SIZE];
+
+    va_list aptr;
+
+    va_start(aptr, fmt);
+    if (vsnprintf(path, MAX_PATH_SIZE, fmt, aptr) >= MAX_PATH_SIZE)
+        DIE("Path too long\n");
+    va_end(aptr);
+
+    return path;
+}
+
+static void store_lexicons(int num_lexicons, const char *root)
+{
     int i;
-    for (i = 0; i < num_lexicons; i++){
-        asprintf(&path, "%s/lexicon.%d", root, i);
-        encode_lexicon(lexicon[i], path);
-        free(path);
-    }
-    asprintf(&path, "%s/cookies", root);
-    encode_lexicon(cookie_index, path);
-    free(path);
+
+    for (i = 0; i < num_lexicons; i++)
+        store_lexicon(lexicon[i], make_path("%s/lexicon.%d", root, i));
+
+    store_lexicon(cookie_index, make_path("%s/cookies", root));
 }
 
 int main(int argc, char **argv)
@@ -201,7 +218,15 @@ int main(int argc, char **argv)
         DIE("Could not allocate lexicon counters\n");
 
     read_inputs(num_fields, num_inputs);
-    encode_lexicons(num_fields - 2, argv[3]);
+    store_lexicons(num_fields - 2, argv[3]);
+    store_trails((const uint32_t*)values.data,
+                 values.next,
+                 (const struct cookie*)cookies.data,
+                 cookies.next,
+                 (num_fields - 2) * 4 + sizeof(struct cookie),
+                 (const struct logline*)loglines.data,
+                 loglines.next,
+                 make_path("%s/trails", argv[3]));
 
     return 0;
 }

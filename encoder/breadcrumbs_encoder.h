@@ -25,8 +25,8 @@
 #define MAX_FIELD_SIZE 1024
 
 struct logline{
-    uint32_t fields_offset;
-    uint32_t num_fields;
+    uint32_t values_offset;
+    uint32_t num_values;
     uint32_t timestamp;
     struct logline *prev;
 };
@@ -36,12 +36,15 @@ struct cookie{
     uint32_t previous_values[0];
 } __attribute((packed))__;
 
-void encode_lexicon(Pvoid_t lexicon, const char *path);
-                     const struct logline *loglines,
+void store_lexicon(Pvoid_t lexicon, const char *path);
 
-void encode_loglines(const uint32_t *fields,
-                     const struct logline *loglines,
-                     const struct cookie *cookies,
-                     uint32_t num_cookies);
+void store_trails(const uint32_t *fields,
+                  uint32_t num_fields,
+                  const struct cookie *cookies,
+                  uint32_t num_cookies,
+                  uint32_t cookie_size,
+                  const struct logline *loglines,
+                  uint32_t num_loglines,
+                  const char *path);
 
 #endif /* __BREADCRUMBS_ENCODER_H__ */

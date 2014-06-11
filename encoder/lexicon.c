@@ -19,7 +19,7 @@ static uint32_t lexicon_size(const Pvoid_t lexicon, uint64_t *size){
     return count;
 }
 
-void encode_lexicon(Pvoid_t lexicon, const char *path)
+void store_lexicon(Pvoid_t lexicon, const char *path)
 {
     uint8_t token[MAX_FIELD_SIZE];
     uint64_t size = 0;
