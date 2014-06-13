@@ -5,6 +5,8 @@
 #include <sys/types.h>
 #include <stdarg.h>
 
+#include "ddb_profile.h"
+
 #include "breadcrumbs_encoder.h"
 
 #define MAX_NUM_FIELDS 255
@@ -191,6 +193,7 @@ int main(int argc, char **argv)
 {
     long num_fields;
     long num_inputs;
+    DDB_TIMER_DEF
 
     if (argc < 4)
         DIE("Usage: breadcrumbs_encoder "
@@ -217,8 +220,15 @@ int main(int argc, char **argv)
     if (!(lexicon_counters = calloc(num_fields - 2, sizeof(Word_t))))
         DIE("Could not allocate lexicon counters\n");
 
+    DDB_TIMER_START
     read_inputs(num_fields, num_inputs);
+    DDB_TIMER_END("encoder/read_inputs")
+
+    DDB_TIMER_START
     store_lexicons(num_fields - 2, argv[3]);
+    DDB_TIMER_END("encoder/store_lexicons")
+
+    DDB_TIMER_START
     store_trails((const uint32_t*)values.data,
                  values.next,
                  (const struct cookie*)cookies.data,
@@ -227,6 +237,7 @@ int main(int argc, char **argv)
                  (const struct logline*)loglines.data,
                  loglines.next,
                  make_path("%s/trails", argv[3]));
+    DDB_TIMER_END("encoder/store_trails")
 
     return 0;
 }

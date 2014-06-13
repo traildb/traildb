@@ -1,6 +1,8 @@
 
 #include <Judy.h>
 
+#include "ddb_profile.h"
+#include "huffman.h"
 #include "breadcrumbs_encoder.h"
 
 #define INVALID_RATIO 0.0001
@@ -24,11 +26,11 @@ static int compare(const void *p1, const void *p2)
     return 0;
 }
 
-static void sort_loglines(struct cookie_logline *loglines,
-                          const void *cookies,
-                          uint32_t num_cookies,
-                          uint32_t cookie_size,
-                          uint32_t base_timestamp)
+static void group_loglines(struct cookie_logline *loglines,
+                           const void *cookies,
+                           uint32_t num_cookies,
+                           uint32_t cookie_size,
+                           uint32_t base_timestamp)
 {
     uint32_t i;
     uint32_t idx = 0;
@@ -50,11 +52,13 @@ static void sort_loglines(struct cookie_logline *loglines,
             line = line->prev;
         }
 
+        /* sort events of a cookie by time */
         qsort(&loglines[idx0],
               idx - idx0,
               sizeof(struct cookie_logline),
               compare);
 
+        /* delta-encode timestamps */
         for (prev_timestamp = base_timestamp, j = idx0; j < idx; j++){
             uint32_t prev = loglines[j].timestamp;
             loglines[j].timestamp -= prev_timestamp;
@@ -121,15 +125,35 @@ void store_trails(const uint32_t *values,
                   const char *path)
 {
     struct cookie_logline *grouped;
-    uint32_t base_timestamp = find_base_timestamp(loglines, num_loglines);
+    uint32_t base_timestamp;
     Pvoid_t freqs;
+    Pvoid_t codemap;
+
+    DDB_TIMER_DEF
 
     if (!(grouped = malloc(num_loglines * sizeof(struct cookie_logline))))
         DIE("Couldn't malloc loglines\n");
 
-    sort_loglines(grouped, cookies, num_cookies, cookie_size, base_timestamp);
-    freqs = collect_value_freqs(values, num_values, grouped, num_loglines);
+    /* 1. find minimum timestamp (for delta-encoding) */
+    DDB_TIMER_START
+    base_timestamp = find_base_timestamp(loglines, num_loglines);
+    DDB_TIMER_END("trail/find_base_timestamp");
 
+    /* 2. group loglines by cookie, sort events of each cookie by time,
+          and delta-encode timestamps */
+    DDB_TIMER_START
+    group_loglines(grouped, cookies, num_cookies, cookie_size, base_timestamp);
+    DDB_TIMER_END("trail/group_loglines");
+
+    /* 3. collect value frequencies, including delta-encoded timestamps */
+    DDB_TIMER_START
+    freqs = collect_value_freqs(values, num_values, grouped, num_loglines);
+    DDB_TIMER_END("trail/collect_value_freqs");
+
+    /* 4. huffman-code values */
+    DDB_TIMER_START
+    codemap = huff_create_codemap(freqs);
+    DDB_TIMER_END("trail/huff_create_codemap");
 
 
     /* - create an array loglines[num_loglines]
