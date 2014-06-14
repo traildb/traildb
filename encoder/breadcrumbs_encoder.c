@@ -13,7 +13,6 @@
 #define MAX_NUM_INPUTS 10000000
 #define ARENA_INCREMENT 10000000
 #define INVALID_RATIO 0.001
-#define MAX_PATH_SIZE 1024
 
 /* We want to filter out all corrupted and invalid timestamps
    but we don't know the exact timerange we should be getting.

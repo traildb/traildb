@@ -4,11 +4,11 @@
 #include "util.h"
 #include "ddb_queue.h"
 #include "ddb_profile.h"
+#include "ddb_bits.h"
 
 #include "huffman.h"
 
 #define MIN(a,b) ((a)>(b)?(b):(a))
-#define MAX_CANDIDATES 16777216
 
 struct hnode{
     uint32_t code;
@@ -23,6 +23,11 @@ struct sortpair{
     uint32_t freq;
     uint32_t symbol;
 };
+
+struct huff_codebook{
+    uint32_t symbol;
+    uint32_t bits;
+} __attribute__((packed));
 
 static void allocate_codewords(struct hnode *node, uint32_t code, int depth)
 {
@@ -199,4 +204,72 @@ Pvoid_t huff_create_codemap(const Pvoid_t key_freqs)
 
     free(nodes);
     return codemap;
+}
+
+static inline void encode_value(const Pvoid_t codemap,
+                                uint32_t value,
+                                char *buf,
+                                uint64_t *offs)
+{
+    Word_t *ptr;
+
+    JLG(ptr, codemap, value);
+    if (ptr){
+        /* codeword: prefix code by an up bit */
+        uint32_t code = 1 | (HUFF_CODE(*ptr) << 1);
+        uint32_t bits = HUFF_BITS(*ptr);
+        write_bits(buf, *offs, code);
+        *offs += bits + 1;
+    }else{
+        /* literal: prefix by a zero bit (offs + 1) */
+        write_bits(buf, *offs + 1, value);
+        *offs += 33;
+    }
+}
+
+/* NB! This function assumes that buf is initially 2^32 / 8 = 512MB,
+   initialized with zeros */
+void huff_encode_values(const Pvoid_t codemap,
+                        uint32_t timestamp,
+                        const uint32_t *values,
+                        uint32_t num_values,
+                        char *buf,
+                        uint64_t *offs)
+{
+    uint32_t i = 0;
+    uint64_t worstcase_bits = *offs + (num_values + 1) * 33 + 64;
+    if (worstcase_bits >= UINT32_MAX)
+        DIE("Cookie trail too long: %llu bits\n",
+            (unsigned long long)worstcase_bits);
+
+    encode_value(codemap, timestamp, buf, offs);
+    for (i = 0; i < num_values; i++)
+        encode_value(codemap, values[i], buf, offs);
+}
+
+struct huff_codebook *huff_create_codebook(const Pvoid_t codemap,
+                                           uint32_t *size)
+{
+    struct huff_codebook *book;
+    Word_t symbol = 0;
+    Word_t *ptr;
+
+    *size = HUFF_CODEBOOK_SIZE * sizeof(struct huff_codebook);
+    if (!(book = calloc(1, *size)))
+        DIE("Could not allocate codebook in huff_create_codebook\n");
+
+    JLF(ptr, codemap, symbol);
+    while (ptr){
+        uint32_t code = HUFF_CODE(*ptr);
+        int n = HUFF_BITS(*ptr);
+        int j = 1 << (16 - n);
+        while (j--){
+            int k = code | (j << n);
+            book[k].symbol = symbol;
+            book[k].bits = n;
+        }
+        JLN(ptr, codemap, symbol);
+    }
+
+    return book;
 }

@@ -15,4 +15,9 @@
         DIE("Writing to %s failed\n", path);\
     }
 
+#define SAFE_SEEK(f, offset, path)\
+    if (fseek(f, offset, SEEK_SET) == -1){\
+        DIE("Seeking to %llu in %s failed\n", (unsigned long long)offset, path);\
+    }
+
 #endif /* __DIE_H__ */

@@ -35,7 +35,7 @@ void store_lexicon(Pvoid_t lexicon, const char *path)
             path,
             (long long unsigned int)size);
 
-    if (!(out = fopen(path, "w+")))
+    if (!(out = fopen(path, "w")))
         DIE("Could not create lexicon file: %s\n", path);
 
     if (ftruncate(fileno(out), size))
@@ -52,10 +52,10 @@ void store_lexicon(Pvoid_t lexicon, const char *path)
         uint32_t len = strlen((char*)token);
 
         /* note: token IDs start 1, otherwise we would need to +1 */
-        fseek(out, *token_id * 4, SEEK_SET);
+        SAFE_SEEK(out, *token_id * 4, path);
         SAFE_WRITE(&offset, 4, path, out);
 
-        fseek(out, offset, SEEK_SET);
+        SAFE_SEEK(out, offset, path);
         SAFE_WRITE(token, len, path, out);
 
         offset += len;
@@ -63,7 +63,7 @@ void store_lexicon(Pvoid_t lexicon, const char *path)
     }
     /* write the redundant last offset in the TOC, so we can determine
        token length with toc[i + 1] - toc[i]. */
-    fseek(out, (count + 1) * 4, SEEK_SET);
+    SAFE_SEEK(out, (count + 1) * 4, path);
     SAFE_WRITE(&offset, 4, path, out);
 
     fclose(out);

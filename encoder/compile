@@ -1,0 +1,1 @@
+gcc -DDDB_PROFILE -g -Wall -O3 breadcrumbs_encoder.c lexicon.c trail.c ddb_queue.c huffman.c -lJudy

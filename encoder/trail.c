@@ -3,9 +3,12 @@
 
 #include "ddb_profile.h"
 #include "huffman.h"
+#include "ddb_bits.h"
+
 #include "breadcrumbs_encoder.h"
 
 #define INVALID_RATIO 0.0001
+#define REALPATH_SIZE (MAX_PATH_SIZE + 32)
 
 struct cookie_logline{
     uint32_t values_offset;
@@ -115,6 +118,94 @@ static uint32_t find_base_timestamp(const struct logline *loglines,
     return base_timestamp;
 }
 
+static void encode_trails(const uint32_t *values,
+                          const struct cookie_logline *grouped,
+                          uint32_t num_loglines,
+                          uint32_t num_cookies,
+                          const Pvoid_t codemap,
+                          const char *path)
+{
+    uint32_t i = 0;
+    char *buf;
+    FILE *out;
+    uint64_t file_offs = (num_cookies + 1) * 4;
+
+    if (!(out = fopen(path, "w")))
+        DIE("Could not create trail file: %s\n", path);
+
+    /* reserve space for TOC */
+    SAFE_SEEK(out, file_offs, path);
+
+    /* huff_encode_values guarantees that it writes fewer
+       than UINT32_MAX bits per buffer, or it fails */
+    if (!(buf = calloc(1, UINT32_MAX / 8 + 8)))
+        DIE("Could not allocate 512MB in encode_trails\n");
+
+    while (i < num_loglines){
+        /* encode trail for one cookie (multiple loglines) */
+
+        /* reserve 3 bits in the head of the trail for a length residual:
+           Length of a trail is measured in bytes but the last byte may
+           be short. The residual indicates how many bits in the end we
+           should ignore. */
+        uint64_t offs = 3;
+        uint32_t cookie_id = grouped[i].cookie_id;
+        uint32_t trail_size;
+
+        /* write offset to TOC */
+        SAFE_SEEK(out, cookie_id * 4, path);
+        SAFE_WRITE(&file_offs, 4, path, out);
+
+        while (grouped[i].cookie_id == cookie_id && i < num_loglines){
+            huff_encode_values(codemap,
+                               grouped[i].timestamp,
+                               &values[grouped[i].values_offset],
+                               grouped[i].num_values,
+                               buf,
+                               &offs);
+            ++i;
+        }
+        /* write the length residual */
+        if (offs & 7){
+            trail_size = offs / 8 + 1;
+            write_bits(buf, 0, 8 - (offs & 7));
+        }else
+            trail_size = offs / 8;
+
+        /* append trail to the end of file */
+        if (fseek(out, 0, SEEK_END) == -1)
+            DIE("Seeking to the end of %s failed\n", path);
+        SAFE_WRITE(buf, trail_size, path, out);
+
+        file_offs += trail_size;
+        if (file_offs >= UINT32_MAX)
+            DIE("Trail file %s over 4GB!\n", path);
+
+        memset(buf, 0, trail_size);
+    }
+    /* write the redundant last offset in the TOC, so we can determine
+       trail length with toc[i + 1] - toc[i]. */
+    SAFE_SEEK(out, num_cookies * 4, path);
+    SAFE_WRITE(&file_offs, 4, path, out);
+
+    fclose(out);
+}
+
+static void store_codebook(const Pvoid_t codemap, const char *path)
+{
+    FILE *out;
+    uint32_t size;
+    struct huff_codebook *book = huff_create_codebook(codemap, &size);
+
+    if (!(out = fopen(path, "w")))
+        DIE("Could not create codebook file: %s\n", path);
+
+    SAFE_WRITE(book, size, path, out);
+
+    free(book);
+    fclose(out);
+}
+
 void store_trails(const uint32_t *values,
                   uint32_t num_values,
                   const struct cookie *cookies,
@@ -124,10 +215,12 @@ void store_trails(const uint32_t *values,
                   uint32_t num_loglines,
                   const char *path)
 {
+    char realpath[REALPATH_SIZE];
     struct cookie_logline *grouped;
     uint32_t base_timestamp;
     Pvoid_t freqs;
     Pvoid_t codemap;
+    Word_t tmp;
 
     DDB_TIMER_DEF
 
@@ -150,27 +243,32 @@ void store_trails(const uint32_t *values,
     freqs = collect_value_freqs(values, num_values, grouped, num_loglines);
     DDB_TIMER_END("trail/collect_value_freqs");
 
-    /* 4. huffman-code values */
+    /* 4. build a huffman codebook for values */
     DDB_TIMER_START
     codemap = huff_create_codemap(freqs);
     DDB_TIMER_END("trail/huff_create_codemap");
 
+    /* 5. encode and write trails to disk */
+    DDB_TIMER_START
+    if (snprintf(realpath, REALPATH_SIZE, "%s.data", path) >= REALPATH_SIZE)
+        DIE("Trail path too long (%s.data)!\n", path);
+    encode_trails(values,
+                  grouped,
+                  num_loglines,
+                  num_cookies,
+                  codemap,
+                  realpath);
+    DDB_TIMER_END("trail/encode_trails");
 
-    /* - create an array loglines[num_loglines]
-       - create an array for cookies {offset, length}[num_cookies]
-          - populate loglines and cookies arrays
-          - each cookie gets consecutive list of loglines, sort by timestamp
-          - convert timestamps to deltas per cookie
-       - collect field value frequencies -> key_freqs
-       - collect timestamp delta frequencies -> key_freqs
-       - run huffman:create_codemap
-       - write codebook to path.codebook
-       - for each cookie
-          - for each logline
-            - huffman:encode_fields
-          - write results to path.trails
-    */
+    /* 6. write huffman codebook to disk */
+    DDB_TIMER_START
+    if (snprintf(realpath, REALPATH_SIZE, "%s.codebook", path) >= REALPATH_SIZE)
+        DIE("Trail path too long (%s.codebook)!\n", path);
+    store_codebook(codemap, realpath);
+    DDB_TIMER_END("trail/store_codebook");
 
+    JLFA(tmp, freqs);
+    JLFA(tmp, codemap);
     free(grouped);
 }
 

@@ -12,6 +12,7 @@
 #include "util.h"
 
 #define MAX_FIELD_SIZE 1024
+#define MAX_PATH_SIZE 1024
 
 struct logline{
     uint32_t values_offset;
