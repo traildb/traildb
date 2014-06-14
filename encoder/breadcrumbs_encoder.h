@@ -18,11 +18,11 @@ struct logline{
     uint32_t values_offset;
     uint32_t num_values;
     uint32_t timestamp;
-    struct logline *prev;
+    uint32_t prev_logline_idx;
 };
 
 struct cookie{
-    struct logline *last;
+    uint32_t last_logline_idx;
     uint32_t previous_values[0];
 } __attribute((packed))__;
 

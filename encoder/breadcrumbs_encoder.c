@@ -37,14 +37,14 @@ static struct arena values = {.item_size = 4};
 
 static inline void *get_item(struct arena *a, uint32_t idx)
 {
-    return a->data + a->item_size * idx;
+    return a->data + a->item_size * (uint64_t)idx;
 }
 
 static void *add_item(struct arena *a)
 {
     if (a->next >= a->size){
         a->size += ARENA_INCREMENT;
-        if (!(a->data = realloc(a->data, a->item_size * a->size)))
+        if (!(a->data = realloc(a->data, a->item_size * (uint64_t)a->size)))
             DIE("Realloc failed\n");
     }
     return get_item(a, a->next++);
@@ -91,8 +91,8 @@ static int parse_line(char *line, long num_fields)
     logline->values_offset = values.next;
     logline->num_values = 0;
     logline->timestamp = (uint32_t)tstamp;
-    logline->prev = cookie->last;
-    cookie->last = logline;
+    logline->prev_logline_idx = cookie->last_logline_idx;
+    cookie->last_logline_idx = loglines.next;
 
     for (i = 0; line && i < num_fields - 2; i++){
         char *field = strsep(&line, " ");
@@ -150,6 +150,10 @@ static void read_inputs(long num_fields, long num_inputs)
             if (parse_line(line, num_fields))
                 ++num_invalid;
         }
+
+        if (!(num_lines & 65535))
+            fprintf(stderr, "%u lines processed (%u invalid)\n",
+                    num_lines, num_invalid);
     }
 
     if (num_invalid / (float)num_lines > INVALID_RATIO)

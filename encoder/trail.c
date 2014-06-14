@@ -29,7 +29,8 @@ static int compare(const void *p1, const void *p2)
     return 0;
 }
 
-static void group_loglines(struct cookie_logline *loglines,
+static void group_loglines(struct cookie_logline *grouped,
+                           const struct logline *loglines,
                            const void *cookies,
                            uint32_t num_cookies,
                            uint32_t cookie_size,
@@ -40,36 +41,40 @@ static void group_loglines(struct cookie_logline *loglines,
     uint32_t num_invalid = 0;
 
     for (i = 0; i < num_cookies; i++){
-        const struct logline *line =
-            ((const struct cookie*)(cookies + i * cookie_size))->last;
+        const struct cookie *cookie =
+            (const struct cookie*)(cookies + i * (uint64_t)cookie_size);
+        const struct logline *line = &loglines[cookie->last_logline_idx - 1];
         uint32_t idx0 = idx;
         uint32_t prev_timestamp;
         int j;
 
-        while (line){
-            loglines[idx].cookie_id = i;
-            loglines[idx].values_offset = line->values_offset;
-            loglines[idx].num_values = line->num_values;
-            loglines[idx].timestamp = line->timestamp;
+        while (1){
+            grouped[idx].cookie_id = i;
+            grouped[idx].values_offset = line->values_offset;
+            grouped[idx].num_values = line->num_values;
+            grouped[idx].timestamp = line->timestamp;
             ++idx;
-            line = line->prev;
+            if (line->prev_logline_idx)
+                line = &loglines[line->prev_logline_idx - 1];
+            else
+                break;
         }
 
         /* sort events of a cookie by time */
-        qsort(&loglines[idx0],
+        qsort(&grouped[idx0],
               idx - idx0,
               sizeof(struct cookie_logline),
               compare);
 
         /* delta-encode timestamps */
         for (prev_timestamp = base_timestamp, j = idx0; j < idx; j++){
-            uint32_t prev = loglines[j].timestamp;
-            loglines[j].timestamp -= prev_timestamp;
-            if (loglines[j].timestamp < (1 << 24))
-                loglines[j].timestamp <<= 8;
+            uint32_t prev = grouped[j].timestamp;
+            grouped[j].timestamp -= prev_timestamp;
+            if (grouped[j].timestamp < (1 << 24))
+                grouped[j].timestamp <<= 8;
             else{
                 /* mark logline as invalid */
-                loglines[j].timestamp = 1;
+                grouped[j].timestamp = 1;
                 ++num_invalid;
             }
             prev_timestamp = prev;
@@ -235,7 +240,12 @@ void store_trails(const uint32_t *values,
     /* 2. group loglines by cookie, sort events of each cookie by time,
           and delta-encode timestamps */
     DDB_TIMER_START
-    group_loglines(grouped, cookies, num_cookies, cookie_size, base_timestamp);
+    group_loglines(grouped,
+                   loglines,
+                   cookies,
+                   num_cookies,
+                   cookie_size,
+                   base_timestamp);
     DDB_TIMER_END("trail/group_loglines");
 
     /* 3. collect value frequencies, including delta-encoded timestamps */
