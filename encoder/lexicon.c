@@ -4,6 +4,38 @@
 
 #include "breadcrumbs_encoder.h"
 
+void store_cookies(const Pvoid_t cookie_index,
+                   uint32_t num_cookies,
+                   const char *path)
+{
+    static Word_t cookie_bytes[2];
+    FILE *out;
+    Word_t *ptr;
+
+    if (!(out = fopen(path, "w")))
+        DIE("Could not create cookie file: %s\n", path);
+
+    if (ftruncate(fileno(out), num_cookies * 16LLU))
+        DIE("Could not initialize lexicon file (%llu bytes): %s\n",
+            (long long unsigned int)(num_cookies * 16),
+            path);
+
+    cookie_bytes[0] = 0;
+    JLF(ptr, cookie_index, cookie_bytes[0]);
+    while (ptr){
+        const Pvoid_t cookie_index_lo = (const Pvoid_t)*ptr;
+        cookie_bytes[1] = 0;
+        JLF(ptr, cookie_index_lo, cookie_bytes[1]);
+        while (ptr){
+            SAFE_SEEK(out, (*ptr - 1) * 16, path);
+            SAFE_WRITE(cookie_bytes, 16, path, out);
+            JLN(ptr, cookie_index_lo, cookie_bytes[1]);
+        }
+        JLN(ptr, cookie_index, cookie_bytes[0]);
+    }
+    fclose(out);
+}
+
 static uint32_t lexicon_size(const Pvoid_t lexicon, uint64_t *size){
     uint8_t token[MAX_FIELD_SIZE];
     Word_t *ptr;
@@ -19,7 +51,7 @@ static uint32_t lexicon_size(const Pvoid_t lexicon, uint64_t *size){
     return count;
 }
 
-void store_lexicon(Pvoid_t lexicon, const char *path)
+void store_lexicon(const Pvoid_t lexicon, const char *path)
 {
     uint8_t token[MAX_FIELD_SIZE];
     uint64_t size = 0;

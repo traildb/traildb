@@ -6,7 +6,7 @@
 #include <stdarg.h>
 
 #include "ddb_profile.h"
-
+#include "hex_decode.h"
 #include "breadcrumbs_encoder.h"
 
 #define MAX_NUM_FIELDS 255
@@ -63,10 +63,13 @@ static long parse_int_arg(const char *str, const char *type, long max)
 
 static int parse_line(char *line, long num_fields)
 {
+    static Word_t cookie_bytes[2];
     int i;
     char *tmp;
     int64_t tstamp;
-    Word_t *cookie_ptr;
+    Word_t *cookie_ptr_hi;
+    Word_t *cookie_ptr_lo;
+    Pvoid_t cookie_index_lo;
     struct cookie *cookie;
     struct logline *logline;
     char *cookie_str = strsep(&line, " ");
@@ -74,18 +77,29 @@ static int parse_line(char *line, long num_fields)
     if (strlen(cookie_str) != 32 || !line)
         return 1;
 
+    if (hex_decode(cookie_str, (uint8_t*)cookie_bytes))
+        return 1;
+
     tstamp = strtoll(strsep(&line, " "), &tmp, 10);
 
     if (tstamp < TSTAMP_MIN || tstamp > TSTAMP_MAX)
         return 1;
 
-    JSLI(cookie_ptr, cookie_index, (uint8_t*)cookie_str);
-    if (!*cookie_ptr){
+    /* Cookie index, which maps 16-byte cookies to indices,
+       has the following structure:
+          JudyL -> JudyL -> Word_t
+    */
+    JLI(cookie_ptr_hi, cookie_index, cookie_bytes[0]);
+    cookie_index_lo = (Pvoid_t)*cookie_ptr_hi;
+    JLI(cookie_ptr_lo, cookie_index_lo, cookie_bytes[1]);
+    *cookie_ptr_hi = (Word_t)cookie_index_lo;
+
+    if (!*cookie_ptr_lo){
         cookie = (struct cookie*)add_item(&cookies);
         memset(cookie, 0, cookies.item_size);
-        *cookie_ptr = cookies.next;
+        *cookie_ptr_lo = cookies.next;
     }
-    cookie = (struct cookie*)get_item(&cookies, *cookie_ptr - 1);
+    cookie = (struct cookie*)get_item(&cookies, *cookie_ptr_lo - 1);
     logline = (struct logline*)add_item(&loglines);
 
     logline->values_offset = values.next;
@@ -131,8 +145,8 @@ static void read_inputs(long num_fields, long num_inputs)
 {
     char *line = NULL;
     size_t line_size = 0;
-    uint32_t num_lines = 0;
-    uint32_t num_invalid = 0;
+    long long unsigned int num_lines = 0;
+    long long unsigned int num_invalid = 0;
 
     while (num_inputs){
         ssize_t n = getline(&line, &line_size, stdin);
@@ -152,18 +166,21 @@ static void read_inputs(long num_fields, long num_inputs)
         }
 
         if (!(num_lines & 65535))
-            fprintf(stderr, "%u lines processed (%u invalid)\n",
+            fprintf(stderr, "%llu lines processed (%llu invalid)\n",
                     num_lines, num_invalid);
+
+        if (num_lines >= UINT32_MAX)
+            DIE("Over 2^32 loglines!\n");
     }
 
     if (num_invalid / (float)num_lines > INVALID_RATIO)
-        DIE("Too many invalid lines: %u invalid, %u valid\n",
+        DIE("Too many invalid lines: %llu invalid, %llu valid\n",
             num_invalid,
             num_lines);
     else
         fprintf(stderr,
                 "All inputs consumed successfully: "
-                "%u valid lines, %u invalid\n",
+                "%llu valid lines, %llu invalid\n",
                 num_lines,
                 num_invalid);
 }
@@ -189,7 +206,7 @@ static void store_lexicons(int num_lexicons, const char *root)
     for (i = 0; i < num_lexicons; i++)
         store_lexicon(lexicon[i], make_path("%s/lexicon.%d", root, i));
 
-    store_lexicon(cookie_index, make_path("%s/cookies", root));
+    store_cookies(cookie_index, cookies.next, make_path("%s/cookies", root));
 }
 
 int main(int argc, char **argv)

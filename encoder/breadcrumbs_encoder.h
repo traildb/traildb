@@ -26,6 +26,10 @@ struct cookie{
     uint32_t previous_values[0];
 } __attribute((packed))__;
 
+void store_cookies(const Pvoid_t cookie_index,
+                   uint32_t num_cookies,
+                   const char *path);
+
 void store_lexicon(Pvoid_t lexicon, const char *path);
 
 void store_trails(const uint32_t *fields,

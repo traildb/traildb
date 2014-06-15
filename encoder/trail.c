@@ -161,7 +161,7 @@ static void encode_trails(const uint32_t *values,
         SAFE_SEEK(out, cookie_id * 4, path);
         SAFE_WRITE(&file_offs, 4, path, out);
 
-        while (grouped[i].cookie_id == cookie_id && i < num_loglines){
+        while (i < num_loglines && grouped[i].cookie_id == cookie_id){
             huff_encode_values(codemap,
                                grouped[i].timestamp,
                                &values[grouped[i].values_offset],
