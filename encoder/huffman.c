@@ -4,7 +4,6 @@
 #include "util.h"
 #include "ddb_queue.h"
 #include "ddb_profile.h"
-#include "ddb_bits.h"
 
 #include "huffman.h"
 
@@ -18,16 +17,6 @@ struct hnode{
     struct hnode *left;
     struct hnode *right;
 };
-
-struct sortpair{
-    uint32_t freq;
-    uint32_t symbol;
-};
-
-struct huff_codebook{
-    uint32_t symbol;
-    uint32_t bits;
-} __attribute__((packed));
 
 static void allocate_codewords(struct hnode *node, uint32_t code, int depth)
 {
@@ -82,48 +71,23 @@ static int huffman_code(struct hnode *symbols, int num)
     return 0;
 }
 
-int compare(const void *p1, const void *p2)
-{
-    const struct sortpair *x = (const struct sortpair*)p1;
-    const struct sortpair *y = (const struct sortpair*)p2;
-
-    if (x->freq > y->freq)
-        return -1;
-    else if (x->freq < y->freq)
-        return 1;
-    return 0;
-}
 
 static uint32_t sort_symbols(const Pvoid_t freqs,
                              uint64_t *totalfreq,
                              struct hnode *book)
 {
-    uint32_t i;
-    struct sortpair *pairs;
-    Word_t symbol;
+    Word_t i;
     Word_t num_symbols;
-    Word_t *freq;
+    struct sortpair *pairs = sort_judyl(freqs, &num_symbols);
 
-    JLC(num_symbols, freqs, 0, -1);
-
-    if (!(pairs = calloc(num_symbols, sizeof(struct sortpair))))
-        DIE("Couldn't allocate sortpairs (%u pairs)\n",
-            (uint32_t)num_symbols);
-
-    symbol = i = *totalfreq = 0;
-    JLF(freq, freqs, symbol);
-    while (freq){
-        pairs[i].symbol = symbol;
-        pairs[i++].freq = *freq;
-        *totalfreq += *freq;
-        JLN(freq, freqs, symbol);
-    }
-    qsort(pairs, num_symbols, sizeof(struct sortpair), compare);
+    *totalfreq = 0;
+    for (i = 0; i < num_symbols; i++)
+        *totalfreq += pairs[i].value;
 
     num_symbols = MIN(HUFF_CODEBOOK_SIZE, num_symbols);
     for (i = 0; i < num_symbols; i++){
-        book[i].symbol = pairs[i].symbol;
-        book[i].weight = pairs[i].freq;
+        book[i].symbol = pairs[i].key;
+        book[i].weight = pairs[i].value;
     }
 
     free(pairs);
@@ -273,3 +237,4 @@ struct huff_codebook *huff_create_codebook(const Pvoid_t codemap,
 
     return book;
 }
+

@@ -1,1 +1,2 @@
-gcc -DDDB_PROFILE -g -Wall -O3 breadcrumbs_encoder.c lexicon.c trail.c ddb_queue.c huffman.c -lJudy
+gcc -DDDB_PROFILE  -g -Wall -O3 breadcrumbs_encoder.c lexicon.c trail.c ddb_queue.c huffman.c util.c -lJudy
+gcc -g -fPIC -o breadcrumbs.so -shared -Wall breadcrumbs.c util.c -lJudy

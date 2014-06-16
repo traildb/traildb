@@ -4,11 +4,9 @@
 #include "ddb_profile.h"
 #include "huffman.h"
 #include "ddb_bits.h"
+#include "util.h"
 
 #include "breadcrumbs_encoder.h"
-
-#define INVALID_RATIO 0.0001
-#define REALPATH_SIZE (MAX_PATH_SIZE + 32)
 
 struct cookie_logline{
     uint32_t values_offset;
@@ -218,9 +216,9 @@ void store_trails(const uint32_t *values,
                   uint32_t cookie_size,
                   const struct logline *loglines,
                   uint32_t num_loglines,
-                  const char *path)
+                  const char *root)
 {
-    char realpath[REALPATH_SIZE];
+    char path[MAX_PATH_SIZE];
     struct cookie_logline *grouped;
     uint32_t base_timestamp;
     Pvoid_t freqs;
@@ -260,21 +258,19 @@ void store_trails(const uint32_t *values,
 
     /* 5. encode and write trails to disk */
     DDB_TIMER_START
-    if (snprintf(realpath, REALPATH_SIZE, "%s.data", path) >= REALPATH_SIZE)
-        DIE("Trail path too long (%s.data)!\n", path);
+    make_path(path, "%s/trails.data", root);
     encode_trails(values,
                   grouped,
                   num_loglines,
                   num_cookies,
                   codemap,
-                  realpath);
+                  path);
     DDB_TIMER_END("trail/encode_trails");
 
     /* 6. write huffman codebook to disk */
     DDB_TIMER_START
-    if (snprintf(realpath, REALPATH_SIZE, "%s.codebook", path) >= REALPATH_SIZE)
-        DIE("Trail path too long (%s.codebook)!\n", path);
-    store_codebook(codemap, realpath);
+    make_path(path, "%s/trails.codebook", root);
+    store_codebook(codemap, path);
     DDB_TIMER_END("trail/store_codebook");
 
     JLFA(tmp, freqs);
@@ -282,3 +278,24 @@ void store_trails(const uint32_t *values,
     free(grouped);
 }
 
+uint32_t trail_decode(struct breadcrumbs *bd,
+                      uint32_t trail_index,
+                      uint32_t *dst,
+                      uint32_t dst_size)
+{
+    /* convert timestamps */
+    /* expand edge-encoding */
+    /* return number of values added to dst (<= dst_size) */
+}
+
+uint32_t trail_value_freqs(const struct breadcrumbs *bd,
+                           uint32_t *trail_indices,
+                           uint32_t num_trail_indices,
+                           uint32_t *dst_values,
+                           uint32_t *dst_freqs,
+                           uint32_t dst_size)
+{
+    /* Use Judy1 to check that only one distinct value per cookie is added to freqs */
+    /* no nulls, no timestamps */
+    /* return number of top values added to dst (<= dst_size) */
+}

@@ -12,7 +12,16 @@
 #include "util.h"
 
 #define MAX_FIELD_SIZE 1024
-#define MAX_PATH_SIZE 1024
+#define MAX_NUM_FIELDS 255
+#define MAX_NUM_INPUTS 10000000
+#define ARENA_INCREMENT 10000000
+#define INVALID_RATIO 0.001
+
+/* We want to filter out all corrupted and invalid timestamps
+   but we don't know the exact timerange we should be getting.
+   Hence, we assume a reasonable range. */
+#define TSTAMP_MIN 1325404800 /* 2012-01-01 */
+#define TSTAMP_MAX 1483257600 /* 2017-01-01 */
 
 struct logline{
     uint32_t values_offset;

@@ -3,22 +3,10 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <stdarg.h>
 
 #include "ddb_profile.h"
 #include "hex_decode.h"
 #include "breadcrumbs_encoder.h"
-
-#define MAX_NUM_FIELDS 255
-#define MAX_NUM_INPUTS 10000000
-#define ARENA_INCREMENT 10000000
-#define INVALID_RATIO 0.001
-
-/* We want to filter out all corrupted and invalid timestamps
-   but we don't know the exact timerange we should be getting.
-   Hence, we assume a reasonable range. */
-#define TSTAMP_MIN 1325404800 /* 2012-01-01 */
-#define TSTAMP_MAX 1483257600 /* 2017-01-01 */
 
 struct arena{
     void *data;
@@ -59,6 +47,17 @@ static long parse_int_arg(const char *str, const char *type, long max)
     if (n >= max)
         DIE("too many %s: %ld >= %ld\n", type, n, max);
     return n;
+}
+
+static long parse_num_fields(const char *str)
+{
+    long num_fields = 0;
+    int i = 0;
+    while (str[i])
+        if (str[i++] == ' ')
+            ++num_fields;
+
+    return num_fields + 1;
 }
 
 static int parse_line(char *line, long num_fields)
@@ -185,46 +184,60 @@ static void read_inputs(long num_fields, long num_inputs)
                 num_invalid);
 }
 
-static const char *make_path(char *fmt, ...)
-{
-    static char path[MAX_PATH_SIZE];
 
-    va_list aptr;
-
-    va_start(aptr, fmt);
-    if (vsnprintf(path, MAX_PATH_SIZE, fmt, aptr) >= MAX_PATH_SIZE)
-        DIE("Path too long\n");
-    va_end(aptr);
-
-    return path;
-}
-
-static void store_lexicons(int num_lexicons, const char *root)
+static void store_lexicons(char *fields,
+                           int num_lexicons,
+                           const char *root)
 {
     int i;
+    FILE *out;
+    char path[MAX_PATH_SIZE];
 
-    for (i = 0; i < num_lexicons; i++)
-        store_lexicon(lexicon[i], make_path("%s/lexicon.%d", root, i));
+    make_path(path, "%s/fields", root);
+    if (!(out = fopen(path, "w")))
+        DIE("Could not open %s\n", path);
 
-    store_cookies(cookie_index, cookies.next, make_path("%s/cookies", root));
+    /* skip cookie */
+    strsep(&fields, " ");
+    /* skip timestamp */
+    strsep(&fields, " ");
+
+    for (i = 0; i < num_lexicons; i++){
+        const char *field = strsep(&fields, " ");
+        make_path(path, "%s/lexicon.%s", root, field);
+        store_lexicon(lexicon[i], path);
+        fprintf(out, "%s\n", field);
+    }
+    fclose(out);
+
+    make_path(path, "%s/cookies", root);
+    store_cookies(cookie_index, cookies.next, path);
 }
 
 int main(int argc, char **argv)
 {
+    char path[MAX_PATH_SIZE];
     long num_fields;
     long num_inputs;
+    FILE *in;
     DDB_TIMER_DEF
 
     if (argc < 4)
         DIE("Usage: breadcrumbs_encoder "
-            "number-of-fields number-of-inputs output-dir\n");
+            "list-of-fields number-of-inputs output-dir\n");
 
-    num_fields = parse_int_arg(argv[1], "fields", MAX_NUM_FIELDS);
+    num_fields = parse_num_fields(argv[1]);
     num_inputs = parse_int_arg(argv[2], "inputs", MAX_NUM_INPUTS);
+
+    if (num_fields < 2)
+        DIE("Too few fields: At least cookie and timestamp are required\n");
+
+    if (num_fields > MAX_NUM_FIELDS)
+        DIE("Too many fields: %ld > %d\n", num_fields, MAX_NUM_FIELDS);
 
     /* Open our own stdin for writing: This ensures that FIFO won't
        get EOF'ed ever. */
-    FILE *in = fopen("/dev/stdin", "r+");
+    in = fopen("/dev/stdin", "r+");
     if (!in)
         DIE("Could not initialize stdin\n");
 
@@ -245,7 +258,7 @@ int main(int argc, char **argv)
     DDB_TIMER_END("encoder/read_inputs")
 
     DDB_TIMER_START
-    store_lexicons(num_fields - 2, argv[3]);
+    store_lexicons(argv[1], num_fields - 2, argv[3]);
     DDB_TIMER_END("encoder/store_lexicons")
 
     DDB_TIMER_START
@@ -256,7 +269,7 @@ int main(int argc, char **argv)
                  (num_fields - 2) * 4 + sizeof(struct cookie),
                  (const struct logline*)loglines.data,
                  loglines.next,
-                 make_path("%s/trails", argv[3]));
+                 argv[3]);
     DDB_TIMER_END("encoder/store_trails")
 
     return 0;
