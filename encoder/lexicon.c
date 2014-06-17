@@ -33,7 +33,7 @@ void store_cookies(const Pvoid_t cookie_index,
         }
         JLN(ptr, cookie_index, cookie_bytes[0]);
     }
-    fclose(out);
+    SAFE_CLOSE(out, path);
 }
 
 static uint32_t lexicon_size(const Pvoid_t lexicon, uint64_t *size){
@@ -98,7 +98,7 @@ void store_lexicon(const Pvoid_t lexicon, const char *path)
     SAFE_SEEK(out, (count + 1) * 4, path);
     SAFE_WRITE(&offset, 4, path, out);
 
-    fclose(out);
+    SAFE_CLOSE(out, path);
 }
 
 uint8_t field_index(uint32_t value)

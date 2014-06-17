@@ -208,7 +208,7 @@ static void store_lexicons(char *fields,
         store_lexicon(lexicon[i], path);
         fprintf(out, "%s\n", field);
     }
-    fclose(out);
+    SAFE_CLOSE(out, path);
 
     make_path(path, "%s/cookies", root);
     store_cookies(cookie_index, cookies.next, path);
@@ -216,7 +216,6 @@ static void store_lexicons(char *fields,
 
 int main(int argc, char **argv)
 {
-    char path[MAX_PATH_SIZE];
     long num_fields;
     long num_inputs;
     FILE *in;

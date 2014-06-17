@@ -19,6 +19,10 @@ struct bdfile{
 };
 
 struct breadcrumbs{
+    uint32_t min_timestamp;
+    uint32_t max_timestamp;
+    uint32_t num_cookies;
+    uint32_t num_loglines;
     uint32_t num_fields;
     uint32_t *previous_values;
 
@@ -87,7 +91,7 @@ static int open_fields(const char *root, char *path, struct breadcrumbs *bd)
     while (getline(&line, &n, f) != -1)
         ++bd->num_fields;
 
-    if (!(bd->previous_values = calloc(bd->num_fields, 4))){
+    if (!(bd->previous_values = malloc(bd->num_fields * 4))){
         bderror(bd,
                 "Could not allocate %u values in open_fields",
                 bd->num_fields);
@@ -117,6 +121,29 @@ static int open_fields(const char *root, char *path, struct breadcrumbs *bd)
     return 0;
 }
 
+static int read_info(struct breadcrumbs *bd, const char *path)
+{
+    FILE *f;
+
+    if (!(f = fopen(path, "r"))){
+        bderror(bd, "Could not open path: %s", path);
+        return -1;
+    }
+
+    if (fscanf(f,
+               "%u %u %u %u",
+               &bd->num_cookies,
+               &bd->num_loglines,
+               &bd->min_timestamp,
+               &bd->max_timestamp) != 4){
+        bderror(bd, "Invalid info file");
+        return -1;
+    }
+    fclose(f);
+
+    return 0;
+}
+
 struct breadcrumbs *bd_open(const char *root)
 {
     char path[MAX_PATH_SIZE];
@@ -124,6 +151,10 @@ struct breadcrumbs *bd_open(const char *root)
 
     if (!(bd = calloc(1, sizeof(struct breadcrumbs))))
         return NULL;
+
+    make_path(path, "%s/info", root);
+    if (read_info(bd, path))
+        goto err;
 
     make_path(path, "%s/cookies", root);
     if (mmap_file(path, &bd->cookies, bd))

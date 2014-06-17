@@ -22,9 +22,19 @@
         DIE("Writing to %s failed\n", path);\
     }
 
+#define SAFE_FPRINTF(f, path, fmt, ...)\
+    if (fprintf(f, fmt, ##__VA_ARGS__) < 1){\
+        DIE("Writing to %s failed\n", path);\
+    }
+
 #define SAFE_SEEK(f, offset, path)\
     if (fseek(f, offset, SEEK_SET) == -1){\
         DIE("Seeking to %llu in %s failed\n", (unsigned long long)offset, path);\
+    }
+
+#define SAFE_CLOSE(f, path)\
+    if (fclose(f)){\
+        DIE("Closing %s failed\n", path);\
     }
 
 struct sortpair{

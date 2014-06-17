@@ -108,17 +108,38 @@ static Pvoid_t collect_value_freqs(const uint32_t *values,
     return freqs;
 }
 
-static uint32_t find_base_timestamp(const struct logline *loglines,
-                                    uint32_t num_loglines)
+static void info(const struct logline *loglines,
+                 uint32_t num_loglines,
+                 uint32_t num_cookies,
+                 uint32_t *min_timestamp,
+                 uint32_t *max_timestamp,
+                 const char *path)
 {
     int i;
-    uint32_t base_timestamp = UINT32_MAX;
+    FILE *out;
 
-    for (i = 0; i < num_loglines; i++)
-        if (loglines[i].timestamp < base_timestamp)
-            base_timestamp = loglines[i].timestamp;
+    *min_timestamp = UINT32_MAX;
+    *max_timestamp = 0;
 
-    return base_timestamp;
+    for (i = 0; i < num_loglines; i++){
+        if (loglines[i].timestamp < *min_timestamp)
+            *min_timestamp = loglines[i].timestamp;
+        if (loglines[i].timestamp > *max_timestamp)
+            *max_timestamp = loglines[i].timestamp;
+    }
+
+    if (!(out = fopen(path, "w")))
+        DIE("Could not create info file: %s\n", path);
+
+    SAFE_FPRINTF(out,
+                 path,
+                 "%u %u %u %u\n",
+                 num_cookies,
+                 num_loglines,
+                 min_timestamp,
+                 max_timestamp);
+
+    SAFE_CLOSE(out, path);
 }
 
 static void encode_trails(const uint32_t *values,
@@ -191,7 +212,7 @@ static void encode_trails(const uint32_t *values,
     SAFE_SEEK(out, num_cookies * 4, path);
     SAFE_WRITE(&file_offs, 4, path, out);
 
-    fclose(out);
+    SAFE_CLOSE(out, path);
 }
 
 static void store_codebook(const Pvoid_t codemap, const char *path)
@@ -206,7 +227,7 @@ static void store_codebook(const Pvoid_t codemap, const char *path)
     SAFE_WRITE(book, size, path, out);
 
     free(book);
-    fclose(out);
+    SAFE_CLOSE(out, path);
 }
 
 void store_trails(const uint32_t *values,
@@ -220,7 +241,7 @@ void store_trails(const uint32_t *values,
 {
     char path[MAX_PATH_SIZE];
     struct cookie_logline *grouped;
-    uint32_t base_timestamp;
+    uint32_t min_timestamp, max_timestamp;
     Pvoid_t freqs;
     Pvoid_t codemap;
     Word_t tmp;
@@ -232,8 +253,14 @@ void store_trails(const uint32_t *values,
 
     /* 1. find minimum timestamp (for delta-encoding) */
     DDB_TIMER_START
-    base_timestamp = find_base_timestamp(loglines, num_loglines);
-    DDB_TIMER_END("trail/find_base_timestamp");
+    make_path(path, "%s/info", root);
+    info(loglines,
+         num_loglines,
+         num_cookies,
+         &min_timestamp,
+         &max_timestamp,
+         path);
+    DDB_TIMER_END("trail/info");
 
     /* 2. group loglines by cookie, sort events of each cookie by time,
           and delta-encode timestamps */
@@ -243,7 +270,7 @@ void store_trails(const uint32_t *values,
                    cookies,
                    num_cookies,
                    cookie_size,
-                   base_timestamp);
+                   min_timestamp);
     DDB_TIMER_END("trail/group_loglines");
 
     /* 3. collect value frequencies, including delta-encoded timestamps */
