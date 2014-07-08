@@ -9,6 +9,8 @@
 
 #include <Judy.h>
 
+#include "breadcrumbs.h"
+
 #define DIE_ON_ERROR(msg)\
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
@@ -42,10 +44,12 @@ struct sortpair{
     Word_t value;
 };
 
+void bderror(struct breadcrumbs *bd, char *fmt, ...);
+
 struct sortpair *sort_judyl(const Pvoid_t judy, Word_t *num_items);
 
-#define MAX_PATH_SIZE 1024
-
 void make_path(char path[MAX_PATH_SIZE], char *fmt, ...);
+
+int mmap_file(const char *path, struct bdfile *dst, struct breadcrumbs *bd);
 
 #endif /* __DIE_H__ */

@@ -1,78 +1,13 @@
 
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/mman.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 
 #include "util.h"
 
-#define ERROR_SIZE (MAX_PATH_SIZE + 512)
-
-struct bdfile{
-    const char *data;
-    uint64_t size;
-};
-
-struct breadcrumbs{
-    uint32_t min_timestamp;
-    uint32_t max_timestamp;
-    uint32_t num_cookies;
-    uint32_t num_loglines;
-    uint32_t num_fields;
-    uint32_t *previous_values;
-
-    struct bdfile cookies;
-    struct bdfile codebook;
-    struct bdfile trails;
-    struct bdfile *lexicons;
-
-    int errno;
-    char error[ERROR_SIZE];
-};
-
-static void bderror(struct breadcrumbs *bd, char *fmt, ...)
-{
-    va_list aptr;
-
-    va_start(aptr, fmt);
-    vsnprintf(bd->error, ERROR_SIZE, fmt, aptr);
-    va_end(aptr);
-}
-
-static int mmap_file(const char *path,
-                     struct bdfile *dst,
-                     struct breadcrumbs *bd)
-{
-    int fd;
-    struct stat stats;
-
-    if ((fd = open(path, O_RDONLY)) == -1){
-        bderror(bd, "Could not open path: %s", path);
-        return -1;
-    }
-
-    if (fstat(fd, &stats)){
-        bderror(bd, "Could not stat path: %s", path);
-        close(fd);
-        return -1;
-    }
-    dst->size = stats.st_size;
-
-    dst->data = mmap(NULL, stats.st_size, PROT_READ, MAP_SHARED, fd, 0);
-    if (dst->data == MAP_FAILED){
-        bderror(bd, "Could not mmap path: %s", path);
-        close(fd);
-        return -1;
-    }
-
-    close(fd);
-    return 0;
-}
+#include "breadcrumbs.h"
+#include "breadcrumbs_decoder.h"
 
 static int open_fields(const char *root, char *path, struct breadcrumbs *bd)
 {
@@ -199,3 +134,30 @@ const char *bd_error(const struct breadcrumbs *bd)
 {
     return bd->error;
 }
+
+uint32_t bd_num_cookies(const struct breadcrumbs *bd)
+{
+    return bd->num_cookies;
+}
+
+uint32_t bd_num_loglines(const struct breadcrumbs *bd)
+{
+    return bd->num_loglines;
+}
+
+uint32_t bd_num_fields(const struct breadcrumbs *bd)
+{
+    return bd->num_fields;
+}
+
+uint32_t bd_min_timestamp(const struct breadcrumbs *bd)
+{
+    return bd->min_timestamp;
+}
+
+uint32_t bd_max_timestamp(const struct breadcrumbs *bd)
+{
+    return bd->max_timestamp;
+}
+
+

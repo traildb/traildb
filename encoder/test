@@ -1,0 +1,1 @@
+(cat test.out; echo "**DONE**") | ./a.out "cookie timestamp type advertisable_eid campaign_eid ad_eid network inventory_source site_url referrer" 1 out

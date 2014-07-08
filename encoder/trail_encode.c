@@ -8,6 +8,8 @@
 
 #include "breadcrumbs_encoder.h"
 
+#define EDGE_INCREMENT 1000000
+
 struct cookie_logline{
     uint32_t values_offset;
     uint32_t num_values;
@@ -28,10 +30,9 @@ static int compare(const void *p1, const void *p2)
 }
 
 static void group_loglines(struct cookie_logline *grouped,
-                           const struct logline *loglines,
-                           const void *cookies,
+                           const uint32_t *cookie_pointers,
                            uint32_t num_cookies,
-                           uint32_t cookie_size,
+                           const struct logline *loglines,
                            uint32_t base_timestamp)
 {
     uint32_t i;
@@ -39,9 +40,7 @@ static void group_loglines(struct cookie_logline *grouped,
     uint32_t num_invalid = 0;
 
     for (i = 0; i < num_cookies; i++){
-        const struct cookie *cookie =
-            (const struct cookie*)(cookies + i * (uint64_t)cookie_size);
-        const struct logline *line = &loglines[cookie->last_logline_idx - 1];
+        const struct logline *line = &loglines[cookie_pointers[i]];
         uint32_t idx0 = idx;
         uint32_t prev_timestamp;
         int j;
@@ -84,27 +83,75 @@ static void group_loglines(struct cookie_logline *grouped,
             base_timestamp);
 }
 
-static Pvoid_t collect_value_freqs(const uint32_t *values,
-                                   uint32_t num_values,
-                                   const struct cookie_logline *loglines,
-                                   uint32_t num_loglines)
+static uint32_t edge_encode_values(const uint32_t *values,
+                                   uint32_t **encoded,
+                                   uint32_t *encoded_size,
+                                   uint32_t *prev_values,
+                                   const struct cookie_logline *line)
 {
+    uint32_t n = 0;
+
+    /* consider only valid timestamps (first byte = 0) */
+    if ((line->timestamp & 255) == 0){
+        uint32_t j = line->values_offset;
+
+        for (; j < line->values_offset + line->num_values; j++){
+            uint32_t field = values[j] & 255;
+
+            if (prev_values[field] != values[j]){
+                if (n == *encoded_size){
+                    *encoded_size += EDGE_INCREMENT;
+                    if (!(*encoded = realloc(*encoded, *encoded_size * 4)))
+                        DIE("Could not allocate encoding buffer of %u items\n",
+                            *encoded_size);
+                }
+                (*encoded)[n++] = prev_values[field] = values[j];
+            }
+        }
+    }
+    return n;
+}
+
+static Pvoid_t collect_value_freqs(const struct cookie_logline *grouped,
+                                   uint32_t num_loglines,
+                                   const uint32_t *values,
+                                   uint32_t num_fields)
+{
+    uint32_t *prev_values = NULL;
+    uint32_t *encoded = NULL;
+    uint32_t encoded_size = 0;
     Pvoid_t freqs = NULL;
-    uint32_t i;
+    uint32_t i = 0;
     Word_t *ptr;
 
-    for (i = 0; i < num_values; i++){
-        JLI(ptr, freqs, values[i]);
-        ++*ptr;
+    if (!(prev_values = malloc(num_fields * 4)))
+        DIE("Could not allocated %u fields in edge_encode_values\n",
+            num_fields);
+
+    while (i < num_loglines){
+        uint32_t cookie_id = grouped[i].cookie_id;
+
+        memset(prev_values, 0, num_fields * 4);
+
+        for (;i < num_loglines && grouped[i].cookie_id == cookie_id; i++){
+            uint32_t n = edge_encode_values(values,
+                                            &encoded,
+                                            &encoded_size,
+                                            prev_values,
+                                            &grouped[i]);
+            if (n > 0){
+                while (n--){
+                    JLI(ptr, freqs, encoded[n]);
+                    ++*ptr;
+                }
+                JLI(ptr, freqs, grouped[i].timestamp);
+                ++*ptr;
+            }
+        }
     }
 
-    for (i = 0; i < num_loglines; i++)
-        /* consider only valid timestamps (first byte = 0) */
-        if ((loglines[i].timestamp & 255) == 0){
-            JLI(ptr, freqs, loglines[i].timestamp);
-            ++*ptr;
-        }
-
+    free(encoded);
+    free(prev_values);
     return freqs;
 }
 
@@ -136,8 +183,8 @@ static void info(const struct logline *loglines,
                  "%u %u %u %u\n",
                  num_cookies,
                  num_loglines,
-                 min_timestamp,
-                 max_timestamp);
+                 *min_timestamp,
+                 *max_timestamp);
 
     SAFE_CLOSE(out, path);
 }
@@ -146,9 +193,13 @@ static void encode_trails(const uint32_t *values,
                           const struct cookie_logline *grouped,
                           uint32_t num_loglines,
                           uint32_t num_cookies,
+                          uint32_t num_fields,
                           const Pvoid_t codemap,
                           const char *path)
 {
+    uint32_t *prev_values = NULL;
+    uint32_t *encoded = NULL;
+    uint32_t encoded_size = 0;
     uint32_t i = 0;
     char *buf;
     FILE *out;
@@ -165,6 +216,10 @@ static void encode_trails(const uint32_t *values,
     if (!(buf = calloc(1, UINT32_MAX / 8 + 8)))
         DIE("Could not allocate 512MB in encode_trails\n");
 
+    if (!(prev_values = malloc(num_fields * 4)))
+        DIE("Could not allocated %u fields in edge_encode_values\n",
+            num_fields);
+
     while (i < num_loglines){
         /* encode trail for one cookie (multiple loglines) */
 
@@ -180,15 +235,36 @@ static void encode_trails(const uint32_t *values,
         SAFE_SEEK(out, cookie_id * 4, path);
         SAFE_WRITE(&file_offs, 4, path, out);
 
-        while (i < num_loglines && grouped[i].cookie_id == cookie_id){
+        /*
+        if (grouped[i].cookie_id == 42859){
+            int k, j = i;
+            uint32_t tt = 1399395599;
+            while (j < num_loglines && grouped[j].cookie_id == cookie_id){
+                tt += grouped[j].timestamp >> 8;
+                printf("timest %u (%u):", tt, grouped[j].num_values);
+                for (k = 0; k < grouped[j].num_values; k++)
+                    printf(" %u", values[grouped[j].values_offset + k]);
+                printf("\n");
+                ++j;
+            }
+        }
+        */
+        memset(prev_values, 0, num_fields * 4);
+
+        for (;i < num_loglines && grouped[i].cookie_id == cookie_id; i++){
+            uint32_t n = edge_encode_values(values,
+                                            &encoded,
+                                            &encoded_size,
+                                            prev_values,
+                                            &grouped[i]);
             huff_encode_values(codemap,
                                grouped[i].timestamp,
-                               &values[grouped[i].values_offset],
-                               grouped[i].num_values,
+                               encoded,
+                               n,
                                buf,
                                &offs);
-            ++i;
         }
+
         /* write the length residual */
         if (offs & 7){
             trail_size = offs / 8 + 1;
@@ -213,6 +289,9 @@ static void encode_trails(const uint32_t *values,
     SAFE_WRITE(&file_offs, 4, path, out);
 
     SAFE_CLOSE(out, path);
+
+    free(encoded);
+    free(prev_values);
 }
 
 static void store_codebook(const Pvoid_t codemap, const char *path)
@@ -230,13 +309,13 @@ static void store_codebook(const Pvoid_t codemap, const char *path)
     SAFE_CLOSE(out, path);
 }
 
-void store_trails(const uint32_t *values,
-                  uint32_t num_values,
-                  const struct cookie *cookies,
+void store_trails(const uint32_t *cookie_pointers,
                   uint32_t num_cookies,
-                  uint32_t cookie_size,
                   const struct logline *loglines,
                   uint32_t num_loglines,
+                  const uint32_t *values,
+                  uint32_t num_values,
+                  uint32_t num_fields,
                   const char *root)
 {
     char path[MAX_PATH_SIZE];
@@ -266,16 +345,15 @@ void store_trails(const uint32_t *values,
           and delta-encode timestamps */
     DDB_TIMER_START
     group_loglines(grouped,
-                   loglines,
-                   cookies,
+                   cookie_pointers,
                    num_cookies,
-                   cookie_size,
+                   loglines,
                    min_timestamp);
     DDB_TIMER_END("trail/group_loglines");
 
     /* 3. collect value frequencies, including delta-encoded timestamps */
     DDB_TIMER_START
-    freqs = collect_value_freqs(values, num_values, grouped, num_loglines);
+    freqs = collect_value_freqs(grouped, num_loglines, values, num_fields);
     DDB_TIMER_END("trail/collect_value_freqs");
 
     /* 4. build a huffman codebook for values */
@@ -290,6 +368,7 @@ void store_trails(const uint32_t *values,
                   grouped,
                   num_loglines,
                   num_cookies,
+                  num_fields,
                   codemap,
                   path);
     DDB_TIMER_END("trail/encode_trails");
@@ -305,24 +384,3 @@ void store_trails(const uint32_t *values,
     free(grouped);
 }
 
-uint32_t trail_decode(struct breadcrumbs *bd,
-                      uint32_t trail_index,
-                      uint32_t *dst,
-                      uint32_t dst_size)
-{
-    /* convert timestamps */
-    /* expand edge-encoding */
-    /* return number of values added to dst (<= dst_size) */
-}
-
-uint32_t trail_value_freqs(const struct breadcrumbs *bd,
-                           uint32_t *trail_indices,
-                           uint32_t num_trail_indices,
-                           uint32_t *dst_values,
-                           uint32_t *dst_freqs,
-                           uint32_t dst_size)
-{
-    /* Use Judy1 to check that only one distinct value per cookie is added to freqs */
-    /* no nulls, no timestamps */
-    /* return number of top values added to dst (<= dst_size) */
-}

@@ -14,7 +14,6 @@
 #define MAX_FIELD_SIZE 1024
 #define MAX_NUM_FIELDS 255
 #define MAX_NUM_INPUTS 10000000
-#define ARENA_INCREMENT 10000000
 #define INVALID_RATIO 0.001
 
 /* We want to filter out all corrupted and invalid timestamps
@@ -30,24 +29,20 @@ struct logline{
     uint32_t prev_logline_idx;
 };
 
-struct cookie{
-    uint32_t last_logline_idx;
-    uint32_t previous_values[0];
-} __attribute((packed))__;
-
 void store_cookies(const Pvoid_t cookie_index,
                    uint32_t num_cookies,
                    const char *path);
 
 void store_lexicon(Pvoid_t lexicon, const char *path);
 
-void store_trails(const uint32_t *fields,
-                  uint32_t num_fields,
-                  const struct cookie *cookies,
+void store_trails(const uint32_t *cookie_pointers,
                   uint32_t num_cookies,
-                  uint32_t cookie_size,
                   const struct logline *loglines,
                   uint32_t num_loglines,
-                  const char *path);
+                  const uint32_t *values,
+                  uint32_t num_values,
+                  uint32_t num_fields,
+                  const char *root);
+
 
 #endif /* __BREADCRUMBS_ENCODER_H__ */

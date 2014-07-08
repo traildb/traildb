@@ -100,13 +100,3 @@ void store_lexicon(const Pvoid_t lexicon, const char *path)
 
     SAFE_CLOSE(out, path);
 }
-
-uint8_t field_index(uint32_t value)
-{
-    return value & 255;
-}
-
-const char *lexicon_lookup(const struct breadcrumbs *bd, uint32_t value)
-{
-    return NULL;
-}
