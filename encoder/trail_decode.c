@@ -25,40 +25,32 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
     toc = (const uint32_t*)bd->trails.data;
     data = &bd->trails.data[toc[trail_index]];
     size = 8 * (toc[trail_index + 1] - toc[trail_index]);
-    printf("resi %u\n",read_bits(data, 0, 3));
     size -= read_bits(data, 0, 3);
     offs = 3;
-
-    printf("OFFS %llu\n", toc[trail_index]);
 
     memset(bd->previous_values, 0, bd->num_fields * 4);
 
     while (offs < size && i < dst_size){
-        uint32_t val = huff_decode_value(codebook, data, &offs);
-        //printf("val %u %llu\n", val, offs);
         /* every event starts with a timestamp */
+        uint32_t val = huff_decode_value(codebook, data, &offs);
         tstamp += val >> 8;
         dst[i++] = tstamp;
-        printf("offs %llu size %llu ", offs, size);
-        printf("t %u:", tstamp);
 
         /* ..followed by at most num_fields field values, some of which
            may be inherited from the previous events (edge encoding) */
         while (offs < size){
             uint64_t prev_offs = offs;
             val = huff_decode_value(codebook, data, &offs);
-            if (val & 255){
-                printf(" %u|%u", val & 255, val >> 8);
-                bd->previous_values[val & 255] = val;
-            }else{
+            if (val & 255)
+                bd->previous_values[(val & 255) - 1] = val;
+            else{
+                /* we hit the next timestamp, take a step back and break */
                 offs = prev_offs;
                 break;
             }
         }
-        printf("\n");
         for (j = 0; j < bd->num_fields && i < dst_size; j++)
-            if (bd->previous_values[j])
-                dst[i++] = bd->previous_values[j];
+            dst[i++] = bd->previous_values[j];
 
         /* we mark the end of an event with zero. Zero can't occur in any
            of the field values since the timestamp field is 0 */

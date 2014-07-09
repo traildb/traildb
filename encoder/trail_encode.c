@@ -45,9 +45,6 @@ static void group_loglines(struct cookie_logline *grouped,
         uint32_t prev_timestamp;
         int j;
 
-        if (i == 97573)
-            printf("PTR %u\n", cookie_pointers[i]);
-
         while (1){
             grouped[idx].cookie_id = i;
             grouped[idx].values_offset = line->values_offset;
@@ -68,8 +65,6 @@ static void group_loglines(struct cookie_logline *grouped,
 
         /* delta-encode timestamps */
         for (prev_timestamp = base_timestamp, j = idx0; j < idx; j++){
-            if (i == 97573)
-                printf("T %u\n", grouped[j].timestamp);
             uint32_t prev = grouped[j].timestamp;
             grouped[j].timestamp -= prev_timestamp;
             if (grouped[j].timestamp < (1 << 24))
@@ -292,8 +287,6 @@ static void encode_trails(const uint32_t *values,
         if (fseek(out, 0, SEEK_END) == -1)
             DIE("Seeking to the end of %s failed\n", path);
 
-        if (cookie_id == 97573)
-        printf("FILE OFFS %llu\n", file_offs);
         SAFE_SEEK(out, file_offs, path);
         SAFE_WRITE(buf, trail_size, path, out);
 

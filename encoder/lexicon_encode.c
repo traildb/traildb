@@ -8,7 +8,7 @@ void store_cookies(const Pvoid_t cookie_index,
                    uint32_t num_cookies,
                    const char *path)
 {
-    static Word_t cookie_bytes[2];
+    Word_t cookie_bytes[2];
     FILE *out;
     Word_t *ptr;
 
@@ -27,9 +27,6 @@ void store_cookies(const Pvoid_t cookie_index,
         cookie_bytes[1] = 0;
         JLF(ptr, cookie_index_lo, cookie_bytes[1]);
         while (ptr){
-            //SAFE_SEEK(out, (*ptr - 1) * 16, path);
-            //if (cookie_bytes[0] == 0x78c5a1e12d7f0400 && cookie_bytes[1] == 0xc1b9648996f8b540)
-
             SAFE_WRITE(cookie_bytes, 16, path, out);
             JLN(ptr, cookie_index_lo, cookie_bytes[1]);
         }
@@ -62,7 +59,7 @@ void store_lexicon(const Pvoid_t lexicon, const char *path)
     FILE *out;
     Word_t *token_id;
 
-    size += (count + 2) * 4;
+    size += (count + 1) * 4;
 
     if (size > UINT32_MAX)
         DIE("Lexicon %s would be huge! %llu bytes > 4GB\n",
@@ -80,7 +77,7 @@ void store_lexicon(const Pvoid_t lexicon, const char *path)
     SAFE_WRITE(&count, 4, path, out);
 
     token[0] = 0;
-    offset = (count + 2) * 4;
+    offset = (count + 1) * 4;
     JSLF(token_id, lexicon, token);
     while (token_id){
         uint32_t len = strlen((char*)token);
@@ -90,15 +87,10 @@ void store_lexicon(const Pvoid_t lexicon, const char *path)
         SAFE_WRITE(&offset, 4, path, out);
 
         SAFE_SEEK(out, offset, path);
-        SAFE_WRITE(token, len, path, out);
+        SAFE_WRITE(token, len + 1, path, out);
 
-        offset += len;
+        offset += len + 1;
         JSLN(token_id, lexicon, token);
     }
-    /* write the redundant last offset in the TOC, so we can determine
-       token length with toc[i + 1] - toc[i]. */
-    SAFE_SEEK(out, (count + 1) * 4, path);
-    SAFE_WRITE(&offset, 4, path, out);
-
     SAFE_CLOSE(out, path);
 }
