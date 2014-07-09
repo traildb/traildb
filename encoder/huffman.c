@@ -178,7 +178,7 @@ static inline void encode_value(const Pvoid_t codemap,
     Word_t *ptr;
 
     JLG(ptr, codemap, value);
-    if (0 && ptr){
+    if (ptr){
         /* codeword: prefix code by an up bit */
         uint32_t code = 1 | (HUFF_CODE(*ptr) << 1);
         uint32_t bits = HUFF_BITS(*ptr);

@@ -104,6 +104,8 @@ static int parse_line(char *line, long num_fields)
     if (hex_decode(cookie_str, (uint8_t*)cookie_bytes))
         return 1;
 
+    //printf("Str %s -> %016lx%016lx\n", cookie_str, cookie_bytes[0], cookie_bytes[1]);
+
     tstamp = strtoll(strsep(&line, " "), &tmp, 10);
 
     if (tstamp < TSTAMP_MIN || tstamp > TSTAMP_MAX)
@@ -129,6 +131,9 @@ static int parse_line(char *line, long num_fields)
     logline->prev_logline_idx = *cookie_ptr_lo;
     *cookie_ptr_lo = loglines.next;
 
+    if (!strcmp("00047f2de1a1c57840b5f8968964b9c1", cookie_str))
+        printf("Last idx %u\n", loglines.next);
+
     for (i = 0; line && i < num_fields - 2; i++){
         char *field = strsep(&line, " ");
         uint32_t field_size = strlen(field);
@@ -147,6 +152,9 @@ static int parse_line(char *line, long num_fields)
             }
             value |= (*token_id) << 8;
         }
+
+        if (!strcmp("00047f2de1a1c57840b5f8968964b9c1", cookie_str))
+            printf("Time %ld field %u, val %u\n", tstamp, value & 255, value >> 8);
 
         *((uint32_t*)add_item(&values)) = value;
         ++logline->num_values;
@@ -251,6 +259,9 @@ void dump_cookie_pointers(uint32_t *cookie_pointers)
         cookie_bytes[1] = 0;
         JLF(ptr, cookie_index_lo, cookie_bytes[1]);
         while (ptr){
+            if (cookie_bytes[0] == 0x78c5a1e12d7f0400 && cookie_bytes[1] == 0xc1b9648996f8b540)
+                printf("YAY: %u %u\n", idx, *ptr);
+
             cookie_pointers[idx++] = *ptr - 1;
             JLN(ptr, cookie_index_lo, cookie_bytes[1]);
         }

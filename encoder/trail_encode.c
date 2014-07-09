@@ -45,6 +45,9 @@ static void group_loglines(struct cookie_logline *grouped,
         uint32_t prev_timestamp;
         int j;
 
+        if (i == 97573)
+            printf("PTR %u\n", cookie_pointers[i]);
+
         while (1){
             grouped[idx].cookie_id = i;
             grouped[idx].values_offset = line->values_offset;
@@ -65,6 +68,8 @@ static void group_loglines(struct cookie_logline *grouped,
 
         /* delta-encode timestamps */
         for (prev_timestamp = base_timestamp, j = idx0; j < idx; j++){
+            if (i == 97573)
+                printf("T %u\n", grouped[j].timestamp);
             uint32_t prev = grouped[j].timestamp;
             grouped[j].timestamp -= prev_timestamp;
             if (grouped[j].timestamp < (1 << 24))
@@ -205,7 +210,7 @@ static void encode_trails(const uint32_t *values,
     FILE *out;
     uint64_t file_offs = (num_cookies + 1) * 4;
 
-    if (!(out = fopen(path, "w")))
+    if (!(out = fopen(path, "wx")))
         DIE("Could not create trail file: %s\n", path);
 
     /* reserve space for TOC */
@@ -235,28 +240,35 @@ static void encode_trails(const uint32_t *values,
         SAFE_SEEK(out, cookie_id * 4, path);
         SAFE_WRITE(&file_offs, 4, path, out);
 
-        /*
-        if (grouped[i].cookie_id == 42859){
+        if (grouped[i].cookie_id == 97573){
+            printf("OFFS %llu\n", file_offs);
             int k, j = i;
             uint32_t tt = 1399395599;
             while (j < num_loglines && grouped[j].cookie_id == cookie_id){
                 tt += grouped[j].timestamp >> 8;
                 printf("timest %u (%u):", tt, grouped[j].num_values);
                 for (k = 0; k < grouped[j].num_values; k++)
-                    printf(" %u", values[grouped[j].values_offset + k]);
+                    printf(" %u|%u", values[grouped[j].values_offset + k] & 255, values[grouped[j].values_offset + k] >> 8);
                 printf("\n");
                 ++j;
             }
         }
-        */
+
         memset(prev_values, 0, num_fields * 4);
 
         for (;i < num_loglines && grouped[i].cookie_id == cookie_id; i++){
-            uint32_t n = edge_encode_values(values,
+            uint32_t j, n = edge_encode_values(values,
                                             &encoded,
                                             &encoded_size,
                                             prev_values,
                                             &grouped[i]);
+            if (grouped[i].cookie_id == 97573){
+                printf("enc %u (%u | %llu):", grouped[i].timestamp, n, offs);
+                for (j = 0; j < n; j++){
+                    printf(" %u|%u", encoded[j] & 255, encoded[j] >> 8);
+                }
+                printf("\n");
+            }
             huff_encode_values(codemap,
                                grouped[i].timestamp,
                                encoded,
@@ -266,15 +278,23 @@ static void encode_trails(const uint32_t *values,
         }
 
         /* write the length residual */
+        if (cookie_id == 97573)
+            printf("RESI %u\n", (offs & 7) ? 8 - (offs & 7): 0);
         if (offs & 7){
             trail_size = offs / 8 + 1;
             write_bits(buf, 0, 8 - (offs & 7));
         }else
             trail_size = offs / 8;
 
+        if (cookie_id == 97573)
+            printf("SIZE %llu\n", offs);
         /* append trail to the end of file */
         if (fseek(out, 0, SEEK_END) == -1)
             DIE("Seeking to the end of %s failed\n", path);
+
+        if (cookie_id == 97573)
+        printf("FILE OFFS %llu\n", file_offs);
+        SAFE_SEEK(out, file_offs, path);
         SAFE_WRITE(buf, trail_size, path, out);
 
         file_offs += trail_size;

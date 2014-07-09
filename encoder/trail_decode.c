@@ -16,7 +16,7 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
     uint64_t size, offs = 0;
     const struct huff_codebook *codebook =
         (const struct huff_codebook*)bd->codebook.data;
-    uint32_t val, j, i = 0;
+    uint32_t j, i = 0;
     uint32_t tstamp = bd->min_timestamp;
 
     if (trail_index >= bd->num_cookies)
@@ -25,24 +25,37 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
     toc = (const uint32_t*)bd->trails.data;
     data = &bd->trails.data[toc[trail_index]];
     size = 8 * (toc[trail_index + 1] - toc[trail_index]);
+    printf("resi %u\n",read_bits(data, 0, 3));
     size -= read_bits(data, 0, 3);
     offs = 3;
 
+    printf("OFFS %llu\n", toc[trail_index]);
+
     memset(bd->previous_values, 0, bd->num_fields * 4);
 
-    val = huff_decode_value(codebook, data, &offs);
     while (offs < size && i < dst_size){
-        printf("val %u %llu\n", val, offs);
+        uint32_t val = huff_decode_value(codebook, data, &offs);
+        //printf("val %u %llu\n", val, offs);
         /* every event starts with a timestamp */
         tstamp += val >> 8;
         dst[i++] = tstamp;
+        printf("offs %llu size %llu ", offs, size);
+        printf("t %u:", tstamp);
 
         /* ..followed by at most num_fields field values, some of which
            may be inherited from the previous events (edge encoding) */
-        while ((val = huff_decode_value(codebook, data, &offs)) & 255){
-            printf("val %u %llu\n", val, offs);
-            bd->previous_values[val & 255] = val;
+        while (offs < size){
+            uint64_t prev_offs = offs;
+            val = huff_decode_value(codebook, data, &offs);
+            if (val & 255){
+                printf(" %u|%u", val & 255, val >> 8);
+                bd->previous_values[val & 255] = val;
+            }else{
+                offs = prev_offs;
+                break;
+            }
         }
+        printf("\n");
         for (j = 0; j < bd->num_fields && i < dst_size; j++)
             if (bd->previous_values[j])
                 dst[i++] = bd->previous_values[j];
