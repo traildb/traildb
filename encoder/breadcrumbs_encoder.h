@@ -23,24 +23,24 @@
 #define TSTAMP_MAX 1483257600 /* 2017-01-01 */
 
 struct logline{
-    uint32_t values_offset;
+    uint64_t values_offset;
     uint32_t num_values;
     uint32_t timestamp;
-    uint32_t prev_logline_idx;
+    uint64_t prev_logline_idx;
 };
 
 void store_cookies(const Pvoid_t cookie_index,
-                   uint32_t num_cookies,
+                   uint64_t num_cookies,
                    const char *path);
 
 void store_lexicon(Pvoid_t lexicon, const char *path);
 
-void store_trails(const uint32_t *cookie_pointers,
-                  uint32_t num_cookies,
+void store_trails(const uint64_t *cookie_pointers,
+                  uint64_t num_cookies,
                   const struct logline *loglines,
-                  uint32_t num_loglines,
+                  uint64_t num_loglines,
                   const uint32_t *values,
-                  uint32_t num_values,
+                  uint64_t num_values,
                   uint32_t num_fields,
                   const char *root);
 

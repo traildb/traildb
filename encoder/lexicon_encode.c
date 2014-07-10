@@ -5,7 +5,7 @@
 #include "breadcrumbs_encoder.h"
 
 void store_cookies(const Pvoid_t cookie_index,
-                   uint32_t num_cookies,
+                   uint64_t num_cookies,
                    const char *path)
 {
     Word_t cookie_bytes[2];
@@ -35,10 +35,10 @@ void store_cookies(const Pvoid_t cookie_index,
     SAFE_CLOSE(out, path);
 }
 
-static uint32_t lexicon_size(const Pvoid_t lexicon, uint64_t *size){
+static uint64_t lexicon_size(const Pvoid_t lexicon, uint64_t *size){
     uint8_t token[MAX_FIELD_SIZE];
     Word_t *ptr;
-    uint32_t count = 0;
+    uint64_t count = 0;
 
     token[0] = 0;
     JSLF(ptr, lexicon, token);
@@ -54,16 +54,17 @@ void store_lexicon(const Pvoid_t lexicon, const char *path)
 {
     uint8_t token[MAX_FIELD_SIZE];
     uint64_t size = 0;
-    uint32_t count = lexicon_size(lexicon, &size);
+    uint64_t count = lexicon_size(lexicon, &size);
     uint64_t offset;
     FILE *out;
     Word_t *token_id;
 
     size += (count + 1) * 4;
 
-    if (size > UINT32_MAX)
-        DIE("Lexicon %s would be huge! %llu bytes > 4GB\n",
+    if (count > UINT32_MAX || size > UINT32_MAX)
+        DIE("Lexicon %s would be huge! %llu items, %llu bytes\n",
             path,
+            (long long unsigned int)count,
             (long long unsigned int)size);
 
     if (!(out = fopen(path, "w")))

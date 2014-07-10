@@ -15,14 +15,14 @@
 
 struct arena{
     void *data;
-    uint32_t size;
-    uint32_t next;
+    uint64_t size;
+    uint64_t next;
     uint32_t item_size;
     FILE *fd;
 };
 
 static Pvoid_t cookie_index;
-static uint32_t num_cookies;
+static uint64_t num_cookies;
 static Pvoid_t *lexicon;
 static Word_t *lexicon_counters;
 
@@ -43,9 +43,6 @@ static void flush_arena(const struct arena *a)
 
 static void *add_item(struct arena *a)
 {
-    if (a->next == UINT32_MAX)
-        DIE("Arena overflow!\n");
-
     if (a->fd){
         if (a->size == 0){
             a->size = ARENA_DISK_BUFFER;
@@ -131,9 +128,6 @@ static int parse_line(char *line, long num_fields)
     logline->prev_logline_idx = *cookie_ptr_lo;
     *cookie_ptr_lo = loglines.next;
 
-    if (!strcmp("00047f2de1a1c57840b5f8968964b9c1", cookie_str))
-        printf("Last idx %u\n", loglines.next);
-
     for (i = 0; line && i < num_fields - 2; i++){
         char *field = strsep(&line, " ");
         uint32_t field_size = strlen(field);
@@ -152,10 +146,6 @@ static int parse_line(char *line, long num_fields)
             }
             value |= (*token_id) << 8;
         }
-
-        if (!strcmp("00047f2de1a1c57840b5f8968964b9c1", cookie_str))
-            printf("Time %ld field %u, val %u\n", tstamp, value & 255, value >> 8);
-
         *((uint32_t*)add_item(&values)) = value;
         ++logline->num_values;
     }
@@ -241,12 +231,12 @@ static void store_lexicons(char *fields,
     store_cookies(cookie_index, num_cookies, path);
 }
 
-void dump_cookie_pointers(uint32_t *cookie_pointers)
+void dump_cookie_pointers(uint64_t *cookie_pointers)
 {
     Word_t cookie_bytes[2];
     Word_t *ptr;
     Word_t tmp;
-    uint32_t idx = 0;
+    uint64_t idx = 0;
 
     /* NOTE: The code below must populate cookie_pointers
        in the same order as what gets stored by store_cookies()
@@ -259,9 +249,6 @@ void dump_cookie_pointers(uint32_t *cookie_pointers)
         cookie_bytes[1] = 0;
         JLF(ptr, cookie_index_lo, cookie_bytes[1]);
         while (ptr){
-            if (cookie_bytes[0] == 0x78c5a1e12d7f0400 && cookie_bytes[1] == 0xc1b9648996f8b540)
-                printf("YAY: %u %u\n", idx, *ptr);
-
             cookie_pointers[idx++] = *ptr - 1;
             JLN(ptr, cookie_index_lo, cookie_bytes[1]);
         }
@@ -276,7 +263,7 @@ int main(int argc, char **argv)
 {
     char values_tmp_path[MAX_PATH_SIZE];
     struct bdfile values_mmaped;
-    uint32_t *cookie_pointers;
+    uint64_t *cookie_pointers;
     long num_fields;
     long num_inputs;
     FILE *in;
@@ -340,7 +327,7 @@ int main(int argc, char **argv)
     free(lexicon_counters);
 
     /* serialize cookie pointers, freeing cookie_index */
-    if (!(cookie_pointers = malloc(num_cookies * 4)))
+    if (!(cookie_pointers = malloc(num_cookies * 8)))
         DIE("Could not allocate cookie values array\n");
     dump_cookie_pointers(cookie_pointers);
 
