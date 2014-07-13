@@ -4,11 +4,18 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+#include <Judy.h>
 
 #include "ddb_profile.h"
 #include "hex_decode.h"
-#include "breadcrumbs_encoder.h"
 #include "util.h"
+
+#include "breadcrumbs_encoder.h"
+#include "trail_encode.h"
+#include "lexicon_encode.h"
 
 #define ARENA_INCREMENT 100000000
 #define ARENA_DISK_BUFFER (1 << 23) /* must be a power of two */

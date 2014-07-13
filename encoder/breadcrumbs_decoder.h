@@ -19,7 +19,8 @@ const char *bd_lookup_cookie(const struct breadcrumbs *bd,
 uint32_t bd_trail_decode(struct breadcrumbs *bd,
                          uint32_t trail_index,
                          uint32_t *dst,
-                         uint32_t dst_size);
+                         uint32_t dst_size,
+                         int raw_values);
 
 uint32_t bd_trail_value_freqs(const struct breadcrumbs *bd,
                               uint32_t *trail_indices,

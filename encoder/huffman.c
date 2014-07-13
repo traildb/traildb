@@ -12,7 +12,7 @@
 struct hnode{
     uint32_t code;
     uint32_t num_bits;
-    uint32_t symbol;
+    uint64_t symbol;
     uint64_t weight;
     struct hnode *left;
     struct hnode *right;
@@ -57,6 +57,7 @@ static int huffman_code(struct hnode *symbols, int num)
         return -1;
     }
 
+    /* construct the huffman tree bottom up */
     while (num || ddb_queue_length(nodes) > 1){
         struct hnode *new = &newnodes[new_i++];
         new->left = pop_min_weight(symbols, &num, nodes);
@@ -65,6 +66,7 @@ static int huffman_code(struct hnode *symbols, int num)
                       (new->right ? new->right->weight: 0);
         ddb_queue_push(nodes, new);
     }
+    /* allocate codewords top down (depth-first) */
     allocate_codewords(ddb_queue_pop(nodes), 0, 0);
     free(newnodes);
     ddb_queue_free(nodes);
@@ -102,20 +104,33 @@ static void print_codeword(const struct hnode *node)
 }
 
 static void output_stats(const struct hnode *book,
-    uint32_t num_symbols, uint64_t tot)
+                         uint32_t num_symbols,
+                         uint64_t tot)
 {
     fprintf(stderr, "#codewords: %u\n", num_symbols);
     uint64_t cum = 0;
     uint32_t i;
-    fprintf(stderr, "index) field value freq prob cum\n");
+    fprintf(stderr, "index) gramtype [field value] freq prob cum\n");
+
     for (i = 0; i < num_symbols; i++){
+
+        long long unsigned int sym = book[i].symbol;
+        long long unsigned int sym2 = sym >> 32;
         uint32_t f = book[i].weight;
         cum += f;
-        fprintf(stderr,
-                "%u) %u %u %u %2.3f %2.3f | ",
-                i,
-                book[i].symbol & 255,
-                book[i].symbol >> 8,
+
+        fprintf(stderr, "%u) ", i);
+        if (sym2 & 255){
+            fprintf(stderr,
+                    "bi [%llu %llu | %llu %llu] ",
+                    sym & 255,
+                    (sym >> 8) & UINT32_MAX,
+                    sym2 & 255,
+                    sym2 >> 8);
+        }else
+            fprintf(stderr, "uni [%llu %llu] ", sym & 255, sym >> 8);
+
+        fprintf(stderr, "%u %2.3f %2.3f | ",
                 f,
                 100. * f / tot,
                 100. * cum / tot);
@@ -170,14 +185,14 @@ Pvoid_t huff_create_codemap(const Pvoid_t key_freqs)
     return codemap;
 }
 
-static inline void encode_value(const Pvoid_t codemap,
-                                uint32_t value,
-                                char *buf,
-                                uint64_t *offs)
+static inline void encode_gram(const Pvoid_t codemap,
+                               uint64_t gram,
+                               char *buf,
+                               uint64_t *offs)
 {
     Word_t *ptr;
 
-    JLG(ptr, codemap, value);
+    JLG(ptr, codemap, gram);
     if (ptr){
         /* codeword: prefix code by an up bit */
         uint32_t code = 1 | (HUFF_CODE(*ptr) << 1);
@@ -185,30 +200,34 @@ static inline void encode_value(const Pvoid_t codemap,
         write_bits(buf, *offs, code);
         *offs += bits + 1;
     }else{
-        /* literal: prefix by a zero bit (offs + 1) */
-        write_bits(buf, *offs + 1, value);
-        *offs += 33;
+        /* encode literal: bigrams are encoded as two unigrams */
+        do{
+            /* literal: prefix by a zero bit (offs + 1) */
+            write_bits(buf, *offs + 1, gram & UINT32_MAX);
+            *offs += 33;
+            gram >>= 32;
+        } while(gram);
     }
 }
 
 /* NB! This function assumes that buf is initially 2^32 / 8 = 512MB,
    initialized with zeros */
-void huff_encode_values(const Pvoid_t codemap,
-                        uint32_t timestamp,
-                        const uint32_t *values,
-                        uint32_t num_values,
-                        char *buf,
-                        uint64_t *offs)
+void huff_encode_grams(const Pvoid_t codemap,
+                       uint32_t timestamp,
+                       const uint64_t *grams,
+                       uint32_t num_grams,
+                       char *buf,
+                       uint64_t *offs)
 {
     uint32_t i = 0;
-    uint64_t worstcase_bits = *offs + (num_values + 1) * 33 + 64;
+    uint64_t worstcase_bits = *offs + (num_grams + 1) * 2 * 33 + 64;
     if (worstcase_bits >= UINT32_MAX)
         DIE("Cookie trail too long: %llu bits\n",
             (unsigned long long)worstcase_bits);
 
-    encode_value(codemap, timestamp, buf, offs);
-    for (i = 0; i < num_values; i++)
-        encode_value(codemap, values[i], buf, offs);
+    encode_gram(codemap, timestamp, buf, offs);
+    for (i = 0; i < num_grams; i++)
+        encode_gram(codemap, grams[i], buf, offs);
 }
 
 struct huff_codebook *huff_create_codebook(const Pvoid_t codemap,

@@ -1,8 +1,13 @@
 
+#include <stdint.h>
 #include <unistd.h>
 #include <sys/types.h>
 
+#include <Judy.h>
+
 #include "breadcrumbs_encoder.h"
+#include "util.h"
+#include "lexicon_encode.h"
 
 void store_cookies(const Pvoid_t cookie_index,
                    uint64_t num_cookies,

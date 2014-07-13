@@ -66,9 +66,9 @@ static int read_info(struct breadcrumbs *bd, const char *path)
     }
 
     if (fscanf(f,
-               "%u %u %u %u",
-               &bd->num_cookies,
-               &bd->num_loglines,
+               "%llu %llu %u %u",
+               (long long unsigned int*)&bd->num_cookies,
+               (long long unsigned int*)&bd->num_loglines,
                &bd->min_timestamp,
                &bd->max_timestamp) != 4){
         bderror(bd, "Invalid info file");

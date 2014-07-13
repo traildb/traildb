@@ -2,12 +2,7 @@
 #ifndef __BREADCRUMBS_ENCODER_H__
 #define __BREADCRUMBS_ENCODER_H__
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <stdint.h>
-
-#include <Judy.h>
 
 #include "util.h"
 
@@ -28,21 +23,6 @@ struct logline{
     uint32_t timestamp;
     uint64_t prev_logline_idx;
 };
-
-void store_cookies(const Pvoid_t cookie_index,
-                   uint64_t num_cookies,
-                   const char *path);
-
-void store_lexicon(Pvoid_t lexicon, const char *path);
-
-void store_trails(const uint64_t *cookie_pointers,
-                  uint64_t num_cookies,
-                  const struct logline *loglines,
-                  uint64_t num_loglines,
-                  const uint32_t *values,
-                  uint64_t num_values,
-                  uint32_t num_fields,
-                  const char *root);
 
 
 #endif /* __BREADCRUMBS_ENCODER_H__ */

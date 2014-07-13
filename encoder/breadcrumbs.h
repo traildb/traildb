@@ -16,8 +16,8 @@ struct bdfile{
 struct breadcrumbs{
     uint32_t min_timestamp;
     uint32_t max_timestamp;
-    uint32_t num_cookies;
-    uint32_t num_loglines;
+    uint64_t num_cookies;
+    uint64_t num_loglines;
     uint32_t num_fields;
     uint32_t *previous_values;
 

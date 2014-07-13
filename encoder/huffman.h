@@ -13,7 +13,7 @@
 #define HUFF_BITS(x) (((x) & (65535 << 16)) >> 16)
 
 struct huff_codebook{
-    uint32_t symbol;
+    uint64_t symbol;
     uint32_t bits;
 } __attribute__((packed));
 
@@ -21,12 +21,12 @@ struct huff_codebook{
 
 Pvoid_t huff_create_codemap(const Pvoid_t key_freqs);
 
-void huff_encode_values(const Pvoid_t codemap,
-                        uint32_t timestamp,
-                        const uint32_t *values,
-                        uint32_t num_values,
-                        char *buf,
-                        uint64_t *offs);
+void huff_encode_grams(const Pvoid_t codemap,
+                       uint32_t timestamp,
+                       const uint64_t *grams,
+                       uint32_t num_grams,
+                       char *buf,
+                       uint64_t *offs);
 
 struct huff_codebook *huff_create_codebook(const Pvoid_t codemap,
                                            uint32_t *size);
