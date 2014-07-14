@@ -199,14 +199,13 @@ static inline void encode_gram(const Pvoid_t codemap,
         uint32_t bits = HUFF_BITS(*ptr);
         write_bits(buf, *offs, code);
         *offs += bits + 1;
+    }else if ((gram >> 32) & 255){
+        /* non-huffman bigrams are encoded as two unigrams */
+        encode_gram(codemap, gram & UINT32_MAX, buf, offs);
+        encode_gram(codemap, gram >> 32, buf, offs);
     }else{
-        /* encode literal: bigrams are encoded as two unigrams */
-        do{
-            /* literal: prefix by a zero bit (offs + 1) */
-            write_bits(buf, *offs + 1, gram & UINT32_MAX);
-            *offs += 33;
-            gram >>= 32;
-        }while (gram);
+        write_bits(buf, *offs + 1, gram & UINT32_MAX);
+        *offs += 33;
     }
 }
 
