@@ -76,7 +76,7 @@ static void logline_fold(logline_op op,
                                                     prev_values,
                                                     &grouped[i]);
 
-                    op(encoded, n, grouped);
+                    op(encoded, n, &grouped[i]);
                 }
             }
         }else
