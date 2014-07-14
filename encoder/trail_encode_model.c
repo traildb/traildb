@@ -13,7 +13,7 @@
 #define UNIGRAM_SUPPORT 0.00001
 
 #define FIELD_IDX_1(x) (x & 255)
-#define FIELD_IDX_2(x) ((x & (255LLU << 32)) >> 32)
+#define FIELD_IDX_2(x) ((x >> 32) & 255)
 
 typedef void (*logline_op)(const uint32_t *encoded,
                            uint32_t n,
@@ -37,18 +37,18 @@ static void logline_fold(logline_op op,
                          const struct cookie_logline *grouped,
                          uint64_t num_loglines,
                          const uint32_t *values,
-                         uint32_t num_fields)
-{
-    uint32_t *prev_values = NULL;
-    uint32_t *encoded = NULL;
-    uint32_t encoded_size = 0;
-    uint64_t i = 0;
-    unsigned int rand_state = RANDOM_SEED;
-    const uint32_t sample_size = get_sample_size();
+                             uint32_t num_fields)
+    {
+        uint32_t *prev_values = NULL;
+        uint32_t *encoded = NULL;
+        uint32_t encoded_size = 0;
+        uint64_t i = 0;
+        unsigned int rand_state = RANDOM_SEED;
+        const uint32_t sample_size = get_sample_size();
 
-    if (!(prev_values = malloc(num_fields * 4)))
-        DIE("Could not allocated %u fields in edge_encode_values\n",
-            num_fields);
+        if (!(prev_values = malloc(num_fields * 4)))
+            DIE("Could not allocated %u fields in edge_encode_values\n",
+                num_fields);
 
     /* this function scans through *all* unencoded data, takes a sample
        of cookies, edge-encodes loglines for a cookie, and calls the
@@ -68,14 +68,16 @@ static void logline_fold(logline_op op,
             memset(prev_values, 0, num_fields * 4);
 
             for (;i < num_loglines && grouped[i].cookie_id == cookie_id; i++){
+                /* consider only valid timestamps (first byte = 0) */
+                if ((grouped[i].timestamp & 255) == 0){
+                    uint32_t n = edge_encode_fields(values,
+                                                    &encoded,
+                                                    &encoded_size,
+                                                    prev_values,
+                                                    &grouped[i]);
 
-                uint32_t n = edge_encode_fields(values,
-                                                &encoded,
-                                                &encoded_size,
-                                                prev_values,
-                                                &grouped[i]);
-
-                op(encoded, n, grouped);
+                    op(encoded, n, grouped);
+                }
             }
         }else
             /* given that we are sampling cookies, we need to skip all loglines
@@ -122,8 +124,7 @@ uint32_t choose_grams(const uint32_t *encoded,
     memset(g->covered, 0, g->num_fields);
 
     /* First, produce all candidate bigrams for this set. */
-    /* Skip the first element, i = 1, which is always timestamp */
-    for (k = 0, i = 1; i < num_encoded; i++){
+    for (k = 0, i = 0; i < num_encoded; i++){
         uint64_t unigram1 = ((uint64_t)encoded[i]) << 32;
         Word_t *ptr;
 
@@ -139,9 +140,6 @@ uint32_t choose_grams(const uint32_t *encoded,
             }
         }
     }
-
-    /* ensure timestamp stays as the first element */
-    grams[n++] = encoded[0];
 
     /* Pick non-overlapping histograms, in the order of descending score.
        As we go, mark fields covered (consumed) in the set. */
@@ -161,9 +159,10 @@ uint32_t choose_grams(const uint32_t *encoded,
 
         if (max_score){
             /* mark both unigrams of this bigram covered */
-            g->covered[FIELD_IDX_1(g->chosen[max_idx])] = 1;
-            g->covered[FIELD_IDX_2(g->chosen[max_idx])] = 1;
-            grams[n++] = g->chosen[max_idx];
+            uint64_t chosen = g->chosen[max_idx];
+            g->covered[FIELD_IDX_1(chosen)] = 1;
+            g->covered[FIELD_IDX_2(chosen)] = 1;
+            grams[n++] = chosen;
         }else
             /* all bigrams used */
             break;
@@ -171,8 +170,8 @@ uint32_t choose_grams(const uint32_t *encoded,
 
     /* Finally, add all remaining unigrams to the result set which have not
        been covered by any bigrams */
-    for (i = 1; i < num_encoded; i++)
-        if (!g->covered[i])
+    for (i = 0; i < num_encoded; i++)
+        if (!g->covered[encoded[i] & 255])
             grams[n++] = encoded[i];
 
     return n;
@@ -201,11 +200,8 @@ static Pvoid_t find_candidates(const Pvoid_t unigram_freqs)
     JLF(ptr, unigram_freqs, idx);
     while (ptr){
         int tmp;
-        /* timestamps are not allowed in bigrams, hence the
-           "idx & 255" check below */
-        if ((idx & 255) && *ptr > support)
+        if (*ptr > support)
             J1S(tmp, candidates, idx);
-
         JLN(ptr, unigram_freqs, idx);
     }
 
@@ -276,6 +272,9 @@ Pvoid_t make_grams(const struct cookie_logline *grouped,
             JLI(ptr, final_freqs, grams[n]);
             ++*ptr;
         }
+        /* include timestamp delta -frequencies in the final set */
+        JLI(ptr, final_freqs, line->timestamp);
+        ++*ptr;
     }
 
     /* execute the above operation, scanning over data twice */
@@ -298,8 +297,7 @@ Pvoid_t collect_unigrams(const struct cookie_logline *grouped,
 {
     Pvoid_t unigram_freqs = NULL;
 
-    /* simply calculate frequencies of values, including delta-encoded
-       timestamps */
+    /* calculate frequencies of all values */
 
     void op(const uint32_t *encoded,
             uint32_t n,
@@ -311,8 +309,6 @@ Pvoid_t collect_unigrams(const struct cookie_logline *grouped,
             JLI(ptr, unigram_freqs, encoded[n]);
             ++*ptr;
         }
-        JLI(ptr, unigram_freqs, line->timestamp);
-        ++*ptr;
     }
 
     logline_fold(op, grouped, num_loglines, values, num_fields);

@@ -124,7 +124,7 @@ static void output_stats(const struct hnode *book,
             fprintf(stderr,
                     "bi [%llu %llu | %llu %llu] ",
                     sym & 255,
-                    (sym >> 8) & UINT32_MAX,
+                    (sym >> 8) & ((1 << 24) - 1),
                     sym2 & 255,
                     sym2 >> 8);
         }else
@@ -206,7 +206,7 @@ static inline void encode_gram(const Pvoid_t codemap,
             write_bits(buf, *offs + 1, gram & UINT32_MAX);
             *offs += 33;
             gram >>= 32;
-        } while(gram);
+        }while (gram);
     }
 }
 

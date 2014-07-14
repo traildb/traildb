@@ -150,8 +150,8 @@ static void encode_trails(const uint32_t *values,
                           uint64_t num_loglines,
                           uint64_t num_cookies,
                           uint32_t num_fields,
-                          const Pvoid_t gram_freqs,
                           const Pvoid_t codemap,
+                          const Pvoid_t gram_freqs,
                           const char *path)
 {
     uint64_t *grams = NULL;

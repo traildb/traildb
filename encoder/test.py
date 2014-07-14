@@ -18,7 +18,7 @@ def cookie_string(idx):
     return ''.join(imap(lambda x: '%.2x' % x, c))
 
 def get_trail(idx):
-    le = bd.bd_trail_decode(chunk, idx, arr, 1000)
+    le = bd.bd_trail_decode(chunk, idx, arr, 1000, 0)
     i = 0
     while i < le:
         tstamp = arr[i]
@@ -38,10 +38,12 @@ bd.bd_error.restype = ctypes.c_char_p
 bd.bd_lookup_cookie.restype = ctypes.POINTER(ctypes.c_ubyte)
 bd.bd_num_cookies.restype = ctypes.c_uint
 bd.bd_lookup_value.restype = ctypes.c_char_p
-bd.bd_trail_decode.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.POINTER(ctypes.c_uint), ctypes.c_uint]
+bd.bd_trail_decode.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.POINTER(ctypes.c_uint), ctypes.c_uint, ctypes.c_uint]
 
 chunk = bd.bd_open('out')
 #idx = cookie_index('00047f2de1a1c57840b5f8968964b9c1', chunk)
+
+#bd.bd_trail_all_freqs(chunk)
 
 for idx in range(bd.bd_num_cookies(chunk)):
     cookie = cookie_string(idx)
