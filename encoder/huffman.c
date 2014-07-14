@@ -212,19 +212,17 @@ static inline void encode_gram(const Pvoid_t codemap,
 /* NB! This function assumes that buf is initially 2^32 / 8 = 512MB,
    initialized with zeros */
 void huff_encode_grams(const Pvoid_t codemap,
-                       uint32_t timestamp,
                        const uint64_t *grams,
                        uint32_t num_grams,
                        char *buf,
                        uint64_t *offs)
 {
     uint32_t i = 0;
-    uint64_t worstcase_bits = *offs + (num_grams + 1) * 2 * 33 + 64;
+    uint64_t worstcase_bits = *offs + num_grams * 2 * 33 + 64;
     if (worstcase_bits >= UINT32_MAX)
         DIE("Cookie trail too long: %llu bits\n",
             (unsigned long long)worstcase_bits);
 
-    encode_gram(codemap, timestamp, buf, offs);
     for (i = 0; i < num_grams; i++)
         encode_gram(codemap, grams[i], buf, offs);
 }

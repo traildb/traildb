@@ -45,10 +45,11 @@ void init_gram_bufs(struct gram_bufs *b, uint32_t num_fields);
 void free_gram_bufs(struct gram_bufs *b);
 
 uint32_t choose_grams(const uint32_t *encoded,
-                      uint32_t num_encoded,
+                      int num_encoded,
                       const Pvoid_t gram_freqs,
                       struct gram_bufs *g,
-                      uint64_t *grams);
+                      uint64_t *grams,
+                      const struct cookie_logline *line);
 
 Pvoid_t make_grams(const struct cookie_logline *grouped,
                    uint64_t num_loglines,

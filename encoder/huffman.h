@@ -22,7 +22,6 @@ struct huff_codebook{
 Pvoid_t huff_create_codemap(const Pvoid_t key_freqs);
 
 void huff_encode_grams(const Pvoid_t codemap,
-                       uint32_t timestamp,
                        const uint64_t *grams,
                        uint32_t num_grams,
                        char *buf,

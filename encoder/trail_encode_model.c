@@ -16,7 +16,7 @@
 #define FIELD_IDX_2(x) ((x >> 32) & 255)
 
 typedef void (*logline_op)(const uint32_t *encoded,
-                           uint32_t n,
+                           int n,
                            const struct cookie_logline *line);
 
 static uint32_t get_sample_size()
@@ -114,32 +114,39 @@ void free_gram_bufs(struct gram_bufs *b)
    and bigrams that cover the original set. In essence, this tries to
    solve Weigted Exact Cover Problem for the universe of 'encoded'. */
 uint32_t choose_grams(const uint32_t *encoded,
-                      uint32_t num_encoded,
+                      int num_encoded,
                       const Pvoid_t gram_freqs,
                       struct gram_bufs *g,
-                      uint64_t *grams)
+                      uint64_t *grams,
+                      const struct cookie_logline *line)
 {
-    uint32_t i, j, k, n = 0;
+    uint32_t j, k, n = 0;
+    int i;
+    Word_t *ptr;
 
     memset(g->covered, 0, g->num_fields);
 
     /* First, produce all candidate bigrams for this set. */
-    for (k = 0, i = 0; i < num_encoded; i++){
-        uint64_t unigram1 = ((uint64_t)encoded[i]) << 32;
-        Word_t *ptr;
+    for (k = 0, i = -1; i < num_encoded; i++){
+        uint64_t unigram1;
+        if (i == -1)
+            unigram1 = line->timestamp;
+        else
+            unigram1 = encoded[i];
 
-        JLF(ptr, gram_freqs, unigram1);
-        if (ptr && (unigram1 >> 32) == encoded[i]){
-            for (j = i + 1; j < num_encoded; j++){
-                uint64_t bigram = ((uint64_t)encoded[j]) | unigram1;
-                JLG(ptr, gram_freqs, bigram);
-                if (ptr){
-                    g->chosen[k] = bigram;
-                    g->scores[k++] = *ptr;
-                }
+        for (j = i + 1; j < num_encoded; j++){
+            uint64_t bigram = unigram1 | (((uint64_t)encoded[j]) << 32);
+            JLG(ptr, gram_freqs, bigram);
+            if (ptr){
+                g->chosen[k] = bigram;
+                g->scores[k++] = *ptr;
             }
         }
     }
+
+    /* timestamp *must* be the first item in the list, add unigram as
+       a placeholder - this may get replaced by a bigram below */
+    grams[n++] = line->timestamp;
 
     /* Pick non-overlapping histograms, in the order of descending score.
        As we go, mark fields covered (consumed) in the set. */
@@ -162,7 +169,11 @@ uint32_t choose_grams(const uint32_t *encoded,
             uint64_t chosen = g->chosen[max_idx];
             g->covered[FIELD_IDX_1(chosen)] = 1;
             g->covered[FIELD_IDX_2(chosen)] = 1;
-            grams[n++] = chosen;
+            if (!(chosen & 255))
+                /* make sure timestamp stays as the first item */
+                grams[0] = chosen;
+            else
+                grams[n++] = chosen;
         }else
             /* all bigrams used */
             break;
@@ -185,8 +196,8 @@ static Pvoid_t find_candidates(const Pvoid_t unigram_freqs)
     uint64_t num_values = 0;
     uint64_t support;
 
-    /* find all non-timestamp unigrams whose probability of
-       occurrence is greater than UNIGRAM_SUPPORT */
+    /* find all unigrams whose probability of occurrence is greater than
+       UNIGRAM_SUPPORT */
 
     JLF(ptr, unigram_freqs, idx);
     while (ptr){
@@ -235,20 +246,25 @@ Pvoid_t make_grams(const struct cookie_logline *grouped,
     /* first, collect frequencies of *all* occurring bigrams of
        candidate unigrams */
     void all_bigrams(const uint32_t *encoded,
-                     uint32_t n,
+                     int n,
                      const struct cookie_logline *line){
 
         int set, i, j;
 
-        for (i = 0; i < n; i++){
-            uint64_t unigram1 = encoded[i];
+        for (i = -1; i < n; i++){
+            uint64_t unigram1;
+            if (i == -1)
+                unigram1 = line->timestamp;
+            else
+                unigram1 = encoded[i];
+
             J1T(set, candidates, unigram1);
             if (set){
                 for (j = i + 1; j < n; j++){
                     uint64_t unigram2 = encoded[j];
                     J1T(set, candidates, unigram2);
                     if (set){
-                        Word_t bigram = unigram2 | (unigram1 << 32);
+                        Word_t bigram = unigram1 | (unigram2 << 32);
                         JLI(ptr, bigram_freqs, bigram);
                         ++*ptr;
                     }
@@ -260,21 +276,19 @@ Pvoid_t make_grams(const struct cookie_logline *grouped,
     /* secondly, collect frequencies of non-overlapping bigrams and
        unigrams (exact covering set for each logline) */
     void choose_bigrams(const uint32_t *encoded,
-                        uint32_t num_encoded,
+                        int num_encoded,
                         const struct cookie_logline *line){
 
         uint32_t n = choose_grams(encoded,
                                   num_encoded,
                                   bigram_freqs,
                                   &gbufs,
-                                  grams);
+                                  grams,
+                                  line);
         while (n--){
             JLI(ptr, final_freqs, grams[n]);
             ++*ptr;
         }
-        /* include timestamp delta -frequencies in the final set */
-        JLI(ptr, final_freqs, line->timestamp);
-        ++*ptr;
     }
 
     /* execute the above operation, scanning over data twice */
@@ -300,7 +314,7 @@ Pvoid_t collect_unigrams(const struct cookie_logline *grouped,
     /* calculate frequencies of all values */
 
     void op(const uint32_t *encoded,
-            uint32_t n,
+            int n,
             const struct cookie_logline *line){
 
         Word_t *ptr;
@@ -309,6 +323,10 @@ Pvoid_t collect_unigrams(const struct cookie_logline *grouped,
             JLI(ptr, unigram_freqs, encoded[n]);
             ++*ptr;
         }
+
+        /* include frequencies for timestamp deltas */
+        JLI(ptr, unigram_freqs, line->timestamp);
+        ++*ptr;
     }
 
     logline_fold(op, grouped, num_loglines, values, num_fields);

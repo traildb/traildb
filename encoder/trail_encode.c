@@ -218,11 +218,11 @@ static void encode_trails(const uint32_t *values,
                                       n,
                                       gram_freqs,
                                       &gbufs,
-                                      grams);
+                                      grams,
+                                      &grouped[i]);
 
             /* 3) huffman-encode grams */
             huff_encode_grams(codemap,
-                              grouped[i].timestamp,
                               grams,
                               m,
                               buf,

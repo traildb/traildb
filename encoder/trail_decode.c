@@ -15,7 +15,7 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
 {
     const uint32_t *toc;
     const char *data;
-    uint64_t size, offs = 0;
+    uint64_t val, size, offs = 0;
     const struct huff_codebook *codebook =
         (const struct huff_codebook*)bd->codebook.data;
     uint32_t j, i = 0;
@@ -32,19 +32,21 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
 
     if (raw_values){
         while (offs < size && i < dst_size){
-            /* every logline starts with a timestamp unigram */
-            uint64_t val = huff_decode_value(codebook, data, &offs);
-            tstamp += val >> 8;
-            dst[i++] = tstamp;
+            /* Every logline starts with a timestamp.
+               Timestamp may be the first member of a bigram */
+            do{
+                val = huff_decode_value(codebook, data, &offs);
+                tstamp += (val & UINT32_MAX) >> 8;
+                dst[i++] = tstamp;
+                val >>= 32;
+            }while (val && i < dst_size);
 
-            /* ..followed by at most num_fields field values, some of which
-               may be inherited from the previous events (edge encoding) */
+            /* timestamp is followed by at most num_fields field values */
             while (offs < size && i < dst_size){
                 uint64_t prev_offs = offs;
                 val = huff_decode_value(codebook, data, &offs);
                 if (val & 255){
-                    /* value may be either a unigram or a bigram,
-                       unpack both as unigrams */
+                    /* value may be either a unigram or a bigram */
                     do{
                         dst[i++] = val & UINT32_MAX;
                         val >>= 32;
@@ -65,10 +67,15 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
         memset(bd->previous_values, 0, bd->num_fields * 4);
 
         while (offs < size && i < dst_size){
-            uint64_t val = huff_decode_value(codebook, data, &offs);
-            tstamp += val >> 8;
-            dst[i++] = tstamp;
+            do{
+                val = huff_decode_value(codebook, data, &offs);
+                tstamp += (val & UINT32_MAX) >> 8;
+                dst[i++] = tstamp;
+                val >>= 32;
+            }while (val && i < dst_size);
 
+            /* edge encoding: some fields may be inherited from previous
+               loglines - keep track what we have seen in the past */
             while (offs < size){
                 uint64_t prev_offs = offs;
                 val = huff_decode_value(codebook, data, &offs);
