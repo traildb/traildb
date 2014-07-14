@@ -32,8 +32,8 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
 
     if (raw_values){
         while (offs < size && i < dst_size){
-            /* every logline starts with a timestamp */
-            uint32_t val = huff_decode_value(codebook, data, &offs);
+            /* every logline starts with a timestamp unigram */
+            uint64_t val = huff_decode_value(codebook, data, &offs);
             tstamp += val >> 8;
             dst[i++] = tstamp;
 
@@ -42,9 +42,14 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
             while (offs < size && i < dst_size){
                 uint64_t prev_offs = offs;
                 val = huff_decode_value(codebook, data, &offs);
-                if (val & 255)
-                    dst[i++] = val;
-                else{
+                if (val & 255){
+                    /* value may be either a unigram or a bigram,
+                       unpack both as unigrams */
+                    do{
+                        dst[i++] = val & UINT32_MAX;
+                        val >>= 32;
+                    }while (val && i < dst_size);
+                }else{
                     /* we hit the next timestamp, take a step back and break */
                     offs = prev_offs;
                     break;
@@ -57,20 +62,22 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
         }
     }else{
         /* same thing as above but here we decode edge encoding */
-
         memset(bd->previous_values, 0, bd->num_fields * 4);
 
         while (offs < size && i < dst_size){
-            uint32_t val = huff_decode_value(codebook, data, &offs);
+            uint64_t val = huff_decode_value(codebook, data, &offs);
             tstamp += val >> 8;
             dst[i++] = tstamp;
 
             while (offs < size){
                 uint64_t prev_offs = offs;
                 val = huff_decode_value(codebook, data, &offs);
-                if (val & 255)
-                    bd->previous_values[(val & 255) - 1] = val;
-                else{
+                if (val & 255){
+                    do{
+                        bd->previous_values[(val & 255) - 1] = val & UINT32_MAX;
+                        val >>= 32;
+                    }while (val);
+                }else{
                     offs = prev_offs;
                     break;
                 }

@@ -36,7 +36,7 @@ void huff_store_codebook(const Pvoid_t codemap,
 
 /* DECODE */
 
-static inline uint32_t huff_decode_value(const struct huff_codebook *codebook,
+static inline uint64_t huff_decode_value(const struct huff_codebook *codebook,
                                          const char *data,
                                          uint64_t *offset)
 {
