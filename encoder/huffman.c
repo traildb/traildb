@@ -155,6 +155,27 @@ static Pvoid_t make_codemap(struct hnode *nodes, uint32_t num_symbols)
     return codemap;
 }
 
+struct field_stats *huff_field_stats(const uint64_t *field_cardinalities,
+                                     uint32_t num_fields,
+                                     uint32_t max_timestamp_delta)
+{
+    uint32_t i;
+    struct field_stats *fstats;
+
+    if (!(fstats = malloc(sizeof(struct field_stats) + (num_fields - 1) * 4)))
+        return NULL;
+
+    fstats->field_id_bits = bits_needed(num_fields - 1);
+    printf("FIELD ID BITS %u (num %u)\n", fstats->field_id_bits, num_fields);
+    fstats->field_bits[0] = bits_needed(max_timestamp_delta);
+    printf("FIELD_BITS[0]: %u\n", fstats->field_bits[0]);
+    for (i = 0; i < num_fields - 2; i++){
+        fstats->field_bits[i + 1] = bits_needed(field_cardinalities[i]);
+        printf("FIELD_BITS[%d]: %u\n", i + 1, fstats->field_bits[i + 1]);
+    }
+    return fstats;
+}
+
 Pvoid_t huff_create_codemap(const Pvoid_t key_freqs)
 {
     struct hnode *nodes;
@@ -188,24 +209,39 @@ Pvoid_t huff_create_codemap(const Pvoid_t key_freqs)
 static inline void encode_gram(const Pvoid_t codemap,
                                uint64_t gram,
                                char *buf,
-                               uint64_t *offs)
+                               uint64_t *offs,
+                               const struct field_stats *fstats)
 {
+    const uint32_t field_id = gram & 255;
+    const uint32_t value = gram >> 8;
+    const uint32_t is_bigram = (gram >> 32) & 255;
+    const uint32_t literal_bits = 1 + fstats->field_id_bits +
+                                  fstats->field_bits[field_id];
+
+    uint32_t huff_code, huff_bits;
     Word_t *ptr;
 
     JLG(ptr, codemap, gram);
     if (ptr){
         /* codeword: prefix code by an up bit */
-        uint32_t code = 1 | (HUFF_CODE(*ptr) << 1);
-        uint32_t bits = HUFF_BITS(*ptr);
-        write_bits(buf, *offs, code);
-        *offs += bits + 1;
-    }else if ((gram >> 32) & 255){
+        huff_code = 1 | (HUFF_CODE(*ptr) << 1);
+        huff_bits = HUFF_BITS(*ptr) + 1;
+    }
+
+    if (ptr && (is_bigram || huff_bits < literal_bits)){
+        /* write huffman-coded codeword */
+        write_bits(buf, *offs, huff_code);
+        *offs += huff_bits;
+    }else if (is_bigram){
         /* non-huffman bigrams are encoded as two unigrams */
-        encode_gram(codemap, gram & UINT32_MAX, buf, offs);
-        encode_gram(codemap, gram >> 32, buf, offs);
+        encode_gram(codemap, gram & UINT32_MAX, buf, offs, fstats);
+        encode_gram(codemap, gram >> 32, buf, offs, fstats);
     }else{
-        write_bits(buf, *offs + 1, gram & UINT32_MAX);
-        *offs += 33;
+        /* write literal:
+           [0 (1 bit) | field-id (field_id_bits) | value (field_bits[field_id])]
+        */
+        write_bits(buf, *offs + 1, field_id | (value << fstats->field_id_bits));
+        *offs += literal_bits;
     }
 }
 
@@ -215,7 +251,8 @@ void huff_encode_grams(const Pvoid_t codemap,
                        const uint64_t *grams,
                        uint32_t num_grams,
                        char *buf,
-                       uint64_t *offs)
+                       uint64_t *offs,
+                       const struct field_stats *fstats)
 {
     uint32_t i = 0;
     uint64_t worstcase_bits = *offs + num_grams * 2 * 33 + 64;
@@ -224,7 +261,7 @@ void huff_encode_grams(const Pvoid_t codemap,
             (unsigned long long)worstcase_bits);
 
     for (i = 0; i < num_grams; i++)
-        encode_gram(codemap, grams[i], buf, offs);
+        encode_gram(codemap, grams[i], buf, offs, fstats);
 }
 
 struct huff_codebook *huff_create_codebook(const Pvoid_t codemap,

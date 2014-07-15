@@ -30,6 +30,7 @@ void store_trails(const uint64_t *cookie_pointers,
                   const uint32_t *values,
                   uint64_t num_values,
                   uint32_t num_fields,
+                  const uint64_t *field_cardinalities,
                   const char *root);
 
 /* trail_encode_model */

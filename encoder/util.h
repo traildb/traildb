@@ -52,4 +52,6 @@ void make_path(char path[MAX_PATH_SIZE], char *fmt, ...);
 
 int mmap_file(const char *path, struct bdfile *dst, struct breadcrumbs *bd);
 
+uint32_t bits_needed(uint32_t max);
+
 #endif /* __DIE_H__ */

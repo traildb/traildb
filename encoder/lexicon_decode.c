@@ -1,15 +1,9 @@
 
 #include "breadcrumbs_decoder.h"
 
-struct lexicon{
-    uint32_t size;
-    const uint32_t *toc;
-    const char *data;
-};
-
-static int open_lexicon(const struct breadcrumbs *bd,
-                        struct lexicon *lex,
-                        uint32_t field)
+int open_lexicon(const struct breadcrumbs *bd,
+                 struct lexicon *lex,
+                 uint32_t field)
 {
     if (field < bd->num_fields){
         lex->size = *(uint32_t*)bd->lexicons[field].data;

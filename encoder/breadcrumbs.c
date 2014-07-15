@@ -56,6 +56,36 @@ static int open_fields(const char *root, char *path, struct breadcrumbs *bd)
     return 0;
 }
 
+static int init_field_stats(struct breadcrumbs *bd)
+{
+    uint32_t i;
+    uint64_t *field_cardinalities;
+
+    if (!(field_cardinalities = malloc((bd->num_fields + 1) * 8)))
+        return -1;
+
+    for (i = 0; i < bd->num_fields; i++){
+        struct lexicon lex;
+
+        if (open_lexicon(bd, &lex, i)){
+            free(field_cardinalities);
+            return -1;
+        }
+
+        field_cardinalities[i] = lex.size;
+    }
+
+    if (!(bd->fstats = huff_field_stats(field_cardinalities,
+                                        bd->num_fields + 2,
+                                        bd->max_timestamp_delta))){
+        free(field_cardinalities);
+        return -1;
+    }
+
+    free(field_cardinalities);
+    return 0;
+}
+
 static int read_info(struct breadcrumbs *bd, const char *path)
 {
     FILE *f;
@@ -66,11 +96,12 @@ static int read_info(struct breadcrumbs *bd, const char *path)
     }
 
     if (fscanf(f,
-               "%llu %llu %u %u",
+               "%llu %llu %u %u %u",
                (long long unsigned int*)&bd->num_cookies,
                (long long unsigned int*)&bd->num_loglines,
                &bd->min_timestamp,
-               &bd->max_timestamp) != 4){
+               &bd->max_timestamp,
+               &bd->max_timestamp_delta) != 5){
         bderror(bd, "Invalid info file");
         return -1;
     }
@@ -106,6 +137,11 @@ struct breadcrumbs *bd_open(const char *root)
     if (open_fields(root, path, bd))
         goto err;
 
+    if (init_field_stats(bd)){
+        bderror(bd, "Could not init field stats");
+        goto err;
+    }
+
     return bd;
 err:
     bd->errno = 1;
@@ -126,6 +162,7 @@ void bd_close(struct breadcrumbs *bd)
 
         free(bd->lexicons);
         free(bd->previous_values);
+        free(bd->fstats);
         free(bd);
     }
 }

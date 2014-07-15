@@ -5,8 +5,18 @@
 #include "breadcrumbs.h"
 #include "util.h"
 
+struct lexicon{
+    uint32_t size;
+    const uint32_t *toc;
+    const char *data;
+};
+
 struct breadcrumbs *bd_open(const char *root);
 void bd_close(struct breadcrumbs *bd);
+
+int open_lexicon(const struct breadcrumbs *bd,
+                 struct lexicon *lex,
+                 uint32_t field);
 
 uint8_t bd_field_value(uint32_t value);
 uint8_t bd_field_index(uint32_t value);

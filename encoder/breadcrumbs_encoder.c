@@ -331,7 +331,6 @@ int main(int argc, char **argv)
         Word_t tmp;
         JSLFA(tmp, lexicon[i]);
     }
-    free(lexicon_counters);
 
     /* serialize cookie pointers, freeing cookie_index */
     if (!(cookie_pointers = malloc(num_cookies * 8)))
@@ -346,11 +345,13 @@ int main(int argc, char **argv)
                  (const uint32_t*)values_mmaped.data, /* field values */
                  values.next, /* number of values */
                  num_fields, /* number of fields */
+                 (const uint64_t*)lexicon_counters, /* field cardinalities */
                  argv[3]); /* output directory */
     DDB_TIMER_END("encoder/store_trails")
 
     unlink(values_tmp_path);
     free(cookie_pointers);
+    free(lexicon_counters);
 
     return 0;
 }

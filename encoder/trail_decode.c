@@ -20,6 +20,7 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
         (const struct huff_codebook*)bd->codebook.data;
     uint32_t j, i = 0;
     uint32_t tstamp = bd->min_timestamp;
+    const struct field_stats *fstats = bd->fstats;
 
     if (trail_index >= bd->num_cookies)
         return 0;
@@ -29,22 +30,21 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
     size = 8 * (toc[trail_index + 1] - toc[trail_index]);
     size -= read_bits(data, 0, 3);
     offs = 3;
-
     if (raw_values){
         while (offs < size && i < dst_size){
             /* Every logline starts with a timestamp.
                Timestamp may be the first member of a bigram */
-            do{
-                val = huff_decode_value(codebook, data, &offs);
-                tstamp += (val & UINT32_MAX) >> 8;
-                dst[i++] = tstamp;
-                val >>= 32;
-            }while (val && i < dst_size);
+            val = huff_decode_value(codebook, data, &offs, fstats);
+            tstamp += (val & UINT32_MAX) >> 8;
+            dst[i++] = tstamp;
+            val >>= 32;
+            if (val && i < dst_size)
+                dst[i++] = val;
 
             /* timestamp is followed by at most num_fields field values */
             while (offs < size && i < dst_size){
                 uint64_t prev_offs = offs;
-                val = huff_decode_value(codebook, data, &offs);
+                val = huff_decode_value(codebook, data, &offs, fstats);
                 if (val & 255){
                     /* value may be either a unigram or a bigram */
                     do{
@@ -67,18 +67,18 @@ uint32_t bd_trail_decode(struct breadcrumbs *bd,
         memset(bd->previous_values, 0, bd->num_fields * 4);
 
         while (offs < size && i < dst_size){
-            do{
-                val = huff_decode_value(codebook, data, &offs);
-                tstamp += (val & UINT32_MAX) >> 8;
-                dst[i++] = tstamp;
-                val >>= 32;
-            }while (val && i < dst_size);
+            val = huff_decode_value(codebook, data, &offs, fstats);
+            tstamp += (val & UINT32_MAX) >> 8;
+            dst[i++] = tstamp;
+            val >>= 32;
+            if (val)
+                bd->previous_values[(val & 255) - 1] = val;
 
             /* edge encoding: some fields may be inherited from previous
                loglines - keep track what we have seen in the past */
             while (offs < size){
                 uint64_t prev_offs = offs;
-                val = huff_decode_value(codebook, data, &offs);
+                val = huff_decode_value(codebook, data, &offs, fstats);
                 if (val & 255){
                     do{
                         bd->previous_values[(val & 255) - 1] = val & UINT32_MAX;

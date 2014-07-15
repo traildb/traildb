@@ -47,6 +47,17 @@ struct sortpair *sort_judyl(const Pvoid_t judy, Word_t *num_items)
     return pairs;
 }
 
+uint32_t bits_needed(uint32_t max)
+{
+    uint32_t x = max;
+    uint32_t bits = x ? 0: 1;
+    while (x){
+        x >>= 1;
+        ++bits;
+    }
+    return bits;
+}
+
 void make_path(char path[MAX_PATH_SIZE], char *fmt, ...)
 {
     va_list aptr;

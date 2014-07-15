@@ -25,11 +25,14 @@ static void group_loglines(struct cookie_logline *grouped,
                            const uint64_t *cookie_pointers,
                            uint64_t num_cookies,
                            const struct logline *loglines,
-                           uint32_t base_timestamp)
+                           uint32_t base_timestamp,
+                           uint32_t *max_timestamp_delta)
 {
     uint64_t i;
     uint64_t idx = 0;
     uint64_t num_invalid = 0;
+
+    *max_timestamp_delta = 0;
 
     for (i = 0; i < num_cookies; i++){
         /* find the last logline belonging to this cookie */
@@ -64,6 +67,10 @@ static void group_loglines(struct cookie_logline *grouped,
             /* timestamps can be at most 2**24 seconds apart (194 days).
                It is not a problem since data should be partitioned by time */
             if (grouped[j].timestamp < (1 << 24)){
+
+                if (grouped[j].timestamp > *max_timestamp_delta)
+                    *max_timestamp_delta = grouped[j].timestamp;
+
                 grouped[j].timestamp <<= 8;
                 prev_timestamp = prev;
             }else{
@@ -111,16 +118,12 @@ uint32_t edge_encode_fields(const uint32_t *values,
     return n;
 }
 
-static void info(const struct logline *loglines,
-                 uint64_t num_loglines,
-                 uint64_t num_cookies,
-                 uint32_t *min_timestamp,
-                 uint32_t *max_timestamp,
-                 const char *path)
+static void timestamp_range(const struct logline *loglines,
+                            uint64_t num_loglines,
+                            uint32_t *min_timestamp,
+                            uint32_t *max_timestamp)
 {
     uint64_t i;
-    FILE *out;
-
     *min_timestamp = UINT32_MAX;
     *max_timestamp = 0;
 
@@ -130,17 +133,28 @@ static void info(const struct logline *loglines,
         if (loglines[i].timestamp > *max_timestamp)
             *max_timestamp = loglines[i].timestamp;
     }
+}
+
+static void store_info(uint64_t num_loglines,
+                       uint64_t num_cookies,
+                       uint32_t min_timestamp,
+                       uint32_t max_timestamp,
+                       uint32_t max_timestamp_delta,
+                       const char *path)
+{
+    FILE *out;
 
     if (!(out = fopen(path, "w")))
         DIE("Could not create info file: %s\n", path);
 
     SAFE_FPRINTF(out,
                  path,
-                 "%llu %llu %u %u\n",
+                 "%llu %llu %u %u %u\n",
                  (long long unsigned int)num_cookies,
                  (long long unsigned int)num_loglines,
-                 *min_timestamp,
-                 *max_timestamp);
+                 min_timestamp,
+                 max_timestamp,
+                 max_timestamp_delta);
 
     SAFE_CLOSE(out, path);
 }
@@ -152,6 +166,7 @@ static void encode_trails(const uint32_t *values,
                           uint32_t num_fields,
                           const Pvoid_t codemap,
                           const Pvoid_t gram_freqs,
+                          const struct field_stats *fstats,
                           const char *path)
 {
     uint64_t *grams = NULL;
@@ -226,7 +241,8 @@ static void encode_trails(const uint32_t *values,
                               grams,
                               m,
                               buf,
-                              &offs);
+                              &offs,
+                              fstats);
         }
 
         /* write the length residual */
@@ -284,11 +300,13 @@ void store_trails(const uint64_t *cookie_pointers,
                   const uint32_t *values,
                   uint64_t num_values,
                   uint32_t num_fields,
+                  const uint64_t *field_cardinalities,
                   const char *root)
 {
     char path[MAX_PATH_SIZE];
     struct cookie_logline *grouped;
-    uint32_t min_timestamp, max_timestamp;
+    struct field_stats *fstats;
+    uint32_t min_timestamp, max_timestamp, max_timestamp_delta;
     Pvoid_t unigram_freqs;
     Pvoid_t gram_freqs;
     Pvoid_t codemap;
@@ -301,13 +319,7 @@ void store_trails(const uint64_t *cookie_pointers,
 
     /* 1. find minimum timestamp (for delta-encoding) */
     DDB_TIMER_START
-    make_path(path, "%s/info", root);
-    info(loglines,
-         num_loglines,
-         num_cookies,
-         &min_timestamp,
-         &max_timestamp,
-         path);
+    timestamp_range(loglines, num_loglines, &min_timestamp, &max_timestamp);
     DDB_TIMER_END("trail/info");
 
     /* 2. group loglines by cookie, sort events of each cookie by time,
@@ -317,16 +329,28 @@ void store_trails(const uint64_t *cookie_pointers,
                    cookie_pointers,
                    num_cookies,
                    loglines,
-                   min_timestamp);
+                   min_timestamp,
+                   &max_timestamp_delta);
     DDB_TIMER_END("trail/group_loglines");
 
-    /* 3. collect value (unigram) frequencies, including delta-encoded
+    /* 3. store metatadata */
+    DDB_TIMER_START
+    make_path(path, "%s/info", root);
+    store_info(num_loglines,
+               num_cookies,
+               min_timestamp,
+               max_timestamp,
+               max_timestamp_delta,
+               path);
+    DDB_TIMER_END("trail/group_loglines");
+
+    /* 4. collect value (unigram) frequencies, including delta-encoded
           timestamps */
     DDB_TIMER_START
     unigram_freqs = collect_unigrams(grouped, num_loglines, values, num_fields);
     DDB_TIMER_END("trail/collect_unigrams");
 
-    /* 4. construct uni/bi-grams */
+    /* 5. construct uni/bi-grams */
     DDB_TIMER_START
     gram_freqs = make_grams(grouped,
                             num_loglines,
@@ -335,12 +359,15 @@ void store_trails(const uint64_t *cookie_pointers,
                             unigram_freqs);
     DDB_TIMER_END("trail/gram_freqs");
 
-    /* 5. build a huffman codebook for grams */
+    /* 6. build a huffman codebook and stats struct for encoding grams */
     DDB_TIMER_START
     codemap = huff_create_codemap(gram_freqs);
+    fstats = huff_field_stats(field_cardinalities,
+                              num_fields,
+                              max_timestamp_delta);
     DDB_TIMER_END("trail/huff_create_codemap");
 
-    /* 6. encode and write trails to disk */
+    /* 7. encode and write trails to disk */
     DDB_TIMER_START
     make_path(path, "%s/trails.data", root);
     encode_trails(values,
@@ -350,10 +377,11 @@ void store_trails(const uint64_t *cookie_pointers,
                   num_fields,
                   codemap,
                   gram_freqs,
+                  fstats,
                   path);
     DDB_TIMER_END("trail/encode_trails");
 
-    /* 7. write huffman codebook to disk */
+    /* 8. write huffman codebook to disk */
     DDB_TIMER_START
     make_path(path, "%s/trails.codebook", root);
     store_codebook(codemap, path);
@@ -363,5 +391,6 @@ void store_trails(const uint64_t *cookie_pointers,
     JLFA(tmp, gram_freqs);
     JLFA(tmp, codemap);
     free(grouped);
+    free(fstats);
 }
 
