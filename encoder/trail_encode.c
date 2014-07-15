@@ -320,7 +320,7 @@ void store_trails(const uint64_t *cookie_pointers,
     /* 1. find minimum timestamp (for delta-encoding) */
     DDB_TIMER_START
     timestamp_range(loglines, num_loglines, &min_timestamp, &max_timestamp);
-    DDB_TIMER_END("trail/info");
+    DDB_TIMER_END("trail/timestamp_range");
 
     /* 2. group loglines by cookie, sort events of each cookie by time,
           and delta-encode timestamps */
@@ -342,7 +342,7 @@ void store_trails(const uint64_t *cookie_pointers,
                max_timestamp,
                max_timestamp_delta,
                path);
-    DDB_TIMER_END("trail/group_loglines");
+    DDB_TIMER_END("trail/info");
 
     /* 4. collect value (unigram) frequencies, including delta-encoded
           timestamps */
