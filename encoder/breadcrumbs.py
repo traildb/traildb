@@ -1,8 +1,9 @@
 import sys
+import os
+import string
 from ctypes import CDLL, c_char_p, c_ubyte, POINTER, c_void_p, c_uint
-from itertools import imap
 
-bc = CDLL('breadcrumbs.so')
+bc = CDLL('libbreadcrumbs.so')
 bc.bd_error.restype = c_char_p
 
 bc.bd_lookup_cookie.argtypes = [c_void_p, c_uint]
@@ -27,6 +28,8 @@ class Breadcrumb(object):
     def __init__(self, path):
         self._chunk = bc.bd_open(path)
         self._max_idx = bc.bd_num_cookies(self._chunk)
+        self._fields = ['timestamp'] +\
+                       map(string.strip, open(os.path.join(path, 'fields')))
         self._trail_buf_size = 0
         self._grow_buffer()
 
@@ -75,18 +78,25 @@ class Breadcrumb(object):
             i += 1
             yield tstamp, fields
 
-    def get_cookie(self, idx):
+    def get_cookie(self, idx, raw_bytes=False):
         c = bc.bd_lookup_cookie(self._chunk, idx)
         if c:
-            return ''.join(imap(lambda x: '%.2x' % x, c[:16]))
+            if raw_bytes:
+                return c[:16]
+            else:
+                return ''.join('%.2x' % x for x in c[:16])
         else:
             raise IndexError("Cookie index out of range")
 
     def lookup_value(self, field):
         return bc.bd_lookup_value(self._chunk, field)
 
+    def get_fields(self):
+        return self._fields
+
 if __name__ == '__main__':
     crumb = Breadcrumb(sys.argv[1])
+    print crumb.get_fields()
     idx = int(sys.argv[2])
     print 'cookie: %s' % crumb.get_cookie(idx)
     for tstamp, fields in crumb[idx]:
