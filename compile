@@ -1,0 +1,8 @@
+
+cd src
+
+gcc -DDDB_PROFILE -o ../breadcrumbs_encoder -g -Wall -O3 breadcrumbs_encoder.c lexicon_encode.c trail_encode.c trail_encode_model.c ddb_queue.c huffman.c util.c -lJudy
+
+gcc -DDDB_PROFILE -O3 -g -fPIC -o ../libbreadcrumbs.so -shared -Wall breadcrumbs.c util.c trail_decode.c lexicon_decode.c huffman.c ddb_queue.c -lJudy
+
+cd ..
