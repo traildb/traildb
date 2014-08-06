@@ -9,7 +9,7 @@
 #define MAX_FIELD_SIZE 1024
 #define MAX_NUM_FIELDS 255
 #define MAX_NUM_INPUTS 10000000
-#define INVALID_RATIO 0.001
+#define INVALID_RATIO 0.005
 
 /* We want to filter out all corrupted and invalid timestamps
    but we don't know the exact timerange we should be getting.
