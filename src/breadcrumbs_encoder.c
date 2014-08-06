@@ -340,7 +340,7 @@ int main(int argc, char **argv)
     DDB_TIMER_START
     store_trails(cookie_pointers, /* pointer to last event by cookie */
                  num_cookies, /* number of cookies */
-                 (const struct logline*)loglines.data, /* loglines */
+                 (struct logline*)loglines.data, /* loglines */
                  loglines.next, /* number of loglines */
                  (const uint32_t*)values_mmaped.data, /* field values */
                  values.next, /* number of values */

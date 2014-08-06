@@ -2,6 +2,7 @@
 #ifndef __TRAIL_ENCODE_H__
 #define __TRAIL_ENCODE_H__
 
+#include <stdio.h>
 #include <stdint.h>
 
 #include <Judy.h>
@@ -25,7 +26,7 @@ uint32_t edge_encode_fields(const uint32_t *values,
 
 void store_trails(const uint64_t *cookie_pointers,
                   uint64_t num_cookies,
-                  const struct logline *loglines,
+                  struct logline *loglines,
                   uint64_t num_loglines,
                   const uint32_t *values,
                   uint64_t num_values,
@@ -52,13 +53,13 @@ uint32_t choose_grams(const uint32_t *encoded,
                       uint64_t *grams,
                       const struct cookie_logline *line);
 
-Pvoid_t make_grams(const struct cookie_logline *grouped,
+Pvoid_t make_grams(FILE *grouped,
                    uint64_t num_loglines,
                    const uint32_t *values,
                    uint32_t num_fields,
                    const Pvoid_t unigram_freqs);
 
-Pvoid_t collect_unigrams(const struct cookie_logline *grouped,
+Pvoid_t collect_unigrams(FILE *grouped,
                          uint64_t num_loglines,
                          const uint32_t *values,
                          uint32_t num_fields);

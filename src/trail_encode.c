@@ -1,4 +1,10 @@
 
+#define _GNU_SOURCE
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/types.h>
+
 #include <Judy.h>
 
 #include "ddb_profile.h"
@@ -8,6 +14,9 @@
 
 #include "breadcrumbs_encoder.h"
 #include "trail_encode.h"
+
+#define GROUPBUF_INCREMENT 10000000
+#define READ_BUFFER_SIZE (1000000 * sizeof(struct cookie_logline))
 
 static int compare(const void *p1, const void *p2)
 {
@@ -21,70 +30,86 @@ static int compare(const void *p1, const void *p2)
     return 0;
 }
 
-static void group_loglines(struct cookie_logline *grouped,
+static void group_loglines(FILE *grouped_w,
+                           const char *path,
+                           const struct logline *loglines,
                            const uint64_t *cookie_pointers,
                            uint64_t num_cookies,
-                           const struct logline *loglines,
                            uint32_t base_timestamp,
                            uint32_t *max_timestamp_delta)
 {
     uint64_t i;
     uint64_t idx = 0;
     uint64_t num_invalid = 0;
+    struct cookie_logline *buf = NULL;
+    uint32_t buf_size = 0;
 
     *max_timestamp_delta = 0;
 
     for (i = 0; i < num_cookies; i++){
         /* find the last logline belonging to this cookie */
         const struct logline *line = &loglines[cookie_pointers[i]];
-        uint64_t j, idx0 = idx;
+        uint32_t j = 0;
+        uint32_t num_lines = 0;
         uint32_t prev_timestamp;
 
         /* loop through all loglines belonging to this cookie,
            following back-links */
         while (1){
-            grouped[idx].cookie_id = i;
-            grouped[idx].values_offset = line->values_offset;
-            grouped[idx].num_values = line->num_values;
-            grouped[idx].timestamp = line->timestamp;
-            ++idx;
+            if (j >= buf_size){
+                buf_size += GROUPBUF_INCREMENT;
+                if (!(buf = realloc(buf,
+                                    buf_size * sizeof(struct cookie_logline))))
+                    DIE("Couldn't realloc group buffer of %u items\n",
+                        buf_size);
+            }
+            buf[j].cookie_id = i;
+            buf[j].values_offset = line->values_offset;
+            buf[j].num_values = line->num_values;
+            buf[j].timestamp = line->timestamp;
+            ++j;
             if (line->prev_logline_idx)
                 line = &loglines[line->prev_logline_idx - 1];
             else
                 break;
         }
+        num_lines = j;
 
         /* sort events of this cookie by time */
-        qsort(&grouped[idx0],
-              idx - idx0,
-              sizeof(struct cookie_logline),
-              compare);
+        qsort(buf, num_lines, sizeof(struct cookie_logline), compare);
 
         /* delta-encode timestamps */
-        for (prev_timestamp = base_timestamp, j = idx0; j < idx; j++){
-            uint32_t prev = grouped[j].timestamp;
-            grouped[j].timestamp -= prev_timestamp;
+        for (prev_timestamp = base_timestamp, j = 0; j < num_lines; j++){
+            uint32_t prev = buf[j].timestamp;
+            buf[j].timestamp -= prev_timestamp;
             /* timestamps can be at most 2**24 seconds apart (194 days).
                It is not a problem since data should be partitioned by time */
-            if (grouped[j].timestamp < (1 << 24)){
+            if (buf[j].timestamp < (1 << 24)){
 
-                if (grouped[j].timestamp > *max_timestamp_delta)
-                    *max_timestamp_delta = grouped[j].timestamp;
+                if (buf[j].timestamp > *max_timestamp_delta)
+                    *max_timestamp_delta = buf[j].timestamp;
 
-                grouped[j].timestamp <<= 8;
+                buf[j].timestamp <<= 8;
                 prev_timestamp = prev;
             }else{
                 /* mark logline as invalid if it is too far in the future,
                    most likely because of a corrupted timestamp */
-                grouped[j].timestamp = 1;
+                buf[j].timestamp = 1;
                 ++num_invalid;
             }
         }
+
+        SAFE_WRITE(buf,
+                   num_lines * sizeof(struct cookie_logline),
+                   path,
+                   grouped_w);
     }
 
     if (num_invalid / (float)idx > INVALID_RATIO)
         DIE("Too many invalid timestamps (base timestamp: %u)\n",
             base_timestamp);
+
+    free(buf);
 }
 
 uint32_t edge_encode_fields(const uint32_t *values,
@@ -160,7 +185,7 @@ static void store_info(uint64_t num_loglines,
 }
 
 static void encode_trails(const uint32_t *values,
-                          const struct cookie_logline *grouped,
+                          FILE *grouped,
                           uint64_t num_loglines,
                           uint64_t num_cookies,
                           uint32_t num_fields,
@@ -178,6 +203,7 @@ static void encode_trails(const uint32_t *values,
     FILE *out;
     uint64_t file_offs = (num_cookies + 1) * 4;
     struct gram_bufs gbufs;
+    struct cookie_logline line;
 
     init_gram_bufs(&gbufs, num_fields);
 
@@ -202,6 +228,10 @@ static void encode_trails(const uint32_t *values,
     if (!(grams = malloc(num_fields * 8)))
         DIE("Could not allocate %u grams\n", num_fields);
 
+    rewind(grouped);
+    readahead(fileno(grouped), 0, num_loglines * sizeof(struct cookie_logline));
+    fread(&line, sizeof(struct cookie_logline), 1, grouped);
+
     while (i < num_loglines){
         /* encode trail for one cookie (multiple loglines) */
 
@@ -210,7 +240,7 @@ static void encode_trails(const uint32_t *values,
            be short. The residual indicates how many bits in the end we
            should ignore. */
         uint64_t offs = 3;
-        uint64_t cookie_id = grouped[i].cookie_id;
+        uint64_t cookie_id = line.cookie_id;
         uint64_t trail_size;
 
         /* write offset to TOC */
@@ -219,14 +249,14 @@ static void encode_trails(const uint32_t *values,
 
         memset(prev_values, 0, num_fields * 4);
 
-        for (;i < num_loglines && grouped[i].cookie_id == cookie_id; i++){
+        for (;i < num_loglines && line.cookie_id == cookie_id; i++){
 
             /* 1) produce an edge-encoded set of values for this logline */
             uint32_t n = edge_encode_fields(values,
                                             &encoded,
                                             &encoded_size,
                                             prev_values,
-                                            &grouped[i]);
+                                            &line);
 
             /* 2) cover the encoded set with a set of unigrams and bigrams */
             uint32_t m = choose_grams(encoded,
@@ -234,7 +264,7 @@ static void encode_trails(const uint32_t *values,
                                       gram_freqs,
                                       &gbufs,
                                       grams,
-                                      &grouped[i]);
+                                      &line);
 
             /* 3) huffman-encode grams */
             huff_encode_grams(codemap,
@@ -243,6 +273,8 @@ static void encode_trails(const uint32_t *values,
                               buf,
                               &offs,
                               fstats);
+
+            fread(&line, sizeof(struct cookie_logline), 1, grouped);
         }
 
         /* write the length residual */
@@ -295,7 +327,7 @@ static void store_codebook(const Pvoid_t codemap, const char *path)
 
 void store_trails(const uint64_t *cookie_pointers,
                   uint64_t num_cookies,
-                  const struct logline *loglines,
+                  struct logline *loglines,
                   uint64_t num_loglines,
                   const uint32_t *values,
                   uint64_t num_values,
@@ -304,18 +336,18 @@ void store_trails(const uint64_t *cookie_pointers,
                   const char *root)
 {
     char path[MAX_PATH_SIZE];
-    struct cookie_logline *grouped;
+    char grouped_path[MAX_PATH_SIZE];
     struct field_stats *fstats;
     uint32_t min_timestamp, max_timestamp, max_timestamp_delta;
     Pvoid_t unigram_freqs;
     Pvoid_t gram_freqs;
     Pvoid_t codemap;
     Word_t tmp;
+    FILE *grouped_w;
+    FILE *grouped_r;
+    char *read_buf;
 
     DDB_TIMER_DEF
-
-    if (!(grouped = malloc(num_loglines * sizeof(struct cookie_logline))))
-        DIE("Couldn't malloc loglines\n");
 
     /* 1. find minimum timestamp (for delta-encoding) */
     DDB_TIMER_START
@@ -325,13 +357,31 @@ void store_trails(const uint64_t *cookie_pointers,
     /* 2. group loglines by cookie, sort events of each cookie by time,
           and delta-encode timestamps */
     DDB_TIMER_START
-    group_loglines(grouped,
+
+    make_path(grouped_path, "%s/tmp.grouped.%d", root, getpid());
+    if (!(grouped_w = fopen(grouped_path, "w")))
+        DIE("Could not open tmp file at %s\n", path);
+
+    group_loglines(grouped_w,
+                   grouped_path,
+                   loglines,
                    cookie_pointers,
                    num_cookies,
-                   loglines,
                    min_timestamp,
                    &max_timestamp_delta);
+
+    SAFE_CLOSE(grouped_w, grouped_path);
+    if (!(grouped_r = fopen(grouped_path, "r")))
+        DIE("Could not open tmp file at %s\n", path);
+    if (!(read_buf = malloc(READ_BUFFER_SIZE)))
+        DIE("Could not allocate read buffer of %lu bytes\n", READ_BUFFER_SIZE);
+    setvbuf(grouped_r, read_buf, _IOFBF, READ_BUFFER_SIZE);
+
     DDB_TIMER_END("trail/group_loglines");
+
+    /* not the most clean separation of ownership here, but loglines is huge
+       so keeping it around unecessarily is expensive */
+    free(loglines);
 
     /* 3. store metatadata */
     DDB_TIMER_START
@@ -347,12 +397,12 @@ void store_trails(const uint64_t *cookie_pointers,
     /* 4. collect value (unigram) frequencies, including delta-encoded
           timestamps */
     DDB_TIMER_START
-    unigram_freqs = collect_unigrams(grouped, num_loglines, values, num_fields);
+    unigram_freqs = collect_unigrams(grouped_r, num_loglines, values, num_fields);
     DDB_TIMER_END("trail/collect_unigrams");
 
     /* 5. construct uni/bi-grams */
     DDB_TIMER_START
-    gram_freqs = make_grams(grouped,
+    gram_freqs = make_grams(grouped_r,
                             num_loglines,
                             values,
                             num_fields,
@@ -371,7 +421,7 @@ void store_trails(const uint64_t *cookie_pointers,
     DDB_TIMER_START
     make_path(path, "%s/trails.data", root);
     encode_trails(values,
-                  grouped,
+                  grouped_r,
                   num_loglines,
                   num_cookies,
                   num_fields,
@@ -390,7 +440,11 @@ void store_trails(const uint64_t *cookie_pointers,
     JLFA(tmp, unigram_freqs);
     JLFA(tmp, gram_freqs);
     JLFA(tmp, codemap);
-    free(grouped);
+
+    fclose(grouped_r);
+    unlink(grouped_path);
+
+    free(read_buf);
     free(fstats);
 }
 
