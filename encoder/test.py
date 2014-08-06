@@ -33,7 +33,7 @@ def get_trail(idx):
         i += 1
         yield tstamp, fields
 
-bd = ctypes.CDLL('breadcrumbs.so')
+bd = ctypes.CDLL('libbreadcrumbs.so')
 bd.bd_error.restype = ctypes.c_char_p
 bd.bd_lookup_cookie.restype = ctypes.POINTER(ctypes.c_ubyte)
 bd.bd_num_cookies.restype = ctypes.c_uint
