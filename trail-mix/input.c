@@ -61,6 +61,8 @@ static int parse_text(const uint8_t keybuf[33],
             void *dst = arena_add_item(&input_ids);
             memcpy(dst, id, 16);
             row_id = *ptr = input_ids.next;
+            if (input_ids.next == UINT32_MAX)
+                DIE("Too many input IDs (over 2^32!)\n");
         }
     }
 

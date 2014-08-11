@@ -9,6 +9,14 @@
 #define TRAIL_ATTR_SCALAR 1
 #define TRAIL_ATTR_SET 2
 
+#define TRAIL_OP_DB 1
+#define TRAIL_OP_PRE_TRAIL 2
+#define TRAIL_OP_POST_TRAIL 4
+#define TRAIL_OP_EVENT 8
+
+#define TRAIL_OP_MOD_ATTR 16
+#define TRAIL_OP_CHECK_ATTR 32
+
 struct trail_ctx;
 
 typedef void (*op_help_t)(void);
@@ -16,9 +24,15 @@ typedef void (*op_help_t)(void);
 typedef void* (*op_init_t)(struct trail_ctx *ctx,
                            const char *arg,
                            int op_index,
-                           int num_ops);
+                           int num_ops,
+                           uint64_t *flags);
 
-typedef void (*op_exec_t)(struct trail_ctx *ctx, const void *arg);
+typedef int (*op_exec_t)(struct trail_ctx *ctx,
+                         int mode,
+                         uint64_t row_id,
+                         const uint32_t *fields,
+                         const uint32_t num_fields,
+                         const void *arg);
 
 struct trail_available_op{
     const char *name;
@@ -30,6 +44,7 @@ struct trail_available_op{
 struct trail_op{
     const struct trail_available_op *op;
     const void *arg;
+    uint64_t flags;
 };
 
 struct trail_ctx{
@@ -37,6 +52,7 @@ struct trail_ctx{
     int opt_match_events;
     int opt_cardinalities;
     int opt_output_trails;
+    int opt_output_count;
     int opt_binary;
     int opt_verbose;
 

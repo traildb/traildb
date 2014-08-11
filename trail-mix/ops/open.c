@@ -11,10 +11,11 @@ void op_help_open()
     printf("help open\n");
 }
 
-void op_init_open(struct trail_ctx *ctx,
-                  const char *arg,
-                  int op_index,
-                  int num_ops)
+void *op_init_open(struct trail_ctx *ctx,
+                   const char *arg,
+                   int op_index,
+                   int num_ops,
+                   uint64_t *flags)
 {
     if (op_index > 0)
         DIE("Open must be the first operation\n");
@@ -24,10 +25,19 @@ void op_init_open(struct trail_ctx *ctx,
         DIE("Malloc failed in op_init_open\n");
     if (ctx->db->errno)
         DIE("%s\n", bd_error(ctx->db));
+
+    *flags = 0;
     MSG(ctx, "DB %s opened\n", arg);
+
+    return NULL;
 }
 
-void op_exec_open(struct trail_ctx *ctx, const void *arg)
+int op_exec_open(struct trail_ctx *ctx,
+                 int mode,
+                 uint64_t row_id,
+                 const uint32_t *fields,
+                 uint32_t num_fields,
+                 const void *arg)
 {
-    /* no-op */
+    return 1;
 }

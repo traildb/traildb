@@ -5,8 +5,8 @@ do
     OP=`basename $fname .c`
     echo "
 void op_help_$OP();
-void *op_init_$OP(struct trail_ctx*, const char*, int, int);
-void op_exec_$OP(struct trail_ctx*, const void*);"
+void *op_init_$OP(struct trail_ctx*, const char*, int, int, uint64_t*);
+int op_exec_$OP(struct trail_ctx*, int, uint64_t, const uint32_t*, uint32_t, const void*);"
 done
 
 echo
