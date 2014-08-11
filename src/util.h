@@ -29,6 +29,11 @@
         DIE("Writing to %s failed\n", path);\
     }
 
+#define SAFE_FREAD(f, path, buf, size)\
+    if (fread(buf, size, 1, f) < 1){\
+        DIE("Reading from %s failed\n", path);\
+    }
+
 #define SAFE_SEEK(f, offset, path)\
     if (fseek(f, offset, SEEK_SET) == -1){\
         DIE("Seeking to %llu in %s failed\n", (unsigned long long)offset, path);\
