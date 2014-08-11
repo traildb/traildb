@@ -1,0 +1,1 @@
+gcc -Wall -g -I . -I ../src/ -L ../ -ljemalloc  trail-mix.c input.c output.c ops/*.c ../src/util.c -lbreadcrumbs -lJudy -static
