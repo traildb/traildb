@@ -39,6 +39,7 @@ uint32_t bd_trail_value_freqs(const struct breadcrumbs *bd,
                               uint32_t *dst_freqs,
                               uint32_t dst_size);
 
+const char *bd_error(const struct breadcrumbs *bd);
 uint32_t bd_num_cookies(const struct breadcrumbs *bd);
 uint32_t bd_num_loglines(const struct breadcrumbs *bd);
 uint32_t bd_num_fields(const struct breadcrumbs *bd);
