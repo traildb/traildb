@@ -10,6 +10,7 @@ struct arena{
     uint64_t size;
     uint64_t next;
     uint32_t item_size;
+    uint32_t arena_increment;
     FILE *fd;
 };
 
