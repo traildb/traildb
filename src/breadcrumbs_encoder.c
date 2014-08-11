@@ -12,21 +12,11 @@
 #include "ddb_profile.h"
 #include "hex_decode.h"
 #include "util.h"
+#include "arena.h"
 
 #include "breadcrumbs_encoder.h"
 #include "trail_encode.h"
 #include "lexicon_encode.h"
-
-#define ARENA_INCREMENT 100000000
-#define ARENA_DISK_BUFFER (1 << 23) /* must be a power of two */
-
-struct arena{
-    void *data;
-    uint64_t size;
-    uint64_t next;
-    uint32_t item_size;
-    FILE *fd;
-};
 
 static Pvoid_t cookie_index;
 static uint64_t num_cookies;
@@ -35,38 +25,6 @@ static Word_t *lexicon_counters;
 
 static struct arena loglines = {.item_size = sizeof(struct logline)};
 static struct arena values = {.item_size = 4};
-
-static void flush_arena(const struct arena *a)
-{
-    if (a->fd){
-        uint64_t size = (((a->next - 1) & (ARENA_DISK_BUFFER - 1)) + 1) *
-                        (uint64_t)a->item_size;
-        SAFE_WRITE(a->data,
-                   size,
-                   "tmp.values",
-                   a->fd);
-    }
-}
-
-static void *add_item(struct arena *a)
-{
-    if (a->fd){
-        if (a->size == 0){
-            a->size = ARENA_DISK_BUFFER;
-            if (!(a->data = malloc(a->item_size * (uint64_t)a->size)))
-                DIE("Arena malloc failed\n");
-        }else if ((a->next & (ARENA_DISK_BUFFER - 1)) == 0)
-            flush_arena(a);
-        return a->data + a->item_size * (a->next++ & (ARENA_DISK_BUFFER - 1));
-    }else{
-        if (a->next >= a->size){
-            a->size += ARENA_INCREMENT;
-            if (!(a->data = realloc(a->data, a->item_size * (uint64_t)a->size)))
-                DIE("Arena realloc failed\n");
-        }
-        return a->data + a->item_size * a->next++;
-    }
-}
 
 static long parse_int_arg(const char *str, const char *type, long max)
 {
@@ -127,7 +85,7 @@ static int parse_line(char *line, long num_fields)
     if (!*cookie_ptr_lo)
         ++num_cookies;
 
-    logline = (struct logline*)add_item(&loglines);
+    logline = (struct logline*)arena_add_item(&loglines);
 
     logline->values_offset = values.next;
     logline->num_values = 0;
@@ -153,7 +111,7 @@ static int parse_line(char *line, long num_fields)
             }
             value |= (*token_id) << 8;
         }
-        *((uint32_t*)add_item(&values)) = value;
+        *((uint32_t*)arena_add_item(&values)) = value;
         ++logline->num_values;
     }
 
@@ -315,7 +273,7 @@ int main(int argc, char **argv)
     DDB_TIMER_END("encoder/read_inputs")
 
     /* finalize logline values */
-    flush_arena(&values);
+    arena_flush(&values);
     if (fclose(values.fd))
         DIE("Closing %s failed\n", values_tmp_path);
 
