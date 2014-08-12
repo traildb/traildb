@@ -31,7 +31,7 @@ struct breadcrumbs{
 
     struct field_stats *fstats;
 
-    int errno;
+    int error_code;
     char error[BD_ERROR_SIZE];
 };
 

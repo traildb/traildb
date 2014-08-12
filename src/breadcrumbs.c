@@ -144,7 +144,7 @@ struct breadcrumbs *bd_open(const char *root)
 
     return bd;
 err:
-    bd->errno = 1;
+    bd->error_code = 1;
     return bd;
 }
 
