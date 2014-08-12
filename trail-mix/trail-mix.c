@@ -123,7 +123,7 @@ static void init_ops(int optidx, int argc, char **argv)
                                             TRAIL_OP_POST_TRAIL)) != 1)
                 DIE("Internal error (2): Invalid attribute check %s\n", name);
 
-            ctx.ops[i++].flags = flags;
+            ctx.ops[i].flags = flags;
             MSG(&ctx, "Operation '%s' initialized\n", name);
         }
     }
