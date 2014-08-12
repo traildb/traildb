@@ -1,10 +1,180 @@
 
+#define _GNU_SOURCE
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+
+#include <breadcrumbs_decoder.h>
+#include <util.h>
+
+#ifdef ENABLE_DISCODB
+    #include <discodb.h>
+    #include <Judy.h>
+#else
+    #include "ddb_structs.h"
+#endif
+
 #include <trail-mix.h>
+
+#define MAX_EVENT_QUERY_LEN 1000000
+
+struct qctx{
+    struct ddb_query_clause *clauses;
+    uint32_t num_clauses;
+    uint32_t event_query_len;
+    uint32_t event_query[0];
+};
+
+static uint32_t num_chars(const char *str, char chr)
+{
+    uint32_t n = 0;
+
+    while (*str){
+        if (*str == chr)
+            ++n;
+        ++str;
+    }
+    return n;
+}
+
+static struct ddb_query_clause *parse_query(char *query,
+                                            uint32_t *num_clauses,
+                                            const struct trail_ctx *ctx,
+                                            uint32_t *event_query,
+                                            uint32_t *event_query_len)
+{
+    char *saveptr;
+    char *clauseptr;
+    struct ddb_query_clause *clauses;
+    uint32_t max_num_clauses = num_chars(query, '&') + 1;
+    const struct breadcrumbs *db = ctx->db;
+
+    *event_query_len = *num_clauses = 0;
+
+    if (!(clauses = malloc(max_num_clauses * sizeof(struct ddb_query_clause))))
+        DIE("Could not allocate %u clauses\n", max_num_clauses);
+
+    clauseptr = strtok_r(query, "&", &saveptr);
+    while (clauseptr){
+        char *saveptr1;
+        uint32_t max_num_terms = num_chars(clauseptr, ' ') + 1;
+        char *termptr = strtok_r(clauseptr, " ", &saveptr1);
+        struct ddb_query_clause *clause = &clauses[*num_clauses];
+        uint32_t clause_start = *event_query_len;
+        uint32_t num_terms = 0;
+
+        if (!(clause->terms =
+              malloc(max_num_terms * sizeof(struct ddb_query_term))))
+            DIE("Could not allocate %u clauses\n", max_num_terms);
+
+        while (termptr){
+            char *term;
+            char *field_name = strsep(&termptr, ":");
+            int field_idx = -1;
+            uint32_t i;
+
+            for (i = 0; i < db->num_fields; i++)
+                if (!strcmp(field_name, db->field_names[i]))
+                    field_idx = i;
+
+            if (field_idx == -1)
+                DIE("Unrecognized field in q: %s\n", field_name);
+
+            if (asprintf(&term, "%d:%s", field_idx + 1, termptr) == -1)
+                DIE("Malloc failed in q/parse_query\n");
+
+            clause->terms[num_terms].key.data = term;
+            clause->terms[num_terms].key.length = strlen(term);
+            clause->terms[num_terms++].nnot = 0;
+
+            if (1 + *event_query_len == MAX_EVENT_QUERY_LEN)
+                DIE("Too many terms in the query (found %u)\n",
+                    *event_query_len);
+
+            event_query[++*event_query_len] = bd_lookup_token(db,
+                                                              termptr,
+                                                              field_idx);
+            if (!event_query[*event_query_len])
+                MSG(ctx, "Unknown term '%s'\n", term);
+
+            termptr = strtok_r(NULL, " ", &saveptr1);
+        }
+        clauseptr = strtok_r(NULL, "&", &saveptr);
+        if (num_terms){
+            clause->num_terms = num_terms;
+            event_query[clause_start] = num_terms;
+            ++*num_clauses;
+            ++*event_query_len;
+        }
+    }
+    return clauses;
+}
 
 void op_help_q()
 {
 
 }
+
+#ifdef ENABLE_DISCODB
+static struct ddb *open_index(const char *root)
+{
+    char path[MAX_PATH_SIZE];
+    struct ddb *db;
+    int fd;
+
+    make_path(path, "%s/index", root);
+
+    if ((fd = open(path, O_RDONLY)) == -1)
+        return NULL;
+
+    if (!(db = ddb_new()))
+        DIE("Could not initialize index\n");
+
+    if (ddb_load(db, fd)){
+        const char *err;
+        ddb_error(db, &err);
+        DIE("Could not load index at %s: %s\n", path, err);
+    }
+
+    close(fd);
+    return db;
+}
+
+static int match_index(struct trail_ctx *ctx, const struct qctx *q)
+{
+    struct ddb_cursor *cur;
+    const struct ddb_entry *e;
+    int tst, err;
+    Word_t tmp;
+
+    Pvoid_t new_matches = NULL;
+    if (!(cur = ddb_query(ctx->db_index, q->clauses, q->num_clauses)))
+        DIE("Query init failed (out of memory?)\n");
+
+    while ((e = ddb_next(cur, &err))){
+        Word_t row_id = *(uint32_t*)e->data;
+
+        if (err)
+            DIE("Query execution failed (out of memory?)\n");
+
+        J1T(tst, ctx->matched_rows, row_id);
+        if (tst)
+            J1S(tst, new_matches, row_id);
+    }
+
+    ddb_free_cursor(cur);
+    J1FA(tmp, ctx->matched_rows);
+    ctx->matched_rows = new_matches;
+
+    return 0;
+}
+
+#endif
 
 void *op_init_q(struct trail_ctx *ctx,
                 const char *arg,
@@ -12,25 +182,78 @@ void *op_init_q(struct trail_ctx *ctx,
                 int num_ops,
                 uint64_t *flags)
 {
-    #if 0
-    if index_enabled
-        *flags = TRAIL_OP_DB
-        if (!ctx.opt_index_only){
-            if (!(only-one-term && !opt_match_events))
-                *flags |= TRAIL_OP_EVENT;
+    char *query;
+    struct qctx *q;
+
+    if (!ctx->db)
+        DIE("q requires a DB\n");
+    if (!arg)
+        DIE("q requires a string argument. See --help=q\n");
+
+    if (!(query = strdup(arg)))
+        DIE("Malloc failed in op_init_q\n");
+
+    if (!(q = malloc(sizeof(struct qctx) + MAX_EVENT_QUERY_LEN * 4)))
+        DIE("Malloc failed in op_init_q\n");
+
+    q->clauses = parse_query(query,
+                             &q->num_clauses,
+                             ctx,
+                             q->event_query,
+                             &q->event_query_len);
+
+    *flags = 0;
+
+#ifdef ENABLE_DISCODB
+    if (!ctx->db_index && !ctx->opt_no_index)
+        if (!(ctx->db_index = open_index(ctx->db_path)))
+            MSG(ctx, "Query index not found at %s/index\n", ctx->db_path);
+    if (ctx->db_index){
+        *flags |= TRAIL_OP_DB;
+        MSG(ctx, "Query index is enabled\n");
+        if (!(q->num_clauses == 1 && !ctx->opt_match_events)){
+            *flags |= TRAIL_OP_EVENT;
+            MSG(ctx, "Query (%dth op) is index-only\n", op_index);
         }
-    else
-        *flags = TRAIL_OP_EVENT;
-    #endif
-    return NULL;
+    }else
+        *flags |= TRAIL_OP_EVENT;
+#else
+    *flags |= TRAIL_OP_EVENT;
+#endif
+
+    if (!(*flags & TRAIL_OP_DB))
+        MSG(ctx, "Query index is disabled\n");
+
+    free(query);
+    return q;
 }
 
 int op_exec_q(struct trail_ctx *ctx,
               int mode,
               uint64_t row_id,
-              const uint32_t fields,
+              const uint32_t *fields,
               uint32_t num_fields,
               const void *arg)
 {
-    return 1;
+    const struct qctx *q = (const struct qctx*)arg;
+    uint32_t j, i = 0;
+
+#ifdef ENABLE_DISCODB
+    if (mode == TRAIL_OP_DB)
+        return match_index(ctx, q);
+#endif
+
+    while (i < q->event_query_len){
+        uint32_t clause_len = q->event_query[i++];
+
+        for (j = 0; j < clause_len; j++){
+            uint32_t term = q->event_query[i + j];
+            if (term && fields[term & 255] == term)
+                goto next_clause;
+        }
+        return 1;
+next_clause:
+        i += clause_len;
+    }
+    return 0;
 }

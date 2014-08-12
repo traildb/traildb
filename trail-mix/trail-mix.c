@@ -143,6 +143,7 @@ static void initialize(int argc, char **argv)
         {"output-count", no_argument, 0, 'c'},
         /* long options */
         {"cardinalities", no_argument, 0, -2},
+        {"no-index", no_argument, 0, -3},
         {0, 0, 0, 0}
     };
 
@@ -155,6 +156,10 @@ static void initialize(int argc, char **argv)
 
             case -2: /* --cardinalities */
                 ctx.opt_cardinalities = 1;
+                break;
+
+            case -3: /* --no-index */
+                ctx.opt_no_index = 1;
                 break;
 
             case 'o': /* --output-file */

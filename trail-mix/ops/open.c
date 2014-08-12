@@ -26,6 +26,7 @@ void *op_init_open(struct trail_ctx *ctx,
     if (ctx->db->error_code)
         DIE("%s\n", bd_error(ctx->db));
 
+    ctx->db_path = arg;
     *flags = 0;
     MSG(ctx, "DB %s opened\n", arg);
 

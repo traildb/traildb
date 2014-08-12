@@ -4,6 +4,10 @@
 
 #include <Judy.h>
 
+#ifdef ENABLE_DISCODB
+#include <discodb.h>
+#endif
+
 #include <breadcrumbs.h>
 
 #define TRAIL_ATTR_SCALAR 1
@@ -55,6 +59,7 @@ struct trail_ctx{
     int opt_output_count;
     int opt_binary;
     int opt_verbose;
+    int opt_no_index;
 
     const char *output_file;
 
@@ -73,6 +78,10 @@ struct trail_ctx{
 
     /* trail db */
     struct breadcrumbs *db;
+    const char *db_path;
+#ifdef ENABLE_DISCODB
+    struct ddb *db_index;
+#endif
 };
 
 /* input.c */

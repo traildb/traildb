@@ -1,1 +1,17 @@
-gcc -Wall -g -I . -I ../src/ -L ../ -ljemalloc  trail-mix.c input.c output.c ops/*.c ../src/util.c -lbreadcrumbs -lJudy -static
+gcc -Wall\
+    -DENABLE_DISCODB\
+    -g\
+    -O3\
+    -o trail-mix\
+    -I .\
+    -I ../src/\
+    -I ../../discodb/src/\
+    -L ../\
+    -ljemalloc\
+    trail-mix.c input.c output.c ops/*.c ../src/util.c\
+    ../../discodb/src/*.o\
+    -lbreadcrumbs\
+    -lJudy\
+    -lcmph\
+    -lm\
+    -static
