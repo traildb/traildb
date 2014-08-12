@@ -47,7 +47,7 @@ static int parse_text(const uint8_t keybuf[33],
     Word_t *ptr;
 
     if (hex_decode((const char*)keybuf, id))
-        DIE("Invalid ID: %s\n", keybuf);
+        DIE("Invalid ID: %*s\n", 32, keybuf);
 
     if (ctx->db){
         JHSG(ptr, *id_index, id, 16);
@@ -80,7 +80,7 @@ static int parse_text(const uint8_t keybuf[33],
                 DIE("Cannot mix set and scalar attributes "
                     "(offending ID: %*s)\n", 32, keybuf);
 
-            if (fscanf(stdin, "%llu", &attr_value) == 1){
+            if (fscanf(stdin, "%llu\n", &attr_value) == 1){
                 Word_t *attr;
                 JLI(attr, ctx->attributes, row_id);
                 *attr += attr_value;
