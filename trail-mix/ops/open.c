@@ -23,7 +23,7 @@ void *op_init_open(struct trail_ctx *ctx,
         DIE("Can't open more than one traildb\n");
     if (!(ctx->db = bd_open(arg)))
         DIE("Malloc failed in op_init_open\n");
-    if (ctx->db->errno)
+    if (ctx->db->error_code)
         DIE("%s\n", bd_error(ctx->db));
 
     *flags = 0;
