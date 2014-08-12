@@ -31,7 +31,7 @@ void *arena_add_item(struct arena *a)
         return a->data + a->item_size * (a->next++ & (ARENA_DISK_BUFFER - 1));
     }else{
         if (a->next >= a->size){
-            a->size += a->arena_increment ? arena_increment: ARENA_INCREMENT;
+            a->size += a->arena_increment ? a->arena_increment: ARENA_INCREMENT;
             if (!(a->data = realloc(a->data, a->item_size * (uint64_t)a->size)))
                 DIE("Arena realloc failed\n");
         }
