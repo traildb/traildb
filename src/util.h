@@ -59,4 +59,6 @@ int mmap_file(const char *path, struct bdfile *dst, struct breadcrumbs *bd);
 
 uint32_t bits_needed(uint32_t max);
 
+uint64_t parse_uint64(const char *str, const char *ctx);
+
 #endif /* __DIE_H__ */

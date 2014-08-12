@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 
 #include "util.h"
 
@@ -108,3 +109,16 @@ int mmap_file(const char *path, struct bdfile *dst, struct breadcrumbs *bd)
     return 0;
 }
 
+uint64_t parse_uint64(const char *str, const char *ctx)
+{
+    char *p;
+    uint64_t n;
+
+    errno = 0;
+    n = strtoull(str, &p, 10);
+
+    if (*p || errno)
+        DIE("Invalid unsigned integer '%s' (%s)\n", str, ctx);
+
+    return n;
+}
