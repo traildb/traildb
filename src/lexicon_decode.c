@@ -37,6 +37,25 @@ const char *bd_lookup_value(const struct breadcrumbs *bd,
         return NULL;
 }
 
+uint32_t bd_lookup_token(const struct breadcrumbs *bd,
+                         const char *token,
+                         uint32_t field)
+{
+    struct lexicon lex;
+
+    if (!open_lexicon(bd, &lex, field)){
+        uint32_t i;
+        if (*token){
+            for (i = 0; i < lex.size; i++)
+                if (!strcmp(&lex.data[lex.toc[i]], token))
+                    return (field + 1) | ((i + 1) << 8);
+        }else
+            /* valid empty value */
+            return field + 1;
+    }
+    return 0;
+}
+
 const char *bd_lookup_cookie(const struct breadcrumbs *bd,
                              uint32_t cookie_index)
 {

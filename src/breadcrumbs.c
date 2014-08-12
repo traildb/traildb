@@ -26,7 +26,22 @@ static int open_fields(const char *root, char *path, struct breadcrumbs *bd)
     while (getline(&line, &n, f) != -1)
         ++bd->num_fields;
 
+    if (!feof(f)){
+        /* we can get here if malloc fails inside getline() */
+        bderror(bd, "getline failed in open_fields");
+        fclose(f);
+        return -1;
+    }
+
     if (!(bd->previous_values = malloc(bd->num_fields * 4))){
+        bderror(bd,
+                "Could not allocate %u values in open_fields",
+                bd->num_fields);
+        fclose(f);
+        return -1;
+    }
+
+    if (!(bd->field_names = calloc(bd->num_fields, sizeof(char*)))){
         bderror(bd,
                 "Could not allocate %u values in open_fields",
                 bd->num_fields);
@@ -44,14 +59,25 @@ static int open_fields(const char *root, char *path, struct breadcrumbs *bd)
 
     rewind(f);
     while (getline(&line, &n, f) != -1){
+
         line[strlen(line) - 1] = 0;
-        make_path(path, "%s/lexicon.%s", root, line);
-        if (mmap_file(path, &bd->lexicons[i++], bd)){
+
+        if (!(bd->field_names[i] = strdup(line))){
+            bderror(bd, "Could allocate field name in open_fields");
             fclose(f);
             return -1;
         }
+
+        make_path(path, "%s/lexicon.%s", root, line);
+        if (mmap_file(path, &bd->lexicons[i], bd)){
+            fclose(f);
+            return -1;
+        }
+
+        ++i;
     }
 
+    free(line);
     fclose(f);
     return 0;
 }
@@ -153,13 +179,16 @@ void bd_close(struct breadcrumbs *bd)
     if (bd){
         int i = bd->num_fields;
 
-        while (i--)
+        while (i--){
+            free((char*)bd->field_names[i]);
             munmap((void*)bd->lexicons[i].data, bd->lexicons[i].size);
+        }
 
         munmap((void*)bd->cookies.data, bd->cookies.size);
         munmap((void*)bd->codebook.data, bd->codebook.size);
         munmap((void*)bd->trails.data, bd->trails.size);
 
+        free(bd->field_names);
         free(bd->lexicons);
         free(bd->previous_values);
         free(bd->fstats);

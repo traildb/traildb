@@ -23,6 +23,11 @@ uint8_t bd_field_index(uint32_t value);
 
 const char *bd_lookup_value(const struct breadcrumbs *bd,
                             uint32_t cookie_index);
+
+uint32_t bd_lookup_token(const struct breadcrumbs *bd,
+                         const char *token,
+                         uint32_t field);
+
 const char *bd_lookup_cookie(const struct breadcrumbs *bd,
                              uint32_t cookie_index);
 

@@ -29,6 +29,7 @@ struct breadcrumbs{
     struct bdfile trails;
     struct bdfile *lexicons;
 
+    const char **field_names;
     struct field_stats *fstats;
 
     int error_code;
