@@ -1,7 +1,5 @@
 
 #include <util.h>
-#include <breadcrumbs_decoder.h>
-
 #include <trail-mix.h>
 
 void op_help_min()
