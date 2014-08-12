@@ -34,7 +34,7 @@ int op_exec_length(struct trail_ctx *ctx,
 
     if (ctx->attr_type){
         if (ctx->attr_type != TRAIL_ATTR_SCALAR)
-            DIE("Can not mix attribute types (attr_trail_length is scalar)\n");
+            DIE("Can not mix attribute types (length is scalar)\n");
     }else
         ctx->attr_type = TRAIL_ATTR_SCALAR;
 
