@@ -42,6 +42,26 @@ static uint32_t num_chars(const char *str, char chr)
     return n;
 }
 
+/*
+   parse_query() looks hairy but it does not do anything special besides
+   parsing the query string and looking up values.
+
+   The main thing to note is that it builds two representations of the
+   same query simultaneously: One for DiscoDB (which may be redundant),
+   and one for event-level operations (event_query).
+
+   The DiscoDB version is a straightforward list of structs. The event
+   version is optimized for fast evaluation against events. It has the
+   following format:
+
+   [ num_terms | term1 | term2 | ... | num_terms | ... ]
+    \--------------------------------/\---------------/
+                  |                        |
+                  Clause 1                 Clause 2
+
+   That is, it contains clauses and terms as a flat array.
+*/
+
 static struct ddb_query_clause *parse_query(char *query,
                                             uint32_t *num_clauses,
                                             const struct trail_ctx *ctx,
@@ -115,11 +135,6 @@ static struct ddb_query_clause *parse_query(char *query,
     return clauses;
 }
 
-void op_help_q()
-{
-
-}
-
 #ifdef ENABLE_DISCODB
 static struct ddb *open_index(const char *root)
 {
@@ -162,6 +177,8 @@ static int match_index(struct trail_ctx *ctx, const struct qctx *q)
         if (err)
             DIE("Query execution failed (out of memory?)\n");
 
+        /* Intersect result set from the index with the currently
+           matched rows */
         J1T(tst, ctx->matched_rows, row_id);
         if (tst)
             J1S(tst, new_matches, row_id);
@@ -169,12 +186,18 @@ static int match_index(struct trail_ctx *ctx, const struct qctx *q)
 
     ddb_free_cursor(cur);
     J1FA(tmp, ctx->matched_rows);
+    /* Intersection replaces the old set of matched_rows */
     ctx->matched_rows = new_matches;
 
     return 0;
 }
 
 #endif
+
+void op_help_q()
+{
+
+}
 
 void *op_init_q(struct trail_ctx *ctx,
                 const char *arg,
@@ -205,18 +228,32 @@ void *op_init_q(struct trail_ctx *ctx,
     *flags = 0;
 
 #ifdef ENABLE_DISCODB
+
     if (!ctx->db_index && !ctx->opt_no_index)
         if (!(ctx->db_index = open_index(ctx->db_path)))
             MSG(ctx, "Query index not found at %s/index\n", ctx->db_path);
+
     if (ctx->db_index){
         *flags |= TRAIL_OP_DB;
         MSG(ctx, "Query index is enabled\n");
+
+        /* We can skip trail decoding and evaluate the query only using the
+           index under the following conditions:
+
+             1. Index is enabled.
+             2. Match-events mode not enabled (default).
+             3. There is only one clause (i.e. no ANDs) in the query.
+
+           If all the three conditions are true, index returns exactly the
+           same result as what would be returned by checking events.
+        */
         if (!(q->num_clauses == 1 && !ctx->opt_match_events)){
             *flags |= TRAIL_OP_EVENT;
             MSG(ctx, "Query (%dth op) is index-only\n", op_index);
         }
     }else
         *flags |= TRAIL_OP_EVENT;
+
 #else
     *flags |= TRAIL_OP_EVENT;
 #endif
@@ -243,17 +280,28 @@ int op_exec_q(struct trail_ctx *ctx,
         return match_index(ctx, q);
 #endif
 
+    /* Check if event matches the given query. See
+       the description of the event_query structure
+       above.
+
+       The key observation here is that 'fields' (events)
+       contains exactly one value for each field, so we
+       can look up values by field index efficiently.
+    */
     while (i < q->event_query_len){
         uint32_t clause_len = q->event_query[i++];
-
+        /* Evaluate one clause */
         for (j = 0; j < clause_len; j++){
             uint32_t term = q->event_query[i + j];
             if (term && fields[term & 255] == term)
+                /* One of the terms match, clause ok */
                 goto next_clause;
         }
+        /* None of the terms in the clause match, query fails */
         return 1;
 next_clause:
         i += clause_len;
     }
+    /* All clauses ok, trail matches */
     return 0;
 }
