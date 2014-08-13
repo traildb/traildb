@@ -122,3 +122,20 @@ uint64_t parse_uint64(const char *str, const char *ctx)
 
     return n;
 }
+
+void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed)
+{
+    uint64_t i;
+    dsfmt_t state;
+
+    if (len > 1){
+        dsfmt_init_gen_rand(&state, seed);
+
+        for (i = 0; i < len - 1; i++){
+            uint32_t j = i + (len - i) * dsfmt_genrand_close_open(&state);
+            uint64_t t = arr[j];
+            arr[j] = arr[i];
+            arr[i] = t;
+        }
+    }
+}

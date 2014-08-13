@@ -11,6 +11,9 @@
 
 #include "breadcrumbs.h"
 
+#define DSFMT_MEXP 521
+#include "dsfmt/dSFMT.h"
+
 #define DIE_ON_ERROR(msg)\
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
@@ -60,5 +63,7 @@ int mmap_file(const char *path, struct bdfile *dst, struct breadcrumbs *bd);
 uint32_t bits_needed(uint32_t max);
 
 uint64_t parse_uint64(const char *str, const char *ctx);
+
+void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed);
 
 #endif /* __DIE_H__ */

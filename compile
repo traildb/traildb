@@ -2,10 +2,12 @@
 cd src
 rm *.o
 gcc -fPIC -O3 -g -c -Wall breadcrumbs.c util.c trail_decode.c lexicon_decode.c huffman.c ddb_queue.c
+gcc -fPIC -DDSFMT_MEXP=521 -c -O3 -fno-strict-aliasing -msse2 -DHAVE_SSE2=1 dsfmt/dSFMT.c
+
 gcc -O3 -g -fPIC -o ../libbreadcrumbs.so -Wall -lJudy *.o -shared
 ar ruv ../libbreadcrumbs.a *.o
 ranlib ../libbreadcrumbs.a
 
-gcc -DDDB_PROFILE -o ../breadcrumbs_encoder -g -Wall -O3 -ljemalloc breadcrumbs_encoder.c arena.c lexicon_encode.c trail_encode.c trail_encode_model.c ddb_queue.c huffman.c util.c -lJudy  -lpthread -static
+gcc -DDDB_PROFILE -o ../breadcrumbs_encoder -g -Wall -O3 -ljemalloc breadcrumbs_encoder.c arena.c lexicon_encode.c trail_encode.c trail_encode_model.c ddb_queue.c huffman.c util.c dSFMT.o -lJudy  -lpthread -static
 
 cd ..
