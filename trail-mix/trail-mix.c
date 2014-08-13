@@ -232,6 +232,9 @@ static void initialize(int argc, char **argv)
         else
             input_choose_all_rows(&ctx);
 
+        if (ctx.opt_output_trails && !ctx.db)
+            DIE("Cannot --output-trails without a DB\n");
+
         /* MSG(num_matches) */
     }else
         print_usage_and_exit();
@@ -268,7 +271,7 @@ static uint32_t *filter_ops(uint64_t include,
                 label = "event";
                 break;
             case TRAIL_OP_FINALIZE:
-                label = "finalizer";
+                label = "finalize";
                 break;
             default:
                 label = "unknown";
