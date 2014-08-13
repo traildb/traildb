@@ -146,6 +146,7 @@ static void initialize(int argc, char **argv)
         {"verbose", no_argument, 0, 'v'},
         {"output-trails", no_argument, 0, 't'},
         {"output-file", required_argument, 0, 'o'},
+        {"input-file", required_argument, 0, 'i'},
         {"output-binary", no_argument, 0, 'b'},
         {"output-count", no_argument, 0, 'c'},
         {"random-seed", required_argument, 0, 'S'},
@@ -156,7 +157,11 @@ static void initialize(int argc, char **argv)
     };
 
     do{
-        c = getopt_long(argc, argv, "o:cbetvh::S:", long_options, &option_index);
+        c = getopt_long(argc,
+                        argv,
+                        "i:o:cbetvh::S:",
+                        long_options,
+                        &option_index);
         switch (c){
 
             case -1:
@@ -172,6 +177,10 @@ static void initialize(int argc, char **argv)
 
             case 'o': /* --output-file */
                 ctx.output_file = optarg;
+                break;
+
+            case 'i': /* --input-file */
+                ctx.input_file = optarg;
                 break;
 
             case 'c': /* --output-count */

@@ -67,6 +67,7 @@ struct trail_ctx{
     /* input and output */
     int read_stdin;
     const char *output_file;
+    const char *input_file;
 
     /* operations */
     int num_ops;

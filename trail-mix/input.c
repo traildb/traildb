@@ -39,6 +39,7 @@ static int parse_binary(const uint8_t keybuf[33],
 
 static int parse_text(const uint8_t keybuf[33],
                       Pvoid_t *id_index,
+                      FILE *input,
                       struct trail_ctx *ctx)
 {
     uint8_t id[16];
@@ -80,7 +81,7 @@ static int parse_text(const uint8_t keybuf[33],
                 DIE("Cannot mix set and scalar attributes "
                     "(offending ID: %*s)\n", 32, keybuf);
 
-            if (fscanf(stdin, "%llu\n", &attr_value) == 1){
+            if (fscanf(input, "%llu\n", &attr_value) == 1){
                 Word_t *attr;
                 JLI(attr, ctx->attributes, row_id);
                 *attr += attr_value;
@@ -103,12 +104,17 @@ void input_parse_stdin(struct trail_ctx *ctx)
     unsigned long long num_lines = 0;
     unsigned long long num_matches = 0;
     Word_t tmp;
+    FILE *input = stdin;
 
     if (ctx->db)
         id_index = index_db_ids(ctx);
 
+    if (ctx->input_file)
+        if (!(input = fopen(ctx->input_file, "r")))
+            DIE("Could not open input file at %s\n", ctx->input_file);
+
     while (1){
-        int n = fread(keybuf, 1, 17, stdin);
+        int n = fread(keybuf, 1, 17, input);
         if (!n)
             break;
         else if (n != 17)
@@ -117,14 +123,17 @@ void input_parse_stdin(struct trail_ctx *ctx)
         ++num_lines;
 
         if (keybuf[0] < 128){
-            SAFE_FREAD(stdin, "stdin", &keybuf[17], 16);
-            if (parse_text(keybuf, &id_index, ctx))
+            SAFE_FREAD(input, "stdin", &keybuf[17], 16);
+            if (parse_text(keybuf, &id_index, input, ctx))
                 ++num_matches;
         }else
             parse_binary(keybuf, &id_index, ctx);
     }
 
     MSG(ctx, "%llu lines read, %llu lines match\n", num_lines, num_matches);
+
+    if (input != stdin)
+        fclose(input);
 
     ctx->input_ids = input_ids.data;
     JHSFA(tmp, id_index);
