@@ -1,0 +1,44 @@
+#!/bin/bash
+set -e
+
+TMP=`tempfile -p trailm`
+ROOT=`dirname $0`
+DIR=`dirname $1`
+PREFIX=`basename $1`
+shift
+NUM_PROC=$1
+shift
+LIMIT=$1
+shift
+
+echo "Running $NUM_PROC processes in parallel, limit is $LIMIT" >&2
+
+find $DIR -type d -follow -iname "$PREFIX*" -printf '%f\n' > $TMP.inputs
+
+echo "Found $(wc -l $TMP.inputs | cut -d ' ' -f 1) chunks" >&2
+
+cat $TMP.inputs |\
+    xargs -r -n 1 -P $NUM_PROC -I '{}'\
+         $ROOT/trail-mix --output-file=$TMP.'{}'.query $DIR/'{}' $@ length
+
+echo "Query executed" >&2
+
+if [ "$LIMIT" != "unlimited" ]
+then
+    cat $TMP*.query | $ROOT/trail-mix - limit=$LIMIT > $TMP.chosen
+else
+    cat $TMP*.query | $ROOT/trail-mix - > $TMP.chosen
+fi
+
+echo "Matches aggregated" >&2
+
+cat $TMP.inputs |\
+    xargs -r -n 1 -P $NUM_PROC -I '{}'\
+         $ROOT/trail-mix --input-file=$TMP.chosen\
+                         --output-file=$TMP.'{}'.out - open=$DIR/'{}'
+
+cat $TMP.*.out
+
+echo "Done" >&2
+
+rm $TMP.*
