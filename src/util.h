@@ -42,9 +42,19 @@
         DIE("Seeking to %llu in %s failed\n", (unsigned long long)offset, path);\
     }
 
+#define SAFE_TELL(f, val, path)\
+    if ((val = ftell(f)) == 1){\
+        DIE("Checking file position of %s failed\n", path);\
+    }
+
 #define SAFE_CLOSE(f, path)\
     if (fclose(f)){\
         DIE("Closing %s failed\n", path);\
+    }
+
+#define SAFE_FLUSH(f, path)\
+    if (fflush(f)){\
+        DIE("Flushing %s failed\n", path);\
     }
 
 struct sortpair{
