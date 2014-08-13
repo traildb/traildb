@@ -17,9 +17,10 @@
 #define TRAIL_OP_PRE_TRAIL 2
 #define TRAIL_OP_POST_TRAIL 4
 #define TRAIL_OP_EVENT 8
+#define TRAIL_OP_FINALIZE 16
 
-#define TRAIL_OP_MOD_ATTR 16
-#define TRAIL_OP_CHECK_ATTR 32
+#define TRAIL_OP_MOD_ATTR 32
+#define TRAIL_OP_CHECK_ATTR 64
 
 struct trail_ctx;
 
@@ -61,6 +62,10 @@ struct trail_ctx{
     int opt_verbose;
     int opt_no_index;
 
+    uint32_t random_seed;
+
+    /* input and output */
+    int read_stdin;
     const char *output_file;
 
     /* operations */

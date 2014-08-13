@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <string.h>
+#include <time.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "util.h"
 
@@ -110,18 +113,22 @@ static void init_ops(int optidx, int argc, char **argv)
                 DIE("Attribute checks must precede ops that modify "
                     "attributes (offending op: %s)\n", name);
 
-            /* RULE: Attribute checks must support both pre- and post-ops */
-            if ((flags & TRAIL_OP_CHECK_ATTR) &&\
-                !((flags & TRAIL_OP_PRE_TRAIL) &&
-                 (flags & TRAIL_OP_POST_TRAIL)))
+            /* RULE: Attribute checks that support either pre- or post-ops
+               must support both of them */
+            if ((flags & TRAIL_OP_CHECK_ATTR) &&
+                (flags & (TRAIL_OP_PRE_TRAIL | TRAIL_OP_POST_TRAIL)) &&
+                (__builtin_popcount(flags & (TRAIL_OP_PRE_TRAIL |
+                                             TRAIL_OP_POST_TRAIL)) == 2))
                 DIE("Internal error (1): Invalid attribute check %s\n", name);
 
             /* RULE: Attribute mods must set exactly one scope */
             if ((flags & TRAIL_OP_MOD_ATTR) &&\
-                __builtin_popcount(flags & (TRAIL_OP_PRE_TRAIL |
+                __builtin_popcount(flags & (TRAIL_OP_DB |
+                                            TRAIL_OP_PRE_TRAIL |
                                             TRAIL_OP_EVENT |
-                                            TRAIL_OP_POST_TRAIL)) != 1)
-                DIE("Internal error (2): Invalid attribute check %s\n", name);
+                                            TRAIL_OP_POST_TRAIL |
+                                            TRAIL_OP_FINALIZE)) != 1)
+                DIE("Internal error (2): Invalid attribute modifier %s\n", name);
 
             ctx.ops[i].flags = flags;
             MSG(&ctx, "Operation '%s' initialized\n", name);
@@ -141,6 +148,7 @@ static void initialize(int argc, char **argv)
         {"output-file", required_argument, 0, 'o'},
         {"output-binary", no_argument, 0, 'b'},
         {"output-count", no_argument, 0, 'c'},
+        {"random-seed", required_argument, 0, 'S'},
         /* long options */
         {"cardinalities", no_argument, 0, -2},
         {"no-index", no_argument, 0, -3},
@@ -148,7 +156,7 @@ static void initialize(int argc, char **argv)
     };
 
     do{
-        c = getopt_long(argc, argv, "ocbetvh::", long_options, &option_index);
+        c = getopt_long(argc, argv, "o:cbetvh::S:", long_options, &option_index);
         switch (c){
 
             case -1:
@@ -182,6 +190,10 @@ static void initialize(int argc, char **argv)
                 ctx.opt_output_trails = 1;
                 break;
 
+            case 'S': /* --random-seed */
+                ctx.random_seed = parse_uint64(optarg, "random-seed");
+                break;
+
             case 'v': /* --verbose */
                 ctx.opt_verbose = 1;
                 break;
@@ -198,22 +210,24 @@ static void initialize(int argc, char **argv)
         }
     }while (c != -1);
 
+    if (!ctx.random_seed)
+        ctx.random_seed = (uint32_t)time(NULL) + (uint32_t)getpid();
+
     if (optind < argc){
         const char *input = argv[optind++];
-        int read_stdin = 0;
 
         if (strcmp(input, "-")){
             uint64_t dummy;
             /* open default db, skip stdin */
             op_init_open(&ctx, input, 0, 0, &dummy);
         }else
-            read_stdin = 1;
+            ctx.read_stdin = 1;
 
         /* before parsing stdin, which can be an expensive operation,
            let's check that all ops are ok, and possibly open the db */
         init_ops(optind, argc, argv);
 
-        if (read_stdin)
+        if (ctx.read_stdin)
             input_parse_stdin(&ctx);
         else
             input_choose_all_rows(&ctx);
@@ -252,6 +266,9 @@ static uint32_t *filter_ops(uint64_t include,
                 break;
             case TRAIL_OP_EVENT:
                 label = "event";
+                break;
+            case TRAIL_OP_FINALIZE:
+                label = "finalizer";
                 break;
             default:
                 label = "unknown";
@@ -365,9 +382,10 @@ static void exec_ops()
     uint32_t *trail = NULL;
     uint32_t trail_size = 0;
 
-    uint32_t num_postops, num_eveops, num_preops, num_dbops;
+    uint32_t num_postops, num_eveops, num_preops, num_dbops, num_finops;
     uint32_t *eveops = filter_ops(TRAIL_OP_EVENT, 0, &num_eveops);
     uint32_t *dbops = filter_ops(TRAIL_OP_DB, 0, &num_dbops);
+    uint32_t *finops = filter_ops(TRAIL_OP_FINALIZE, 0, &num_finops);
     uint32_t *postops;
     uint32_t *preops;
 
@@ -391,10 +409,10 @@ static void exec_ops()
                          attr_check_post ? 0: TRAIL_OP_CHECK_ATTR,
                          &num_postops);
 
-    /* database-level operations */
+    /* DATABASE-LEVEL OPERATIONS */
     for (i = 0; i < num_dbops; i++){
-        /* these ops should modify ctx.matched_rows directly, so we can ignore
-           the return value */
+        /* these ops should modify ctx directly, so we can ignore the
+           return value */
         int idx = dbops[i];
         ctx.ops[idx].op->exec(&ctx, TRAIL_OP_DB, 0, NULL, 0, ctx.ops[idx].arg);
     }
@@ -472,6 +490,19 @@ reject:
         J1U(tmp, ctx.matched_rows, row_id);
 accept:
         J1N(cont, ctx.matched_rows, row_id);
+    }
+
+    /* FINALIZE-LEVEL OPERATIONS */
+    for (i = 0; i < num_finops; i++){
+        /* these ops should modify ctx directly, so we can ignore the
+           return value */
+        int idx = finops[i];
+        ctx.ops[idx].op->exec(&ctx,
+                              TRAIL_OP_FINALIZE,
+                              0,
+                              NULL,
+                              0,
+                              ctx.ops[idx].arg);
     }
 
     free(trail);
