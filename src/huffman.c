@@ -166,12 +166,9 @@ struct field_stats *huff_field_stats(const uint64_t *field_cardinalities,
         return NULL;
 
     fstats->field_id_bits = bits_needed(num_fields - 1);
-    printf("FIELD ID BITS %u (num %u)\n", fstats->field_id_bits, num_fields);
     fstats->field_bits[0] = bits_needed(max_timestamp_delta);
-    printf("FIELD_BITS[0]: %u\n", fstats->field_bits[0]);
     for (i = 0; i < num_fields - 2; i++){
         fstats->field_bits[i + 1] = bits_needed(field_cardinalities[i]);
-        printf("FIELD_BITS[%d]: %u\n", i + 1, fstats->field_bits[i + 1]);
     }
     return fstats;
 }
