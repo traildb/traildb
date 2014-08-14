@@ -13,7 +13,7 @@ shift
 
 echo "Running $NUM_PROC processes in parallel, limit is $LIMIT" >&2
 
-find $DIR -type d -follow -iname "$PREFIX*" -printf '%f\n' > $TMP.inputs
+find $DIR -maxdepth 1 -type d -follow -iname "$PREFIX*" -printf '%f\n' > $TMP.inputs
 
 echo "Found $(wc -l $TMP.inputs | cut -d ' ' -f 1) chunks" >&2
 
@@ -25,16 +25,17 @@ echo "Query executed" >&2
 
 if [ "$LIMIT" != "unlimited" ]
 then
-    cat $TMP*.query | $ROOT/trail-mix - limit=$LIMIT > $TMP.chosen
+    cat $TMP*.query | $ROOT/trail-mix - limit=$LIMIT | cut -d ' ' -f 1 > $TMP.chosen
 else
-    cat $TMP*.query | $ROOT/trail-mix - > $TMP.chosen
+    cat $TMP*.query | $ROOT/trail-mix - | cut -d ' ' -f 1 > $TMP.chosen
 fi
 
 echo "Matches aggregated" >&2
 
 cat $TMP.inputs |\
     xargs -r -n 1 -P $NUM_PROC -I '{}'\
-         $ROOT/trail-mix --input-file=$TMP.chosen\
+         $ROOT/trail-mix --output-trails\
+                         --input-file=$TMP.chosen\
                          --output-file=$TMP.'{}'.out - open=$DIR/'{}'
 
 cat $TMP.*.out
