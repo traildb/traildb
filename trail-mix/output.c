@@ -232,14 +232,15 @@ void output_trails(struct trail_ctx *ctx)
     FILE *out = open_output(ctx, &path);
     char *buf = NULL;
     size_t buf_size = 0;
-    uint32_t offsets[3] = {12, 0, 0};
     Pvoid_t fieldset = NULL;
-    Word_t tmp;
+    uint64_t tmp;
+    uint64_t offset = 24;
+    uint64_t sizes[3];
 
     /*
     Blob is structured in four distinct sections:
 
-    HEADER  [ body offset | fields offset | lexicon offset ]
+    HEADER  [ body size (64bit) | fields size (64bit) | lexicon size (64bit) ]
     BODY    [ trails data ]
     FIELDS  [ list of field names ]
     LEXICON [ field - field value pairs ]
@@ -249,29 +250,31 @@ void output_trails(struct trail_ctx *ctx)
         if (!(out = open_memstream(&buf, &buf_size)))
             DIE("Could not initialize memstream in output_trails\n");
 
-    SAFE_SEEK(out, 12, path);
+    SAFE_SEEK(out, 24, path);
 
     fieldset = serialize_trails(out, ctx);
-    SAFE_TELL(out, offsets[1], path);
+    SAFE_TELL(out, tmp, path);
+    sizes[0] = tmp - offset;
+    offset = tmp;
 
     serialize_fields(out, ctx);
-    SAFE_TELL(out, offsets[2], path);
+    SAFE_TELL(out, tmp, path);
+    sizes[1] = tmp - offset;
+    offset = tmp;
 
     serialize_lexicon(out, fieldset, ctx);
-
     SAFE_TELL(out, tmp, path);
-    if (tmp >= UINT32_MAX)
-        DIE("Trying to output over 4GB of data which is not supported yet\n");
+    sizes[2] = tmp - offset;
 
     SAFE_FLUSH(out, path);
     if (buf_size){
-        memcpy(buf, offsets, 12);
+        memcpy(buf, sizes, 24);
         SAFE_WRITE(buf, buf_size, path, stdout);
         fclose(stdout);
     }else{
         /* rewinding doesn't work with memstream! */
         SAFE_SEEK(out, 0, path);
-        SAFE_WRITE(offsets, 12, path, out);
+        SAFE_WRITE(sizes, 24, path, out);
     }
 
     SAFE_CLOSE(out, path);

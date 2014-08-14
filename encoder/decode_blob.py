@@ -56,7 +56,11 @@ def decode_trails(data, fieldnames, lexicon):
             yield cookie, timestamp, fields
 
 def decode(blob):
-    body_offs, fields_offs, lexicon_offs = struct.unpack('III', blob[:12])
+    body_size, fields_size, lexicon_size = struct.unpack('QQQ', blob[:24])
+    body_offs = 24
+    fields_offs = body_offs + body_size
+    lexicon_offs = fields_offs + fields_size
+
     fieldnames = list(decode_fields(blob[fields_offs:lexicon_offs]))
     lexicon = dict(decode_lexicon(blob[lexicon_offs:]))
     body = blob[body_offs:fields_offs]
