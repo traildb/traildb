@@ -1,0 +1,18 @@
+export DISCODB=../../discodb/
+
+gcc -g\
+    -O3\
+    -Wall\
+    -o trail-index\
+    -I ../src\
+    -I $DISCODB/src\
+    -L ../\
+    -ljemalloc\
+    trail-index.c\
+    ../../discodb/src/*.o\
+    -lbreadcrumbs\
+    -lJudy\
+    -lcmph\
+    -lm\
+    -lpthread\
+    -static
