@@ -50,15 +50,14 @@ static inline uint64_t lookup_cookie(struct trail_ctx *ctx,
     /* (void*) cast is horrible below. I don't know why cmph_search_packed
        can't have a const modifier. This will segfault loudly if cmph tries to
        modify the read-only mmap'ed cookie_index. */
-    uint64_t i = cmph_search_packed((void*)ctx->cookie_index_hash,
+    uint64_t i = cmph_search_packed((void*)ctx->cookie_index,
                                     (const char*)key,
                                     16);
 
     if (i < ctx->db->num_cookies){
-        uint32_t idx = ctx->cookie_index_toc[i];
-        const char *cookie = bd_lookup_cookie(ctx->db, idx);
+        const char *cookie = bd_lookup_cookie(ctx->db, i);
         if (!memcmp(cookie, key, 16))
-            return idx + 1;
+            return i + 1;
     }
     return 0;
 }
@@ -79,7 +78,7 @@ static int parse_text(const uint8_t keybuf[33],
 
     if (ctx->db){
 #ifdef ENABLE_COOKIE_INDEX
-        if (ctx->cookie_index_hash){
+        if (ctx->cookie_index){
             row_id = lookup_cookie(ctx, id);
 #else
         if (0){
@@ -143,7 +142,7 @@ void input_parse_stdin(struct trail_ctx *ctx)
     DDB_TIMER_DEF
 
     DDB_TIMER_START
-    if (ctx->db && !ctx->cookie_index_hash)
+    if (ctx->db && !ctx->cookie_index)
         id_index = index_db_ids(ctx);
     DDB_TIMER_END("index_db_ids");
 
@@ -192,7 +191,6 @@ void input_load_cookie_index(struct trail_ctx *ctx)
 {
     char path[MAX_PATH_SIZE];
     struct bdfile file;
-    uint32_t n = bd_num_cookies(ctx->db);
 
     make_path(path, "%s/cookies.index", ctx->db_path);
 
@@ -200,7 +198,6 @@ void input_load_cookie_index(struct trail_ctx *ctx)
         MSG(ctx, "Cookie index is disabled\n");
     }else{
         MSG(ctx, "Cookie index is enabled\n");
-        ctx->cookie_index_toc = (const uint32_t*)file.data;
-        ctx->cookie_index_hash = &file.data[n * 4];
+        ctx->cookie_index = file.data;
     }
 }

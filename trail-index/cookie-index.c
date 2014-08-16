@@ -41,7 +41,6 @@ void create_cookie_index(const char *path, struct breadcrumbs *bd)
     void *data;
     cmph_config_t *config;
     cmph_t *cmph;
-    uint32_t i;
     FILE *out;
     uint32_t size;
 
@@ -64,7 +63,7 @@ void create_cookie_index(const char *path, struct breadcrumbs *bd)
     if (!(config = cmph_config_new(&r)))
         DIE("cmph_config failed\n");
 
-    cmph_config_set_algo(config, CMPH_CHD);
+    cmph_config_set_algo(config, CMPH_CHM);
 
     if (getenv("DEBUG_CMPH"))
         cmph_config_set_verbosity(config, 5);
@@ -77,15 +76,6 @@ void create_cookie_index(const char *path, struct breadcrumbs *bd)
         DIE("Could not malloc a hash of %u bytes\n", size);
 
     cmph_pack(cmph, data);
-
-    for (i = 0; i < r.nkeys; i++){
-        const char *cookie = bd_lookup_cookie(bd, i);
-        uint32_t idx = cmph_search_packed(data, cookie, 16);
-        SAFE_SEEK(out, idx * 4, path);
-        SAFE_WRITE(&i, 4, path, out);
-    }
-
-    SAFE_SEEK(out, r.nkeys * 4, path);
     SAFE_WRITE(data, size, path, out);
     SAFE_CLOSE(out, path);
 
