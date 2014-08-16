@@ -1,5 +1,7 @@
 gcc -Wall\
     -DENABLE_DISCODB\
+    -DENABLE_COOKIE_INDEX\
+    -DDDB_PROFILE\
     -g\
     -O3\
     -o trail-mix\

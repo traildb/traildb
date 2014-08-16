@@ -7,11 +7,15 @@
 #include "util.h"
 
 #include <discodb.h>
-
+#include <ddb_profile.h>
 #include <Judy.h>
 
 #define DECODE_BUF_INCREMENT 1000000
 #define KEY_BUFFER_SIZE 1000000
+
+#define MIN_NUMBER_OF_COOKIES 100
+
+void create_cookie_index(const char *path, struct breadcrumbs *bd);
 
 static void make_key(struct ddb_entry *key,
                      struct breadcrumbs *bd,
@@ -109,23 +113,11 @@ static void create_trail_index(const char *path, struct breadcrumbs *bd)
     free(data);
 }
 
-static void create_cookie_index(const char *path, struct breadcrumbs *bd)
-{
-    FILE *out;
-
-    if (!(out = fopen(path, "w")))
-        DIE("Could not open output file at %s\n", path);
-
-
-
-    SAFE_CLOSE(out, path);
-}
-
 int main(int argc, char **argv)
 {
     char path[MAX_PATH_SIZE];
     struct breadcrumbs *bd;
-    FILE *out;
+    DDB_TIMER_DEF
 
     if (argc < 2)
         DIE("USAGE: trail-index db-root\n");
@@ -136,11 +128,21 @@ int main(int argc, char **argv)
     if (bd->error_code)
         DIE("%s\n", bd->error);
 
+    DDB_TIMER_START
     make_path(path, "%s/trails.index", argv[1]);
     create_trail_index(path, bd);
+    DDB_TIMER_END("trails.index");
 
-    make_path(path, "%s/cookies.index", argv[1]);
-    create_cookie_index(path, bd);
+    /*
+    CMPH may fail for a very small number of keys. We don't need an
+    index for a small number of cookies anyways, so let's not even try.
+    */
+    if (bd_num_cookies(bd) > MIN_NUMBER_OF_COOKIES){
+        DDB_TIMER_START
+        make_path(path, "%s/cookies.index", argv[1]);
+        create_cookie_index(path, bd);
+        DDB_TIMER_END("cookies.index");
+    }
 
     bd_close(bd);
     return 0;

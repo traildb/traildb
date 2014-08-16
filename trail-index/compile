@@ -3,12 +3,14 @@ export DISCODB=../../discodb/
 gcc -g\
     -O3\
     -Wall\
+    -DDDB_PROFILE\
     -o trail-index\
     -I ../src\
     -I $DISCODB/src\
     -L ../\
     -ljemalloc\
     trail-index.c\
+    cookie-index.c\
     ../../discodb/src/*.o\
     -lbreadcrumbs\
     -lJudy\

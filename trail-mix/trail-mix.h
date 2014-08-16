@@ -85,14 +85,18 @@ struct trail_ctx{
     /* trail db */
     struct breadcrumbs *db;
     const char *db_path;
+
 #ifdef ENABLE_DISCODB
     struct ddb *db_index;
 #endif
+    const void *cookie_index_hash;
+    const uint32_t *cookie_index_toc;
 };
 
 /* input.c */
 void input_parse_stdin(struct trail_ctx *ctx);
 void input_choose_all_rows(struct trail_ctx *ctx);
+void input_load_cookie_index(struct trail_ctx *ctx);
 
 /* output.c */
 void output_matches(struct trail_ctx *ctx);

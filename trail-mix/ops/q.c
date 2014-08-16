@@ -142,7 +142,7 @@ static struct ddb *open_index(const char *root)
     struct ddb *db;
     int fd;
 
-    make_path(path, "%s/index", root);
+    make_path(path, "%s/trails.index", root);
 
     if ((fd = open(path, O_RDONLY)) == -1)
         return NULL;

@@ -3,6 +3,10 @@
 
 #include <Judy.h>
 
+#ifdef ENABLE_COOKIE_INDEX
+#include <cmph.h>
+#endif
+
 #include <breadcrumbs_decoder.h>
 #include <hex_decode.h>
 
@@ -10,6 +14,8 @@
 #include "arena.h"
 
 #include "trail-mix.h"
+
+#include <ddb_profile.h>
 
 static struct arena input_ids = {.arena_increment = 1000000,
                                  .item_size = 16};
@@ -37,6 +43,27 @@ static int parse_binary(const uint8_t keybuf[33],
     return 0;
 }
 
+#ifdef ENABLE_COOKIE_INDEX
+static inline uint64_t lookup_cookie(struct trail_ctx *ctx,
+                                     const uint8_t key[16])
+{
+    /* (void*) cast is horrible below. I don't know why cmph_search_packed
+       can't have a const modifier. This will segfault loudly if cmph tries to
+       modify the read-only mmap'ed cookie_index. */
+    uint64_t i = cmph_search_packed((void*)ctx->cookie_index_hash,
+                                    (const char*)key,
+                                    16);
+
+    if (i < ctx->db->num_cookies){
+        uint32_t idx = ctx->cookie_index_toc[i];
+        const char *cookie = bd_lookup_cookie(ctx->db, idx);
+        if (!memcmp(cookie, key, 16))
+            return idx + 1;
+    }
+    return 0;
+}
+#endif
+
 static int parse_text(const uint8_t keybuf[33],
                       Pvoid_t *id_index,
                       FILE *input,
@@ -51,9 +78,17 @@ static int parse_text(const uint8_t keybuf[33],
         DIE("Invalid ID: %*s\n", 32, keybuf);
 
     if (ctx->db){
-        JHSG(ptr, *id_index, id, 16);
-        if (ptr)
-            row_id = *ptr;
+#ifdef ENABLE_COOKIE_INDEX
+        if (ctx->cookie_index_hash){
+            row_id = lookup_cookie(ctx, id);
+#else
+        if (0){
+#endif
+        }else{
+            JHSG(ptr, *id_index, id, 16);
+            if (ptr)
+                row_id = *ptr;
+        }
     }else{
         JHSI(ptr, *id_index, id, 16);
         if (*ptr)
@@ -105,10 +140,14 @@ void input_parse_stdin(struct trail_ctx *ctx)
     unsigned long long num_matches = 0;
     Word_t tmp;
     FILE *input = stdin;
+    DDB_TIMER_DEF
 
-    if (ctx->db)
+    DDB_TIMER_START
+    if (ctx->db && !ctx->cookie_index_hash)
         id_index = index_db_ids(ctx);
+    DDB_TIMER_END("index_db_ids");
 
+    DDB_TIMER_START
     if (ctx->input_file)
         if (!(input = fopen(ctx->input_file, "r")))
             DIE("Could not open input file at %s\n", ctx->input_file);
@@ -129,14 +168,17 @@ void input_parse_stdin(struct trail_ctx *ctx)
         }else
             parse_binary(keybuf, &id_index, ctx);
     }
+    DDB_TIMER_END("parsing");
 
     MSG(ctx, "%llu lines read, %llu lines match\n", num_lines, num_matches);
 
     if (input != stdin)
         fclose(input);
 
+    DDB_TIMER_START
     ctx->input_ids = input_ids.data;
     JHSFA(tmp, id_index);
+    DDB_TIMER_END("parsing (end)");
 }
 
 void input_choose_all_rows(struct trail_ctx *ctx)
@@ -144,4 +186,21 @@ void input_choose_all_rows(struct trail_ctx *ctx)
     uint32_t tmp, i;
     for (i = 0; i < bd_num_cookies(ctx->db); i++)
         J1S(tmp, ctx->matched_rows, i);
+}
+
+void input_load_cookie_index(struct trail_ctx *ctx)
+{
+    char path[MAX_PATH_SIZE];
+    struct bdfile file;
+    uint32_t n = bd_num_cookies(ctx->db);
+
+    make_path(path, "%s/cookies.index", ctx->db_path);
+
+    if (mmap_file(path, &file, ctx->db)){
+        MSG(ctx, "Cookie index is disabled\n");
+    }else{
+        MSG(ctx, "Cookie index is enabled\n");
+        ctx->cookie_index_toc = (const uint32_t*)file.data;
+        ctx->cookie_index_hash = &file.data[n * 4];
+    }
 }

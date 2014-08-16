@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <ddb_profile.h>
 #include "util.h"
 
 #include "trail-mix.h"
@@ -235,6 +236,11 @@ static void initialize(int argc, char **argv)
         /* before parsing stdin, which can be an expensive operation,
            let's check that all ops are ok, and possibly open the db */
         init_ops(optind, argc, argv);
+
+#ifdef ENABLE_COOKIE_INDEX
+        if (ctx.db)
+            input_load_cookie_index(&ctx);
+#endif
 
         if (ctx.read_stdin)
             input_parse_stdin(&ctx);
@@ -526,13 +532,28 @@ accept:
 
 int main(int argc, char **argv)
 {
-    initialize(argc, argv);
-    exec_ops();
+    DDB_TIMER_DEF
 
+    DDB_TIMER_START
+    initialize(argc, argv);
+    if (ctx.opt_verbose){
+        DDB_TIMER_END("initialization");
+    }
+
+    DDB_TIMER_START
+    exec_ops();
+    if (ctx.opt_verbose){
+        DDB_TIMER_END("operations");
+    }
+
+    DDB_TIMER_START
     if (ctx.opt_output_trails)
         output_trails(&ctx);
     else
         output_matches(&ctx);
+    if (ctx.opt_verbose){
+        DDB_TIMER_END("output");
+    }
 
     MSG(&ctx, "Done!\n");
     return 0;
