@@ -18,7 +18,6 @@ then
 else
     COUNTERS="--counters-prefix=sampler --counters-file=$MIXMAX_COUNTERS"
 fi
-echo "COUNT $COUNTERS" >&2
 
 echo "Running $NUM_PROC processes in parallel, limit is $LIMIT" >&2
 
