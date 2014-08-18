@@ -12,6 +12,14 @@ LIMIT=$1
 shift
 QUERY=( "$@" )
 
+if [ -z "$MIXMAX_COUNTERS" ]
+then
+    COUNTERS=""
+else
+    COUNTERS="--counters-prefix=sampler --counters-file=$MIXMAX_COUNTERS"
+fi
+echo "COUNT $COUNTERS" >&2
+
 echo "Running $NUM_PROC processes in parallel, limit is $LIMIT" >&2
 
 find $DIR -maxdepth 1 -type d -follow -iname "$PREFIX*" -printf '%f\n' > $TMP.inputs
@@ -26,9 +34,11 @@ echo "Query executed" >&2
 
 if [ "$LIMIT" != "unlimited" ]
 then
-    cat $TMP*.query | $ROOT/trail-mix - limit=$LIMIT | cut -d ' ' -f 1 > $TMP.chosen
+    cat $TMP*.query | $ROOT/trail-mix $COUNTERS - limit=$LIMIT |\
+        cut -d ' ' -f 1 > $TMP.chosen
 else
-    cat $TMP*.query | $ROOT/trail-mix - | cut -d ' ' -f 1 > $TMP.chosen
+    cat $TMP*.query | $ROOT/trail-mix $COUNTERS - |\
+        cut -d ' ' -f 1 > $TMP.chosen
 fi
 
 echo "Matches aggregated" >&2
