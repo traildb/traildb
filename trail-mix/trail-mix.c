@@ -15,6 +15,11 @@
 
 #include <breadcrumbs_decoder.h>
 
+/* COUNTER_BUF_SIZE should be less than PIPE_BUF, preferably less than
+   512 bytes, to guarantee atomic appends and write to fifo.
+*/
+#define COUNTER_BUF_SIZE 511
+
 /* Internal structures:
     - Set of chosen IDs
     - List of open DBs
@@ -148,19 +153,21 @@ static void initialize(int argc, char **argv)
         {"output-trails", no_argument, 0, 't'},
         {"output-file", required_argument, 0, 'o'},
         {"input-file", required_argument, 0, 'i'},
+        {"counters-file", required_argument, 0, 'C'},
         {"output-binary", no_argument, 0, 'b'},
         {"output-count", no_argument, 0, 'c'},
         {"random-seed", required_argument, 0, 'S'},
         /* long options */
         {"cardinalities", no_argument, 0, -2},
         {"no-index", no_argument, 0, -3},
+        {"counters-prefix", required_argument, 0, -4},
         {0, 0, 0, 0}
     };
 
     do{
         c = getopt_long(argc,
                         argv,
-                        "i:o:cbetvh::S:",
+                        "C:i:o:cbetvh::S:",
                         long_options,
                         &option_index);
         switch (c){
@@ -176,12 +183,21 @@ static void initialize(int argc, char **argv)
                 ctx.opt_no_index = 1;
                 break;
 
+            case -4: /* --no-index */
+                ctx.counters_prefix = optarg;
+                break;
+
             case 'o': /* --output-file */
                 ctx.output_file = optarg;
                 break;
 
             case 'i': /* --input-file */
                 ctx.input_file = optarg;
+                break;
+
+            case 'C': /* --counters-file */
+                if (!(ctx.counters_file = fopen(optarg, "a")))
+                    DIE("Could not open counters file at %s\n", optarg);
                 break;
 
             case 'c': /* --output-count */
@@ -530,8 +546,29 @@ accept:
     free(postops);
 }
 
+void write_counter(const char *name, long long int val)
+{
+    static char buf[COUNTER_BUF_SIZE];
+
+    if (ctx.counters_file){
+        const char *prefix = ctx.counters_prefix ? ctx.counters_prefix: "";
+        int n = snprintf(buf,
+                         COUNTER_BUF_SIZE,
+                         ctx.counters_prefix ? "%s.%s %lld\n": "%s%s %lld\n",
+                         prefix,
+                         name,
+                         val);
+        if (n >= COUNTER_BUF_SIZE)
+            DIE("Counter buffer too small (value %s.%s)\n", prefix, name);
+        else if (fwrite(buf, n, 1, ctx.counters_file) != 1)
+            DIE("Writing a counter %s.%s failed\n", prefix, name);
+        fflush(ctx.counters_file);
+    }
+}
+
 int main(int argc, char **argv)
 {
+    long long unsigned int count;
     DDB_TIMER_DEF
 
     DDB_TIMER_START
@@ -540,11 +577,19 @@ int main(int argc, char **argv)
         DDB_TIMER_END("initialization");
     }
 
+    J1C(count, ctx.matched_rows, 0, -1);
+    write_counter("main.input_trails", count);
+    MSG(&ctx, "Number of input trails: %llu\n", count);
+
     DDB_TIMER_START
     exec_ops();
     if (ctx.opt_verbose){
         DDB_TIMER_END("operations");
     }
+
+    J1C(count, ctx.matched_rows, 0, -1);
+    write_counter("main.output_trails", count);
+    MSG(&ctx, "Number of output trails: %llu\n", count);
 
     DDB_TIMER_START
     if (ctx.opt_output_trails)

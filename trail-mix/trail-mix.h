@@ -69,6 +69,10 @@ struct trail_ctx{
     const char *output_file;
     const char *input_file;
 
+    /* counters */
+    FILE *counters_file;
+    const char *counters_prefix;
+
     /* operations */
     int num_ops;
     struct trail_op *ops;
@@ -100,6 +104,8 @@ void input_load_cookie_index(struct trail_ctx *ctx);
 /* output.c */
 void output_matches(struct trail_ctx *ctx);
 void output_trails(struct trail_ctx *ctx);
+
+void write_counter(const char *name, long long int val);
 
 #define MSG(ctx, msg, ...)\
      { if ((ctx)->opt_verbose) fprintf(stderr, msg, ##__VA_ARGS__); }
