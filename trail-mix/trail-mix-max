@@ -10,6 +10,7 @@ NUM_PROC=$1
 shift
 LIMIT=$1
 shift
+QUERY=( "$@" )
 
 echo "Running $NUM_PROC processes in parallel, limit is $LIMIT" >&2
 
@@ -19,7 +20,7 @@ echo "Found $(wc -l $TMP.inputs | cut -d ' ' -f 1) chunks" >&2
 
 cat $TMP.inputs |\
     xargs -r -n 1 -P $NUM_PROC -I '{}'\
-         $ROOT/trail-mix --output-file=$TMP.'{}'.query $DIR/'{}' $@ length
+         $ROOT/trail-mix --output-file=$TMP.'{}'.query $DIR/'{}' "${QUERY[@]}" length
 
 echo "Query executed" >&2
 
