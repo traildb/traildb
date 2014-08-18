@@ -562,7 +562,7 @@ void write_counter(const char *name, long long int val)
             DIE("Counter buffer too small (value %s.%s)\n", prefix, name);
         else if (fwrite(buf, n, 1, ctx.counters_file) != 1)
             DIE("Writing a counter %s.%s failed\n", prefix, name);
-        fflush(ctx.counters_file);
+        SAFE_FLUSH(ctx.counters_file, "counters");
     }
 }
 
@@ -578,7 +578,7 @@ int main(int argc, char **argv)
     }
 
     J1C(count, ctx.matched_rows, 0, -1);
-    write_counter("main.input_trails", count);
+    write_counter("main.input-trails", count);
     MSG(&ctx, "Number of input trails: %llu\n", count);
 
     DDB_TIMER_START
@@ -588,7 +588,7 @@ int main(int argc, char **argv)
     }
 
     J1C(count, ctx.matched_rows, 0, -1);
-    write_counter("main.output_trails", count);
+    write_counter("main.output-trails", count);
     MSG(&ctx, "Number of output trails: %llu\n", count);
 
     DDB_TIMER_START
@@ -599,6 +599,9 @@ int main(int argc, char **argv)
     if (ctx.opt_verbose){
         DDB_TIMER_END("output");
     }
+
+    if (ctx.counters_file)
+        SAFE_CLOSE(ctx.counters_file, "counters");
 
     MSG(&ctx, "Done!\n");
     return 0;
