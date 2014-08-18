@@ -78,7 +78,7 @@ int op_exec_limit(struct trail_ctx *ctx,
 
         total = sum_and_shuffle(ctx, rows);
 
-        write_counter("limit.total_events", total);
+        write_counter("limit.total-events", total);
 
         for (i = 0; i < num_rows && total > limit; i++){
             Word_t *ptr;
@@ -90,7 +90,7 @@ int op_exec_limit(struct trail_ctx *ctx,
             J1U(tmp, ctx->matched_rows, rows[i]);
         }
 
-        write_counter("limit.sampled_events", total);
+        write_counter("limit.sampled-events", total);
 
         free(rows);
     }else
