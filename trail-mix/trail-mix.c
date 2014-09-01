@@ -112,12 +112,14 @@ static void init_ops(int optidx, int argc, char **argv)
                                                  ctx.num_ops,
                                                  &flags);
 
-            /* RULE: Attribute modifications must precede checks */
-            if (flags & TRAIL_OP_CHECK_ATTR)
-                check_seen = 1;
+            /* RULE: Attribute modifications must precede checks.
+                     (exception: there's a single op that both checks and mods)
+            */
             if ((flags & TRAIL_OP_MOD_ATTR) && check_seen)
                 DIE("Attribute checks must precede ops that modify "
                     "attributes (offending op: %s)\n", name);
+            if (flags & TRAIL_OP_CHECK_ATTR)
+                check_seen = 1;
 
             /* RULE: Attribute checks that support either pre- or post-ops
                must support both of them */
