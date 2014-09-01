@@ -61,6 +61,7 @@ struct trail_ctx{
     int opt_binary;
     int opt_verbose;
     int opt_no_index;
+    int opt_choose_all;
 
     uint32_t random_seed;
 

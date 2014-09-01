@@ -158,6 +158,7 @@ static void initialize(int argc, char **argv)
         {"counters-file", required_argument, 0, 'C'},
         {"output-binary", no_argument, 0, 'b'},
         {"output-count", no_argument, 0, 'c'},
+        {"choose-all", no_argument, 0, 'A'},
         {"random-seed", required_argument, 0, 'S'},
         /* long options */
         {"cardinalities", no_argument, 0, -2},
@@ -169,7 +170,7 @@ static void initialize(int argc, char **argv)
     do{
         c = getopt_long(argc,
                         argv,
-                        "C:i:o:cbetvh::S:",
+                        "C:i:o:Acbetvh::S:",
                         long_options,
                         &option_index);
         switch (c){
@@ -218,6 +219,10 @@ static void initialize(int argc, char **argv)
                 ctx.opt_output_trails = 1;
                 break;
 
+            case 'A': /* --choose-all */
+                ctx.opt_choose_all = 1;
+                break;
+
             case 'S': /* --random-seed */
                 ctx.random_seed = parse_uint64(optarg, "random-seed");
                 break;
@@ -262,7 +267,7 @@ static void initialize(int argc, char **argv)
 
         if (ctx.read_stdin)
             input_parse_stdin(&ctx);
-        else
+        if (ctx.opt_choose_all || !ctx.read_stdin)
             input_choose_all_rows(&ctx);
 
         if (ctx.opt_output_trails && !ctx.db)
