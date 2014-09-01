@@ -20,6 +20,7 @@ int open_lexicon(const struct breadcrumbs *bd,
 
 uint8_t bd_field_value(uint32_t value);
 uint8_t bd_field_index(uint32_t value);
+int bd_lookup_field_index(const struct breadcrumbs *bd, const char *field_name);
 
 const char *bd_lookup_value(const struct breadcrumbs *bd,
                             uint32_t cookie_index);

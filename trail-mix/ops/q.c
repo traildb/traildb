@@ -95,12 +95,7 @@ static struct ddb_query_clause *parse_query(char *query,
         while (termptr){
             char *term;
             char *field_name = strsep(&termptr, ":");
-            int field_idx = -1;
-            uint32_t i;
-
-            for (i = 0; i < db->num_fields; i++)
-                if (!strcmp(field_name, db->field_names[i]))
-                    field_idx = i;
+            int field_idx = bd_lookup_field_index(db, field_name);
 
             if (field_idx == -1)
                 DIE("Unrecognized field in q: %s\n", field_name);

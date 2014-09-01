@@ -196,6 +196,15 @@ void bd_close(struct breadcrumbs *bd)
     }
 }
 
+int bd_lookup_field_index(const struct breadcrumbs *bd, const char *field_name)
+{
+    int i;
+    for (i = 0; i < bd->num_fields; i++)
+        if (!strcmp(field_name, bd->field_names[i]))
+            return i;
+    return -1;
+}
+
 const char *bd_error(const struct breadcrumbs *bd)
 {
     return bd->error;
