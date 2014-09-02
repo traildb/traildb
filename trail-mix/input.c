@@ -72,6 +72,8 @@ static int parse_text(const uint8_t keybuf[33],
     Word_t row_id = 0;
     int tmp;
     Word_t *ptr;
+    unsigned long long attr_value;
+    int has_attr = 0;
 
     if (hex_decode((const char*)keybuf, id))
         DIE("Invalid ID: %*s\n", 32, keybuf);
@@ -101,30 +103,32 @@ static int parse_text(const uint8_t keybuf[33],
         }
     }
 
+    if (keybuf[32] == ' '){
+
+        if (ctx->attr_type == 0)
+            ctx->attr_type = TRAIL_ATTR_SCALAR;
+        else if (ctx->attr_type != TRAIL_ATTR_SCALAR)
+            DIE("Cannot mix set and scalar attributes "
+                "(offending ID: %*s)\n", 32, keybuf);
+
+        if (fscanf(input, "%llu\n", &attr_value) != 1)
+            DIE("Invalid attribute value "
+                "(offending ID: %*s)\n", 32, keybuf);
+        has_attr = 1;
+
+    }else if (keybuf[32] != '\n')
+        DIE("Invalid input (offending ID: %*s)\n", 32, keybuf);
+
     if (row_id){
         --row_id;
 
         J1S(tmp, ctx->matched_rows, row_id);
 
-        if (keybuf[32] == ' '){
-            unsigned long long attr_value;
-
-            if (ctx->attr_type == 0)
-                ctx->attr_type = TRAIL_ATTR_SCALAR;
-            else if (ctx->attr_type != TRAIL_ATTR_SCALAR)
-                DIE("Cannot mix set and scalar attributes "
-                    "(offending ID: %*s)\n", 32, keybuf);
-
-            if (fscanf(input, "%llu\n", &attr_value) == 1){
-                Word_t *attr;
-                JLI(attr, ctx->attributes, row_id);
-                *attr += attr_value;
-            }else
-                DIE("Invalid attribute value "
-                    "(offending ID: %*s)\n", 32, keybuf);
-
-        }else if (keybuf[32] != '\n')
-            DIE("Invalid input (offending ID: %*s)\n", 32, keybuf);
+        if (has_attr){
+            Word_t *attr;
+            JLI(attr, ctx->attributes, row_id);
+            *attr += attr_value;
+        }
 
         return 1;
     }else
