@@ -349,14 +349,22 @@ static inline int exec_match_events(const uint32_t *trail,
 
         for (j = 0; j < num_eveops; j++){
             int idx = eveops[j];
-            if (ctx.ops[idx].op->exec(&ctx,
-                                      TRAIL_OP_EVENT,
-                                      row_id,
-                                      &trail[event_start],
-                                      event_start - i,
-                                      ctx.ops[idx].arg))
-                break;
+            int ret = ctx.ops[idx].op->exec(&ctx,
+                                            TRAIL_OP_EVENT,
+                                            row_id,
+                                            &trail[event_start],
+                                            event_start - i,
+                                            ctx.ops[idx].arg);
+            switch (ret){
+                case 1:
+                    goto event_done;
+                case 2:
+                    return 0;
+                case 3:
+                    return 1;
+            }
         }
+event_done:
         /* if all ops match an event, the whole trail matches */
         if (j == num_eveops)
             skip = 0;
