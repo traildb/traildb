@@ -51,21 +51,27 @@ def decode_trails(data, fieldnames, lexicon):
             for j in range(len(fieldnames) - 1):
                 field = value.unpack(data[offs:offs + 4])[0]
                 fieldval = '' if field == 0 else lexicon[field]
-                fields.append('%s:%s' % (fieldnames[j + 1], fieldval))
+                fields.append((fieldnames[j + 1], fieldval))
                 offs += 4
             yield cookie, timestamp, fields
 
-def decode(blob):
-    body_size, fields_size, lexicon_size = struct.unpack('QQQ', blob[:24])
-    body_offs = 24
-    fields_offs = body_offs + body_size
-    lexicon_offs = fields_offs + fields_size
+class Decoder(object):
+    def __init__(self, blob):
+        body_size, fields_size, lexicon_size = struct.unpack('QQQ', blob[:24])
+        body_offs = 24
+        fields_offs = body_offs + body_size
+        lexicon_offs = fields_offs + fields_size
 
-    fieldnames = list(decode_fields(blob[fields_offs:lexicon_offs]))
-    lexicon = dict(decode_lexicon(blob[lexicon_offs:]))
-    body = blob[body_offs:fields_offs]
-    for cookie, timestamp, fields in decode_trails(body, fieldnames, lexicon):
-        print cookie, timestamp, ' | '.join(fields)
+        self.fieldnames = list(decode_fields(blob[fields_offs:lexicon_offs]))
+        self.lexicon = dict(decode_lexicon(blob[lexicon_offs:]))
+        self.body = blob[body_offs:fields_offs]
+
+    def __iter__(self):
+        for cookie, timestamp, fields in decode_trails(self.body,
+                                                       self.fieldnames,
+                                                       self.lexicon):
+            yield cookie, timestamp, fields
 
 if __name__ == '__main__':
-    decode(open(sys.argv[1]).read())
+    for cookie, timestamp, fields in Decoder(open(sys.argv[1]).read()):
+        print cookie, timestamp, ' | '.join('%s:%s' % x for x in fields)
