@@ -25,13 +25,14 @@ $GCC -fPIC -DDSFMT_MEXP=521 -c -O3 -fno-strict-aliasing -msse2 -DHAVE_SSE2=1 dsf
 $GCC $CFLAGS -o ../libbreadcrumbs.so -lJudy *.o -shared
 ar ruv ../libbreadcrumbs.a *.o
 ranlib ../libbreadcrumbs.a
+echo "Compiled breadcrumbs library."
 
-EXTRA_STATIC="-static"
-if $IS_MAC; then
-    EXTRA_STATIC=""
-fi
 
 # Compile Encoder
-$GCC $CFLAGS -ljemalloc -o ../breadcrumbs_encoder breadcrumbs_encoder.c arena.c lexicon_encode.c trail_encode.c trail_encode_model.c ddb_queue.c huffman.c util.c dSFMT.o -lJudy -lpthread $EXTRA_STATIC
+if $IS_MAC; then
+    echo "Can't compile breadcrumbs encoder on Mac because 'readahead' is a linux thing."
+else
+    $GCC $CFLAGS -ljemalloc -o ../breadcrumbs_encoder breadcrumbs_encoder.c arena.c lexicon_encode.c trail_encode.c trail_encode_model.c ddb_queue.c huffman.c util.c dSFMT.o -lJudy -lpthread -static
+fi
 
 cd ..
