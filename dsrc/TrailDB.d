@@ -130,7 +130,6 @@ class TrailDB {
 
     void read_dim_names()
     {
-        //_fieldNames = new string[];
         auto f = File(buildPath(_db_path, "fields"), "r");
         foreach(line; f.byLine())
         {
