@@ -1,5 +1,7 @@
-# Dependencies: Judy, jemalloc
-# On MAC OSX, just run 'brew install Judy jemalloc'
+# Dependencies: Judy, jemalloc, cmph
+# cmph-2.0 can be downloaded at http://sourceforge.net/projects/cmph/
+# a 'simple ./configure; make; make install' should work.
+# On MAC OSX, Judy and jemalloc have brew bottles
 
 # Detect OS
 IS_MAC=false;
@@ -8,15 +10,15 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 GCC="gcc"
+CFLAGS="-fPIC -O3 -g -Wall"
+
 if $IS_MAC; then
     GCC="gcc-4.6"
 fi
 
-CFLAGS="-fPIC -O3 -g -Wall"
 
 cd src
 rm *.o
-<<<<<<< HEAD
 $GCC $CFLAGS -DENABLE_COOKIE_INDEX -c breadcrumbs.c util.c trail_decode.c lexicon_decode.c huffman.c ddb_queue.c
 
 # Compile SFMT (SIMD Mersenne Twister random generator)
