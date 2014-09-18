@@ -260,10 +260,13 @@ static void initialize(int argc, char **argv)
            let's check that all ops are ok, and possibly open the db */
         init_ops(optind, argc, argv);
 
-#ifdef ENABLE_COOKIE_INDEX
-        if (ctx.db)
-            input_load_cookie_index(&ctx);
-#endif
+        if (ctx.db){
+            if ((ctx.has_cookie_index = bd_has_cookie_index(ctx.db))){
+                MSG(&ctx, "Cookie index enabled\n");
+            }else{
+                MSG(&ctx, "Cookie index disabled\n");
+            }
+        }
 
         if (ctx.read_stdin)
             input_parse_stdin(&ctx);

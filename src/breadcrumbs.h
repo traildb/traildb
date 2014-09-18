@@ -25,6 +25,7 @@ struct breadcrumbs{
     uint32_t *previous_values;
 
     struct bdfile cookies;
+    struct bdfile cookie_index;
     struct bdfile codebook;
     struct bdfile trails;
     struct bdfile *lexicons;

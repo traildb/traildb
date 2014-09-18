@@ -16,13 +16,14 @@ CFLAGS="-fPIC -O3 -g -Wall"
 
 cd src
 rm *.o
-$GCC $CFLAGS -c breadcrumbs.c util.c trail_decode.c lexicon_decode.c huffman.c ddb_queue.c
+<<<<<<< HEAD
+$GCC $CFLAGS -DENABLE_COOKIE_INDEX -c breadcrumbs.c util.c trail_decode.c lexicon_decode.c huffman.c ddb_queue.c
 
 # Compile SFMT (SIMD Mersenne Twister random generator)
 $GCC -fPIC -DDSFMT_MEXP=521 -c -O3 -fno-strict-aliasing -msse2 -DHAVE_SSE2=1 dsfmt/dSFMT.c
 
 # Compile breadcrumbs lib
-$GCC $CFLAGS -o ../libbreadcrumbs.so -lJudy *.o -shared
+$GCC $CFLAGS -o ../libbreadcrumbs.so -lJudy -lcmph *.o -shared
 ar ruv ../libbreadcrumbs.a *.o
 ranlib ../libbreadcrumbs.a
 echo "Compiled breadcrumbs library."
