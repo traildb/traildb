@@ -108,13 +108,14 @@ class TrailDB {
 
         uint tot_events = _rawDecode(index);
 
+        uint evt_type_encoded = bd_lookup_token(
+            _db, toStringz(type), _eventTypeInd);
+
         uint cnt = 0;
         for(int i = 0; i < tot_events; ++i)
         {
-            //TODO: use lexicon instead to improve perf
-            char[] val = decode_val(
-                _buff[i * (_numDims + 2) + _eventTypeInd + 1]);
-            if(val == type)
+            uint val = _buff[i * (_numDims + 2) + _eventTypeInd + 1];
+            if(val == evt_type_encoded)
                 ++cnt;
         }
 

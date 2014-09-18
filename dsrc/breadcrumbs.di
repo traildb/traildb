@@ -8,3 +8,5 @@ extern(C):
     char* bd_lookup_value(void*, uint);
 
     uint bd_trail_decode(void*, uint, uint*, uint, int);
+
+    uint bd_lookup_token(void*, const char*, uint);
