@@ -3,10 +3,6 @@
 
 #include <Judy.h>
 
-#ifdef ENABLE_COOKIE_INDEX
-#include <cmph.h>
-#endif
-
 #include <breadcrumbs_decoder.h>
 #include <hex_decode.h>
 
@@ -43,26 +39,6 @@ static int parse_binary(const uint8_t keybuf[33],
     return 0;
 }
 
-#ifdef ENABLE_COOKIE_INDEX
-static inline uint64_t lookup_cookie(struct trail_ctx *ctx,
-                                     const uint8_t key[16])
-{
-    /* (void*) cast is horrible below. I don't know why cmph_search_packed
-       can't have a const modifier. This will segfault loudly if cmph tries to
-       modify the read-only mmap'ed cookie_index. */
-    uint64_t i = cmph_search_packed((void*)ctx->cookie_index,
-                                    (const char*)key,
-                                    16);
-
-    if (i < ctx->db->num_cookies){
-        const char *cookie = bd_lookup_cookie(ctx->db, i);
-        if (!memcmp(cookie, key, 16))
-            return i + 1;
-    }
-    return 0;
-}
-#endif
-
 static int parse_text(const uint8_t keybuf[33],
                       Pvoid_t *id_index,
                       FILE *input,
@@ -79,12 +55,8 @@ static int parse_text(const uint8_t keybuf[33],
         DIE("Invalid ID: %*s\n", 32, keybuf);
 
     if (ctx->db){
-#ifdef ENABLE_COOKIE_INDEX
-        if (ctx->cookie_index){
-            row_id = lookup_cookie(ctx, id);
-#else
-        if (0){
-#endif
+        if (ctx->has_cookie_index){
+            row_id = (Word_t)(bd_rlookup_cookie(ctx->db, id) + 1);
         }else{
             JHSG(ptr, *id_index, id, 16);
             if (ptr)
@@ -146,7 +118,7 @@ void input_parse_stdin(struct trail_ctx *ctx)
     DDB_TIMER_DEF
 
     DDB_TIMER_START
-    if (ctx->db && !ctx->cookie_index)
+    if (ctx->db && !ctx->has_cookie_index)
         id_index = index_db_ids(ctx);
     DDB_TIMER_END("index_db_ids");
 
@@ -191,17 +163,3 @@ void input_choose_all_rows(struct trail_ctx *ctx)
         J1S(tmp, ctx->matched_rows, i);
 }
 
-void input_load_cookie_index(struct trail_ctx *ctx)
-{
-    char path[MAX_PATH_SIZE];
-    struct bdfile file;
-
-    make_path(path, "%s/cookies.index", ctx->db_path);
-
-    if (mmap_file(path, &file, ctx->db)){
-        MSG(ctx, "Cookie index is disabled\n");
-    }else{
-        MSG(ctx, "Cookie index is enabled\n");
-        ctx->cookie_index = file.data;
-    }
-}

@@ -94,7 +94,7 @@ struct trail_ctx{
 #ifdef ENABLE_DISCODB
     struct ddb *db_index;
 #endif
-    const void *cookie_index;
+    int has_cookie_index;
 };
 
 /* input.c */

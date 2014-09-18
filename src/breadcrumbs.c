@@ -9,6 +9,10 @@
 #include "breadcrumbs.h"
 #include "breadcrumbs_decoder.h"
 
+#ifdef ENABLE_COOKIE_INDEX
+#include <cmph.h>
+#endif
+
 static int open_fields(const char *root, char *path, struct breadcrumbs *bd)
 {
     FILE *f;
@@ -152,6 +156,10 @@ struct breadcrumbs *bd_open(const char *root)
     if (mmap_file(path, &bd->cookies, bd))
         goto err;
 
+    make_path(path, "%s/cookies.index", root);
+    if (mmap_file(path, &bd->cookie_index, bd))
+        bd->cookie_index.data = NULL;
+
     make_path(path, "%s/trails.codebook", root);
     if (mmap_file(path, &bd->codebook, bd))
         goto err;
@@ -235,4 +243,36 @@ uint32_t bd_max_timestamp(const struct breadcrumbs *bd)
     return bd->max_timestamp;
 }
 
+int bd_has_cookie_index(const struct breadcrumbs *bd)
+{
+#ifdef ENABLE_COOKIE_INDEX
+    return bd->cookie_index.data ? 1: 0;
+#else
+    return 0;
+#endif
+}
+
+int64_t bd_rlookup_cookie(const struct breadcrumbs *bd, const uint8_t key[16])
+{
+#ifdef ENABLE_COOKIE_INDEX
+    /* (void*) cast is horrible below. I don't know why cmph_search_packed
+       can't have a const modifier. This will segfault loudly if cmph tries to
+       modify the read-only mmap'ed cookie_index. */
+    if (bd->cookie_index.data){
+        uint64_t i = cmph_search_packed((void*)bd->cookie_index.data,
+                                        (const char*)key,
+                                        16);
+
+        if (i < bd->num_cookies){
+            const char *cookie = bd_lookup_cookie(bd, i);
+            if (!memcmp(cookie, key, 16))
+                return i;
+        }
+        return -1;
+    }else
+        return -2;
+#else
+    return -2;
+#endif
+}
 
