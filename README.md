@@ -1,5 +1,5 @@
-TrailDB is a database aggregating the past history of a cookie and letting it
-you query it.
+TrailDB is a database aggregating the past history cookies and letting
+you query them.
 
 ### Internals
 Each dimension value is encoded into a 32 bits unsigned int.
