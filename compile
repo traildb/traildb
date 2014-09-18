@@ -1,13 +1,37 @@
+# Dependencies: Judy, jemalloc
+# On MAC OSX, just run 'brew install Judy jemalloc'
+
+# Detect OS
+IS_MAC=false;
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    IS_MAC=true;
+fi
+
+GCC="gcc"
+if $IS_MAC; then
+    GCC="gcc-4.6"
+fi
+
+CFLAGS="-fPIC -O3 -g -Wall"
 
 cd src
 rm *.o
-gcc -fPIC -O3 -g -c -Wall breadcrumbs.c util.c trail_decode.c lexicon_decode.c huffman.c ddb_queue.c
-gcc -fPIC -DDSFMT_MEXP=521 -c -O3 -fno-strict-aliasing -msse2 -DHAVE_SSE2=1 dsfmt/dSFMT.c
+$GCC $CFLAGS -c breadcrumbs.c util.c trail_decode.c lexicon_decode.c huffman.c ddb_queue.c
 
-gcc -O3 -g -fPIC -o ../libbreadcrumbs.so -Wall -lJudy *.o -shared
+# Compile SFMT (SIMD Mersenne Twister random generator)
+$GCC -fPIC -DDSFMT_MEXP=521 -c -O3 -fno-strict-aliasing -msse2 -DHAVE_SSE2=1 dsfmt/dSFMT.c
+
+# Compile breadcrumbs lib
+$GCC $CFLAGS -o ../libbreadcrumbs.so -lJudy *.o -shared
 ar ruv ../libbreadcrumbs.a *.o
 ranlib ../libbreadcrumbs.a
 
-gcc -DDDB_PROFILE -o ../breadcrumbs_encoder -g -Wall -O3 -ljemalloc breadcrumbs_encoder.c arena.c lexicon_encode.c trail_encode.c trail_encode_model.c ddb_queue.c huffman.c util.c dSFMT.o -lJudy  -lpthread -static
+EXTRA_STATIC="-static"
+if $IS_MAC; then
+    EXTRA_STATIC=""
+fi
+
+# Compile Encoder
+$GCC $CFLAGS -ljemalloc -o ../breadcrumbs_encoder breadcrumbs_encoder.c arena.c lexicon_encode.c trail_encode.c trail_encode_model.c ddb_queue.c huffman.c util.c dSFMT.o -lJudy -lpthread $EXTRA_STATIC
 
 cd ..
