@@ -4,7 +4,7 @@ import std.conv;
 import std.datetime;
 import std.path : buildPath;
 import std.stdio;
-import std.string : toStringz;
+import std.string : format, toStringz;
 
 import breadcrumbs;
 
@@ -56,6 +56,39 @@ class TrailDB {
     @property uint numCookies(){ return _numCookies; }
     @property uint numDimensions(){ return _numDims; }
     @property string[] dimNames(){ return _dimNames; }
+    @property bool hasCookieIndex() { return bd_has_cookie_index(_db) == 1; }
+
+    /* Returns the 16 bytes cookie ID at a given position in the DB. */
+    void getCookieByInd(uint ind, ref ubyte[16] res)
+    {
+        auto raw_val = bd_lookup_cookie(_db, ind);
+        res[] = raw_val[0..16];
+    }
+
+    /* Returns the HEX string representing the cookie at a given index
+       in the DB.
+    */
+    char[] getHEXCookieByInd(uint ind)
+    {
+        ubyte[16] cookie;
+        this.getCookieByInd(ind, cookie);
+        char[] cookiestr;
+        foreach(u; cookie)
+            cookiestr ~= format("%.2x",u);
+        return cookiestr;
+    }
+
+    /* Returns index of a given cookie in the database. If the cookie is
+       not present, returns -1.
+    */
+    long getIndForCookie(ref ubyte[16] cookie)
+    {
+        if(!this.hasCookieIndex)
+            throw new Exception("This Database doesn't have cookie indexing." ~
+                " Impossible to perform reverse lookup.");
+        long val = bd_rlookup_cookie(_db, cookie);
+        return val;
+    }
 
 
     char[] get_trail_per_index(uint index)

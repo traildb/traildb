@@ -10,9 +10,13 @@ int main(string[] args)
     writeln("Size of the DB: ", DB.numCookies);
     writeln("Number of dimensions: ", DB.numDimensions);
     writeln("Dimensions: ", DB.dimNames);
+    writeln("DB has cookie index for reverse lookup: ", DB.hasCookieIndex);
 
-    auto index = 120;
+    auto index = 230;
     writeln("--- Detail of cookie index ", index, " trail. ---");
+
+    if(DB.hasCookieIndex)
+        writeln("Cookie HEX: ", DB.getHEXCookieByInd(index));
 
     char[] trail = DB.get_trail_per_index(index);
     writeln("Full trail:\n", trail);
