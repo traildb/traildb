@@ -11,8 +11,7 @@ gcc -Wall\
     -ljemalloc\
     trail-mix.c input.c output.c ops/*.c ../src/util.c\
     ../../discodb/src/*.o\
-    -lbreadcrumbs\
+    ../libbreadcrumbs.a\
     -lJudy\
     -lcmph\
-    -lm\
-    -static
+    -lm

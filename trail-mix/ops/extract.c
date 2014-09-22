@@ -1,0 +1,353 @@
+
+#include <poll.h>
+#include <errno.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <netdb.h>
+
+#include <breadcrumbs_decoder.h>
+
+#include <util.h>
+#include <trail-mix.h>
+
+
+#define BUF_INC 1000000
+#define SEND_BUF_MAX 256000
+#define CONNECT_TIMEOUT_SECS 30
+
+struct extract_ctx{
+    uint32_t *fields;
+    uint32_t num_fields;
+
+    /* trail_buf buffers events of a single trail */
+    uint32_t *trail_buf;
+    uint32_t trail_buf_len;
+    uint32_t trail_buf_size;
+
+    /* send_buf buffers multiple full trails, around SEND_BUF_MAX */
+    char *send_buf;
+    uint64_t send_buf_len;
+    uint64_t send_buf_size;
+
+    int sock;
+};
+
+static int connection_attempt(const struct trail_ctx *ctx,
+                              const char *host,
+                              int port)
+{
+    struct sockaddr_in addr;
+    struct pollfd pfd;
+    int sock;
+    struct hostent *ent;
+
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+
+    if ((ent = gethostbyname(host)))
+        memcpy(&addr.sin_addr, ent->h_addr, ent->h_length);
+    else{
+        MSG(ctx, "Name resolution failed in extract - trying again\n");
+        sleep(1);
+        return -1;
+    }
+
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (fcntl(sock, F_SETFL, O_NONBLOCK) == -1)
+        DIE("Could not make extract socket non-blocking\n");
+
+    connect(sock, (struct sockaddr*)&addr, sizeof(addr));
+
+    memset(&pfd, 0, sizeof(pfd));
+    pfd.fd = sock;
+    pfd.events = POLLOUT | POLLNVAL | POLLHUP | POLLERR;
+
+    switch (poll(&pfd, 1, 1000)){
+        case -1:
+            MSG(ctx, "Poll() failed in extract - trying again\n");
+            break;
+        case 0:
+            MSG(ctx, "Connect() timeout in extract - trying again\n");
+            close(sock);
+            return -1;
+        case 1:
+            if (pfd.revents == POLLOUT){
+                int old = fcntl(sock, F_GETFL, 0);
+                if (old == -1)
+                    DIE("Could not query socket status in extract\n");
+                if (fcntl(sock, F_SETFL, old & ~O_NONBLOCK) == -1)
+                    DIE("Could not make extract socket blocking\n");
+                return sock;
+            }else
+                MSG(ctx,
+                    "Connect() to %s:%d failed in extract - trying again\n",
+                    host,
+                    port);
+            break;
+    }
+    sleep(1);
+    close(sock);
+    return -1;
+}
+
+static void sendall(int sock, const char *buf, uint32_t size)
+{
+    uint32_t sent = 0;
+    while (sent < size){
+        ssize_t ret = send(sock, &buf[sent], size - sent, 0);
+        if (ret == -1)
+            DIE("Extractd closed connection prematurely: %s\n", strerror(errno));
+        sent += ret;
+    }
+}
+
+static int open_connection(const struct trail_ctx *ctx,
+                           const char *host,
+                           int port)
+{
+    int i, sock;
+    for (i = 0; i < CONNECT_TIMEOUT_SECS; i++)
+        if ((sock = connection_attempt(ctx, host, port)) > 0){
+            MSG(ctx, "Extract connected to %s:%d\n", host, port);
+            return sock;
+        }
+    DIE("Extract could not connect to %s:%d\n", host, port);
+}
+
+static void close_connection(const struct trail_ctx *ctx, int sock)
+{
+    static const char DONE[] = "**DONE**";
+    sendall(sock, DONE, sizeof(DONE));
+    close(sock);
+    MSG(ctx, "Connection to extractd closed\n");
+}
+
+static void write_fields(FILE *memio,
+                         const struct breadcrumbs *bd,
+                         const struct extract_ctx *ectx)
+{
+    uint32_t i;
+
+    SAFE_WRITE(&ectx->num_fields, 4, "memory", memio);
+    for (i = 0; i < ectx->num_fields; i++){
+        const char *name = bd->field_names[ectx->fields[i]];
+        int len = strlen(name);
+        SAFE_WRITE(&len, 4, "memory", memio);
+        SAFE_WRITE(name, len, "memory", memio);
+    }
+}
+
+static void write_lexicon(uint32_t field,
+                          FILE *memio,
+                          const struct breadcrumbs *bd,
+                          const struct extract_ctx *ectx)
+{
+    uint32_t i, lexsize;
+
+    if (bd_lexicon_size(bd, field, &lexsize))
+        DIE("Could not get lexicon size for field %u\n", field);
+    ++lexsize;
+
+    SAFE_WRITE(&lexsize, 4, "memory", memio);
+
+    /* index=0 is always an empty string */
+    i = 0;
+    SAFE_WRITE(&i, 4, "memory", memio);
+
+    for (i = 1; i < lexsize; i++){
+        const char *value = bd_lookup_value2(bd, field, i);
+        int len = strlen(value);
+        SAFE_WRITE(&len, 4, "memory", memio);
+        SAFE_WRITE(value, len, "memory", memio);
+    }
+}
+
+static void send_header(const struct extract_ctx *ectx,
+                        const struct trail_ctx *ctx)
+{
+    static const char VERSION[] = "extract-1";
+    FILE *memio = NULL;
+    char *buf = NULL;
+    size_t buf_size;
+    uint32_t i;
+    uint64_t size;
+
+    if (!(memio = open_memstream(&buf, &buf_size)))
+         DIE("Could not initialize memstream in extract\n");
+
+    SAFE_WRITE(VERSION, sizeof(VERSION), "memory", memio);
+
+    write_fields(memio, ctx->db, ectx);
+    for (i = 0; i < ectx->num_fields; i++)
+        write_lexicon(i, memio, ctx->db, ectx);
+
+    SAFE_TELL(memio, size, "memory");
+    SAFE_FLUSH(memio, "memory");
+    sendall(ectx->sock, buf, size);
+
+    fclose(memio);
+    free(buf);
+}
+
+static void add_event(struct extract_ctx *ectx,
+                      const uint32_t *fields,
+                      uint32_t num_fields)
+{
+    uint32_t i;
+
+    if (ectx->trail_buf_len + ectx->num_fields + 1 >= ectx->trail_buf_size){
+        ectx->trail_buf_size += BUF_INC;
+        if (!(ectx->trail_buf = realloc(ectx->trail_buf,
+                                        ectx->trail_buf_size * 4)))
+            DIE("Realloc failed in extract for %u items",
+                 ectx->trail_buf_size);
+    }
+    /* add timestamp */
+    ectx->trail_buf[ectx->trail_buf_len++] = fields[0];
+    for (i = 0; i < ectx->num_fields; i++)
+        /* add fields - just values (24 bits), not field indices */
+        ectx->trail_buf[ectx->trail_buf_len++] = fields[ectx->fields[i]] >> 8;
+}
+
+static void flush_trail_buf(struct extract_ctx *ectx, const char *cookie)
+{
+    uint32_t size = ectx->trail_buf_len * 4 + 4 + 16;
+    char *p;
+
+    if (size + ectx->send_buf_len >= ectx->send_buf_size){
+        ectx->send_buf_size = ectx->send_buf_len + size + BUF_INC;
+        if (!(ectx->send_buf = realloc(ectx->send_buf, ectx->send_buf_size)))
+            DIE("Realloc failed in extract for %llu bytes",
+                (long long unsigned int)ectx->send_buf_size);
+    }
+
+    p = &ectx->send_buf[ectx->send_buf_len];
+    ectx->send_buf_len += size;
+
+    memcpy(p, cookie, 16);
+    p += 16;
+    memcpy(p, &ectx->trail_buf_len, 4);
+    p += 4;
+    memcpy(p, ectx->trail_buf, ectx->trail_buf_len * 4);
+
+    if (ectx->send_buf_len > SEND_BUF_MAX){
+        sendall(ectx->sock, ectx->send_buf, ectx->send_buf_len);
+        ectx->send_buf_len = 0;
+    }
+}
+
+static void init_ectx(char *arg,
+                      struct extract_ctx *ectx,
+                      const struct trail_ctx *ctx)
+{
+    char *tok = strsep(&arg, ",");
+    char *addr;
+    int idx;
+    int port;
+
+    if (memcmp(tok, "tcp://", 6))
+        DIE("Only tcp:// protocol is supported currently in extract\n");
+
+    tok = &tok[6];
+    addr = strsep(&tok, ":");
+    if (!tok)
+        DIE("Address syntax is tcp://host:port in extract\n");
+    port = parse_uint64(tok, "extractd port");
+
+    ectx->sock = open_connection(ctx, addr, port);
+    ectx->num_fields = 0;
+
+    while (arg){
+        tok = strsep(&arg, ",");
+        idx = bd_lookup_field_index(ctx->db, tok);
+
+        if (idx < 0)
+            DIE("Unknown field in extract: %s\n", tok);
+
+        ectx->fields[ectx->num_fields++] = idx;
+    }
+}
+
+void op_help_extract()
+{
+    printf("help extract\n");
+}
+
+void *op_init_extract(struct trail_ctx *ctx,
+                      const char *arg,
+                      int op_index,
+                      int num_ops,
+                      uint64_t *flags)
+{
+    /* extract=tcp://localhost:5000,advertisable_eid,campaign_eid */
+    char *marg;
+    struct extract_ctx *ectx;
+
+    if (!arg)
+        DIE("extract requires an argument (see --help=extract)\n");
+
+    if (!ctx->db)
+        DIE("extract requires a DB\n");
+
+    if (!ctx->opt_match_events)
+        DIE("extract requires --match-events\n");
+
+    if (!(ectx = calloc(1, sizeof(struct extract_ctx))))
+        DIE("Malloc failed in op_init_extract\n");
+
+    if (!(ectx->fields = malloc(bd_num_fields(ctx->db) * 4)))
+        DIE("Malloc failed in op_init_extract\n");
+
+    if (!(marg = strdup(arg)))
+        DIE("Malloc failed in op_init_extract\n");
+
+    init_ectx(marg, ectx, ctx);
+    send_header(ectx, ctx);
+
+    *flags |= TRAIL_OP_PRE_TRAIL |
+              TRAIL_OP_EVENT |
+              TRAIL_OP_POST_TRAIL |
+              TRAIL_OP_FINALIZE;
+
+    free(marg);
+    return ectx;
+}
+
+int op_exec_extract(struct trail_ctx *ctx,
+                    int mode,
+                    uint64_t row_id,
+                    const uint32_t *fields,
+                    uint32_t num_fields,
+                    void *arg)
+{
+    struct extract_ctx *ectx = (struct extract_ctx*)arg;
+
+    switch (mode){
+        case TRAIL_OP_PRE_TRAIL:
+            ectx->trail_buf_len = 0;
+            break;
+
+        case TRAIL_OP_EVENT:
+            add_event(ectx, fields, num_fields);
+            break;
+
+        case TRAIL_OP_POST_TRAIL:
+            if (ectx->trail_buf_len > 0){
+                const char *cookie = bd_lookup_cookie(ctx->db, row_id);
+                flush_trail_buf(ectx, cookie);
+            }
+            break;
+
+        case TRAIL_OP_FINALIZE:
+            if (ectx->send_buf_len > 0)
+                sendall(ectx->sock, ectx->send_buf, ectx->send_buf_len);
+            close_connection(ctx, ectx->sock);
+            break;
+    }
+
+    return 0;
+}
