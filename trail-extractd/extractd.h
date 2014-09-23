@@ -12,6 +12,7 @@ int extractd_next_trail(struct extractd *ext,
                         const char **cookie,
                         const uint32_t **events,
                         uint32_t *num_events,
+                        uint32_t *num_fields,
                         uint32_t timeout_ms);
 
 uint32_t extractd_get_num_fields(const struct extractd *ext);

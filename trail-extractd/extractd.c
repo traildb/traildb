@@ -54,7 +54,10 @@ struct ext_field{
     uint64_t tokens_size;
 
     /* index -> offset for the array above */
-    uint64_t *index_to_token;
+    uint64_t *token_offsets;
+    /* offset array size */
+    uint32_t offsets_size;
+
     /* token -> index mapping for the array above */
     Pvoid_t token_to_index;
 };
@@ -157,7 +160,16 @@ static uint32_t *create_mapping(struct ext_field *field,
                         (unsigned long long)field->tokens_size);
             }
             memcpy(&field->tokens[field->tokens_len], &buf[offs], len + 1);
-            field->index_to_token[field->num_tokens - 1] = field->tokens_len;
+
+            if (field->num_tokens > field->offsets_size){
+                field->offsets_size += BUFFER_INC;
+                if (!(field->token_offsets = realloc(field->token_offsets,
+                                                     field->offsets_size * 4)))
+                    DIE("Could not allocate offsets of %u bytes\n",
+                        field->offsets_size * 4);
+            }
+
+            field->token_offsets[field->num_tokens - 1] = field->tokens_len;
             field->tokens_len += len + 1;
         }
         /* map this local token to the corresponding global token */
@@ -292,7 +304,7 @@ static int receive_chunk(struct extractd *ext, struct ext_mapper *mapper)
 
     recvall(mapper->sock, (char*)&header, sizeof(struct head));
 
-    if (header.len < 5)
+    if (header.len < 4)
         DIE("Truncated chunk (type '%c'): %u bytes\n", header.type, header.len);
 
     if (header.len > mapper->chunk_buf_size){
@@ -322,7 +334,7 @@ static int receive_chunk(struct extractd *ext, struct ext_mapper *mapper)
             return 1;
 
         default:
-            DIE("Unknown chunk type: %c\n", header.type);
+            DIE("Unknown chunk type: '%c' (%d)\n", header.type, header.type);
     }
 
     /* Only trail buffers are of interest to entities outside this function.
@@ -473,12 +485,13 @@ static void parse_next_trail(struct extractd *ext,
     const uint32_t *num_tokens = ext->active_chunk->num_tokens;
     char *p = &ext->active_chunk->chunk_buf[ext->active_chunk_offs];
 
-    ext->active_chunk_offs += 24;
-    if (ext->active_chunk_offs < ext->active_chunk_len){
+    ext->active_chunk_offs += 20;
+    if (ext->active_chunk_offs > ext->active_chunk_len)
+        DIE("Truncated trail: Missing header\n");
+    else{
         *cookie = p;
         num_values = *(uint32_t*)&p[16];
-    }else
-        DIE("Truncated trail: Missing header\n");
+    }
 
     /* each event has num_fields fields and a timestamp */
     if (num_values % (ext->num_fields + 1))
@@ -488,10 +501,12 @@ static void parse_next_trail(struct extractd *ext,
         *num_events = num_values / (ext->num_fields + 1);
 
     ext->active_chunk_offs += num_values * 4;
-    if (ext->active_chunk_offs < ext->active_chunk_len)
-        values = (uint32_t*)&p[24];
+    if (ext->active_chunk_offs > ext->active_chunk_len)
+        DIE("Truncated trail (expected %u bytes, got only %u)\n",
+            ext->active_chunk_offs,
+            ext->active_chunk_len);
     else
-        DIE("Truncated trail\n");
+        values = (uint32_t*)&p[20];
 
     /* map local token indices to global token indices, in-place, using the
        mapper's mapping */
@@ -519,10 +534,12 @@ int extractd_next_trail(struct extractd *ext,
                         const char **cookie,
                         const uint32_t **events,
                         uint32_t *num_events,
+                        uint32_t *num_fields,
                         uint32_t timeout_ms)
 {
     if (ext->active_chunk_offs < ext->active_chunk_len){
         parse_next_trail(ext, cookie, events, num_events);
+        *num_fields = ext->num_fields;
         return 1;
     }else{
         int ret;
@@ -533,6 +550,7 @@ int extractd_next_trail(struct extractd *ext,
                                        cookie,
                                        events,
                                        num_events,
+                                       num_fields,
                                        timeout_ms);
     }
 }
@@ -611,7 +629,7 @@ const char *extractd_get_token(const struct extractd *ext,
 {
     if (field < ext->num_fields && index < ext->fields[field].num_tokens){
         const struct ext_field *f = &ext->fields[field];
-        return &f->tokens[f->index_to_token[index]];
+        return &f->tokens[f->token_offsets[index]];
     }else
         return NULL;
 }
