@@ -20,6 +20,8 @@ bc.bd_trail_decode.argtypes = [c_void_p,
                                POINTER(c_uint),
                                c_uint,
                                c_uint]
+bc.bd_open.argtypes = [c_char_p]
+bc.bd_open.restype = c_void_p
 
 class Breadcrumb(object):
 

@@ -32,6 +32,8 @@ uint32_t bd_lookup_token(const struct breadcrumbs *bd,
 const char *bd_lookup_cookie(const struct breadcrumbs *bd,
                              uint32_t cookie_index);
 
+/* Returns the row index (int) if the given cookie is found, -1 if not,
+or -2 if cookie_index is disabled. */
 int64_t bd_rlookup_cookie(const struct breadcrumbs *bd, const uint8_t key[16]);
 
 uint32_t bd_trail_decode(struct breadcrumbs *bd,
@@ -49,7 +51,10 @@ uint32_t bd_trail_value_freqs(const struct breadcrumbs *bd,
 
 const char *bd_error(const struct breadcrumbs *bd);
 
+/* Checks if the cookie index is enabled in advance.
+Returns 1 if the db has a cookie index. */
 int bd_has_cookie_index(const struct breadcrumbs *bd);
+
 uint32_t bd_num_cookies(const struct breadcrumbs *bd);
 uint32_t bd_num_loglines(const struct breadcrumbs *bd);
 uint32_t bd_num_fields(const struct breadcrumbs *bd);
