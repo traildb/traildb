@@ -1,3 +1,33 @@
+/*
+    EXTRACT PROTOCOL:
+
+    Version: "extract-1" (9 bytes)
+    Chunk-Head: [Chunk Type] (1 byte)
+                [Chunk Length N] (4 bytes)
+    Chunk-Body: [Chunk Data] (N bytes)
+
+    Supported Chunk Types:
+
+    'F' - Fields:
+          [Number of Fields] (4 bytes)
+              [Field String (zero terminated)]
+
+    'L' - Lexicons:
+          [Number of Lexicons] (4 bytes)
+              [Number of Entries] (4 bytes)
+                  [Token String (zero terminated)]
+
+    'T' - Trails:
+          Until end of chunk:
+              [Cookie] (16 bytes)
+              [Number of Events N] (4 bytes)
+              [Events] (N * 4 bytes)
+
+    'D' - Done
+
+    Chunks are guaranteed to come in this order:
+    'F', 'L', 'T'*, 'D'
+*/
 
 #include <poll.h>
 #include <errno.h>
@@ -13,7 +43,6 @@
 
 #include <util.h>
 #include <trail-mix.h>
-
 
 #define BUF_INC 1000000
 #define SEND_BUF_MAX 256000
@@ -64,7 +93,7 @@ static int connection_attempt(const struct trail_ctx *ctx,
 
     memset(&pfd, 0, sizeof(pfd));
     pfd.fd = sock;
-    pfd.events = POLLOUT | POLLNVAL | POLLHUP | POLLERR;
+    pfd.events = POLLOUT;
 
     switch (poll(&pfd, 1, 1000)){
         case -1:
@@ -97,12 +126,23 @@ static int connection_attempt(const struct trail_ctx *ctx,
 static void sendall(int sock, const char *buf, uint32_t size)
 {
     uint32_t sent = 0;
+
     while (sent < size){
         ssize_t ret = send(sock, &buf[sent], size - sent, 0);
         if (ret == -1)
             DIE("Extractd closed connection prematurely: %s\n", strerror(errno));
         sent += ret;
     }
+}
+
+static void send_chunk(int sock, char type, const char *buf, uint32_t size)
+{
+    char header[5];
+
+    header[0] = type;
+    memcpy(&header[1], &size, 4);
+    sendall(sock, header, 5);
+    sendall(sock, buf, size);
 }
 
 static int open_connection(const struct trail_ctx *ctx,
@@ -121,7 +161,8 @@ static int open_connection(const struct trail_ctx *ctx,
 static void close_connection(const struct trail_ctx *ctx, int sock)
 {
     static const char DONE[] = "**DONE**";
-    sendall(sock, DONE, sizeof(DONE));
+
+    send_chunk(sock, 'D', DONE, sizeof(DONE));
     close(sock);
     MSG(ctx, "Connection to extractd closed\n");
 }
@@ -136,8 +177,7 @@ static void write_fields(FILE *memio,
     for (i = 0; i < ectx->num_fields; i++){
         const char *name = bd->field_names[ectx->fields[i]];
         int len = strlen(name);
-        SAFE_WRITE(&len, 4, "memory", memio);
-        SAFE_WRITE(name, len, "memory", memio);
+        SAFE_WRITE(name, len + 1, "memory", memio);
     }
 }
 
@@ -156,13 +196,12 @@ static void write_lexicon(uint32_t field,
 
     /* index=0 is always an empty string */
     i = 0;
-    SAFE_WRITE(&i, 4, "memory", memio);
+    SAFE_WRITE(&i, 1, "memory", memio);
 
     for (i = 1; i < lexsize; i++){
         const char *value = bd_lookup_value2(bd, field, i);
         int len = strlen(value);
-        SAFE_WRITE(&len, 4, "memory", memio);
-        SAFE_WRITE(value, len, "memory", memio);
+        SAFE_WRITE(value, len + 1, "memory", memio);
     }
 }
 
@@ -179,15 +218,22 @@ static void send_header(const struct extract_ctx *ectx,
     if (!(memio = open_memstream(&buf, &buf_size)))
          DIE("Could not initialize memstream in extract\n");
 
-    SAFE_WRITE(VERSION, sizeof(VERSION), "memory", memio);
+    sendall(ectx->sock, VERSION, sizeof(VERSION) - 1);
 
     write_fields(memio, ctx->db, ectx);
+
+    SAFE_TELL(memio, size, "memory");
+    SAFE_FLUSH(memio, "memory");
+    send_chunk(ectx->sock, 'F', buf, size);
+
+    rewind(memio);
+    SAFE_WRITE(&ectx->num_fields, 4, "memory", memio);
     for (i = 0; i < ectx->num_fields; i++)
         write_lexicon(i, memio, ctx->db, ectx);
 
     SAFE_TELL(memio, size, "memory");
     SAFE_FLUSH(memio, "memory");
-    sendall(ectx->sock, buf, size);
+    send_chunk(ectx->sock, 'L', buf, size);
 
     fclose(memio);
     free(buf);
@@ -213,6 +259,12 @@ static void add_event(struct extract_ctx *ectx,
         ectx->trail_buf[ectx->trail_buf_len++] = fields[ectx->fields[i]] >> 8;
 }
 
+static void flush_send_buf(struct extract_ctx *ectx)
+{
+    send_chunk(ectx->sock, 'T', ectx->send_buf, ectx->send_buf_len);
+    ectx->send_buf_len = 0;
+}
+
 static void flush_trail_buf(struct extract_ctx *ectx, const char *cookie)
 {
     uint32_t size = ectx->trail_buf_len * 4 + 4 + 16;
@@ -234,10 +286,8 @@ static void flush_trail_buf(struct extract_ctx *ectx, const char *cookie)
     p += 4;
     memcpy(p, ectx->trail_buf, ectx->trail_buf_len * 4);
 
-    if (ectx->send_buf_len > SEND_BUF_MAX){
-        sendall(ectx->sock, ectx->send_buf, ectx->send_buf_len);
-        ectx->send_buf_len = 0;
-    }
+    if (ectx->send_buf_len > SEND_BUF_MAX)
+        flush_send_buf(ectx);
 }
 
 static void init_ectx(char *arg,
@@ -344,7 +394,7 @@ int op_exec_extract(struct trail_ctx *ctx,
 
         case TRAIL_OP_FINALIZE:
             if (ectx->send_buf_len > 0)
-                sendall(ectx->sock, ectx->send_buf, ectx->send_buf_len);
+                flush_send_buf(ectx);
             close_connection(ctx, ectx->sock);
             break;
     }
