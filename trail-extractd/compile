@@ -1,0 +1,12 @@
+gcc -Wall\
+    -DDDB_PROFILE\
+    -g\
+    -O3\
+    -o trail-extractd\
+    -I .\
+    -I ../src/\
+    -L ../\
+    -ljemalloc\
+    trail-extractd.c extractd.c ../src/util.c\
+    ../src/dSFMT.o\
+    -lJudy
