@@ -229,7 +229,7 @@ static void send_header(const struct extract_ctx *ectx,
     rewind(memio);
     SAFE_WRITE(&ectx->num_fields, 4, "memory", memio);
     for (i = 0; i < ectx->num_fields; i++)
-        write_lexicon(i, memio, ctx->db, ectx);
+        write_lexicon(ectx->fields[i], memio, ctx->db, ectx);
 
     SAFE_TELL(memio, size, "memory");
     SAFE_FLUSH(memio, "memory");
@@ -246,7 +246,7 @@ static void add_event(struct extract_ctx *ectx,
     uint32_t i;
 
     if (ectx->trail_buf_len + ectx->num_fields + 1 >= ectx->trail_buf_size){
-        ectx->trail_buf_size += BUF_INC;
+        ectx->trail_buf_size += ectx->num_fields + 1 + BUF_INC;
         if (!(ectx->trail_buf = realloc(ectx->trail_buf,
                                         ectx->trail_buf_size * 4)))
             DIE("Realloc failed in extract for %u items",
@@ -256,7 +256,8 @@ static void add_event(struct extract_ctx *ectx,
     ectx->trail_buf[ectx->trail_buf_len++] = fields[0];
     for (i = 0; i < ectx->num_fields; i++)
         /* add fields - just values (24 bits), not field indices */
-        ectx->trail_buf[ectx->trail_buf_len++] = fields[ectx->fields[i]] >> 8;
+        ectx->trail_buf[ectx->trail_buf_len++] =
+            fields[ectx->fields[i] + 1] >> 8;
 }
 
 static void flush_send_buf(struct extract_ctx *ectx)
