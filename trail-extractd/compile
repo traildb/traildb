@@ -9,4 +9,5 @@ gcc -Wall\
     -ljemalloc\
     trail-extractd.c extractd.c ../src/util.c\
     ../src/dSFMT.o\
-    -lJudy
+    -lJudy\
+    -static
