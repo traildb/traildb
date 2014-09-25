@@ -353,6 +353,7 @@ static const uint32_t *merge_chunks(const struct group *group,
         *len += chunk->num_values;
 
     }while ((chunk_index = chunk->prev_chunk));
+
     sort_events(merge_buf, *len, num_fields);
 
     return merge_buf;
@@ -385,14 +386,14 @@ static void output_group(struct extractd_ctx *ctx,
 
     JLF(ptr, group->cookies, cookie_id);
     while (ptr){
-        uint32_t i, num_events;
+        uint32_t i, len;
         const uint32_t *events = merge_chunks(group,
                                               *ptr,
                                               num_fields,
-                                              &num_events);
+                                              &len);
 
-        for (i = 0; i < num_events; i++){
-            const uint32_t *event = &events[i * num_fields];
+        for (i = 0; i < len; i += num_fields){
+            const uint32_t *event = &events[i];
             SAFE_WRITE(ptr, 4, path, out);
             SAFE_WRITE(event, num_fields * 4, path, out);
         }
