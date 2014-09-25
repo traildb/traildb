@@ -37,7 +37,7 @@ typedef int (*op_exec_t)(struct trail_ctx *ctx,
                          uint64_t row_id,
                          const uint32_t *fields,
                          const uint32_t num_fields,
-                         const void *arg);
+                         void *arg);
 
 struct trail_available_op{
     const char *name;
@@ -48,7 +48,7 @@ struct trail_available_op{
 
 struct trail_op{
     const struct trail_available_op *op;
-    const void *arg;
+    void *arg;
     uint64_t flags;
 };
 

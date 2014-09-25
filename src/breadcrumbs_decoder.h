@@ -25,12 +25,20 @@ int bd_lookup_field_index(const struct breadcrumbs *bd, const char *field_name);
 const char *bd_lookup_value(const struct breadcrumbs *bd,
                             uint32_t value);
 
+const char *bd_lookup_value2(const struct breadcrumbs *bd,
+                            uint32_t field,
+                            uint32_t index);
+
 uint32_t bd_lookup_token(const struct breadcrumbs *bd,
                          const char *token,
                          uint32_t field);
 
 const char *bd_lookup_cookie(const struct breadcrumbs *bd,
                              uint32_t cookie_index);
+
+int bd_lexicon_size(const struct breadcrumbs *bd,
+                    uint32_t field,
+                    uint32_t *size);
 
 /* Returns the row index (int) if the given cookie is found, -1 if not,
 or -2 if cookie_index is disabled. */

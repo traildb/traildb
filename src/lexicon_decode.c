@@ -27,14 +27,35 @@ uint8_t bd_field_value(uint32_t value)
 const char *bd_lookup_value(const struct breadcrumbs *bd,
                             uint32_t value)
 {
-    struct lexicon lex;
     uint32_t field = (value & 255) - 1;
     uint32_t index = value >> 8;
+    return bd_lookup_value2(bd, field, index);
+}
 
+const char *bd_lookup_value2(const struct breadcrumbs *bd,
+                            uint32_t field,
+                            uint32_t index)
+{
+    struct lexicon lex;
     if (index && !open_lexicon(bd, &lex, field) && index - 1 < lex.size)
         return &lex.data[lex.toc[index - 1]];
     else
         return NULL;
+}
+
+int bd_lexicon_size(const struct breadcrumbs *bd,
+                    uint32_t field,
+                    uint32_t *size)
+{
+    struct lexicon lex;
+
+    if (open_lexicon(bd, &lex, field)){
+        *size = 0;
+        return -1;
+    }else{
+        *size = lex.size;
+        return 0;
+    }
 }
 
 uint32_t bd_lookup_token(const struct breadcrumbs *bd,
