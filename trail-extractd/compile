@@ -1,3 +1,5 @@
+gcc -Wall -g -O3 -c -I . -I ../src/ extractd.c ../src/util.c
+
 gcc -Wall\
     -DDDB_PROFILE\
     -g\
@@ -6,7 +8,11 @@ gcc -Wall\
     -I .\
     -I ../src/\
     -L ../\
-    trail-extractd.c extractd.c grouper.c ../src/util.c ../src/arena.c\
+    trail-extractd.c grouper.c ../src/arena.c\
+    extractd.o util.o\
     ../src/dSFMT.o\
     -lJudy\
     -static
+
+ar ruv ../libextractd.a extractd.o util.o
+ranlib ../libextractd.a
