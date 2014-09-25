@@ -5,34 +5,19 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "extractd.h"
-
 #include <hex_encode.h>
 #include <util.h>
 
+#include "trail-extractd.h"
+
 #define DEFAULT_PORT 7676
-#define MAPPER_TIMEOUT 2 * 60 * 1000
-
-struct extractd_ctx{
-    int port;
-    int show;
-    uint32_t num_mappers;
-    const char *groupby_str;
-    const char *prefix;
-    struct extractd *extd;
-};
-
-/*
-  Groups -> Cookies -> TrailPiece -> Events
-  JudyL     JudyL      Arena         Arena
-*/
 
 static void show(struct extractd_ctx *ctx)
 {
+    static char hex_cookie[33];
     const char *cookie;
     const uint32_t *events;
     uint32_t i, j, k, num_fields, num_events;
-    static char hex_cookie[33];
     int ret;
 
     while ((ret = extractd_next_trail(ctx->extd,
@@ -62,14 +47,6 @@ static void print_usage_and_exit()
     printf("USAGE\n");
     /* list available ops */
     exit(1);
-}
-
-static void output(struct extractd_ctx *ctx)
-{
-}
-
-static void process(struct extractd_ctx *ctx)
-{
 }
 
 int main(int argc, char **argv)
@@ -123,8 +100,8 @@ int main(int argc, char **argv)
     if (ctx.show)
         show(&ctx);
     else{
-        process(&ctx);
-        output(&ctx);
+        grouper_process(&ctx);
+        grouper_output(&ctx);
     }
 
     return 0;

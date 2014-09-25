@@ -6,8 +6,7 @@ gcc -Wall\
     -I .\
     -I ../src/\
     -L ../\
-    -ljemalloc\
-    trail-extractd.c extractd.c ../src/util.c\
+    trail-extractd.c extractd.c grouper.c ../src/util.c ../src/arena.c\
     ../src/dSFMT.o\
     -lJudy\
     -static
