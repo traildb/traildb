@@ -370,7 +370,7 @@ static void output_group(struct extractd_ctx *ctx,
     uint32_t num_fields = extractd_get_num_fields(ctx->extd) + 1;
 
     if (ctx->dir){
-        mkdir(ctx->dir, 755);
+        mkdir(ctx->dir, 0755);
         make_path(path, "%s/%s", ctx->dir, fname);
     }else
         make_path(path, "%s", fname);
@@ -400,6 +400,7 @@ static void output_group(struct extractd_ctx *ctx,
         JLN(ptr, group->cookies, cookie_id);
     }
     fclose(out);
+    printf("%s created\n", path);
 }
 
 void grouper_output(struct extractd_ctx *ctx)
@@ -422,4 +423,5 @@ void grouper_output(struct extractd_ctx *ctx)
             }
     }else
         output_group(ctx, "trail-extract", &groups[0]);
+
 }
