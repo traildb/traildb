@@ -4,6 +4,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <stdint.h>
+#include <ctype.h>
 
 #include <hex_encode.h>
 #include <util.h>
@@ -49,6 +50,21 @@ static void print_usage_and_exit()
     exit(1);
 }
 
+const char *safe_filename(const char *value)
+{
+    static char safe[MAX_PATH_SIZE];
+    uint32_t i;
+
+    for (i = 0; i < MAX_PATH_SIZE - 1 && value[i]; i++)
+        if (isalnum(value[i]))
+            safe[i] = value[i];
+        else
+            safe[i] = '_';
+    safe[i] = 0;
+
+    return safe;
+}
+
 int main(int argc, char **argv)
 {
     static struct extractd_ctx ctx;
@@ -58,7 +74,7 @@ int main(int argc, char **argv)
         {"port", required_argument, 0, 'p'},
         {"show", no_argument, 0, 's'},
         {"groupby", required_argument, 0, 'g'},
-        {"output-prefix", required_argument, 0, 'o'},
+        {"output-dir", required_argument, 0, 'o'},
         {0, 0, 0, 0}
     };
 
@@ -77,8 +93,8 @@ int main(int argc, char **argv)
             case 'g': /* --groupby */
                 ctx.groupby_str = optarg;
                 break;
-            case 'o': /* --output-prefix */
-                ctx.prefix = optarg;
+            case 'o': /* --output-dir */
+                ctx.dir = optarg;
                 break;
             case 's': /* --show */
                 ctx.show = 1;

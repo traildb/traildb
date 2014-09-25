@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include <util.h>
 #include <arena.h>
@@ -9,6 +11,7 @@
 #include "trail-extractd.h"
 
 #define GROUPS_INC 1000000
+#define MERGE_BUF_INC 1000000
 
 /*
 A straightforward way to join trails by cookie would use a dictionary that
@@ -76,6 +79,7 @@ static inline Word_t lookup_cookie(const char *cookie)
     JLI(ptr1, cookie_index, cookie_lo);
     cookies_hi = (Pvoid_t)*ptr1;
     JLI(ptr2, cookies_hi, cookie_hi);
+    *ptr1 = (Word_t)cookies_hi;
 
     if (!*ptr2)
         *ptr2 = ++num_cookies;
@@ -279,14 +283,142 @@ void grouper_process(struct extractd_ctx *ctx)
     }
 }
 
-void grouper_output(struct extractd_ctx *ctx)
+int event_cmp(const void *a, const void *b)
 {
-    /*
-        loop through groups
-            loop through cookies
-                traverse events
-                sort
-                output
-    */
+    uint32_t a_tstamp = *(uint32_t*)a;
+    uint32_t b_tstamp = *(uint32_t*)b;
+
+    if (a_tstamp < b_tstamp)
+        return -1;
+    else if (a_tstamp > b_tstamp)
+        return 1;
+    else
+        return 0;
 }
 
+static void sort_events(uint32_t *merge_buf, uint32_t len, uint32_t num_fields)
+{
+    /* timsort would work great here, since each chunk is already sorted.
+       This implementation https://github.com/swenson/sort would be almost
+       perfect but it does not support dynamic item sizes. It also allocates
+       auxiliary space with malloc(), which we would like to avoid here,
+       since this function is called for all (group, cookie) pairs.
+
+       Instead of a proper timsort, we implement a poor man's timsort here:
+       We first check if the array is already sorted and only if it is not,
+       we sort it using the standard qsort().
+    */
+
+    uint32_t i, prev_tstamp;
+
+    /* check that timestamps are in the ascending order */
+    for (prev_tstamp = 0, i = 0; i < len; i += num_fields){
+        if (merge_buf[i] < prev_tstamp)
+            break;
+        prev_tstamp = merge_buf[i];
+    }
+
+    if (i != len)
+        /* timestamps are not increasing -> sort */
+        qsort(merge_buf, len / num_fields, num_fields * 4, event_cmp);
+}
+
+static const uint32_t *merge_chunks(const struct group *group,
+                                    uint64_t chunk_index,
+                                    uint32_t num_fields,
+                                    uint32_t *len)
+{
+    static uint32_t *merge_buf;
+    static uint64_t merge_buf_size;
+
+    const struct trail_chunk *chunk;
+    const struct trail_chunk *chunks =
+        ((const struct trail_chunk*)trail_chunks.data);
+
+    *len = 0;
+
+    /* concatenate all chunks into merge_buf */
+    do{
+        chunk = &chunks[chunk_index - 1];
+        if (*len + chunk->num_values >= merge_buf_size){
+            merge_buf_size = *len + chunk->num_values + MERGE_BUF_INC;
+            if (!(merge_buf = realloc(merge_buf, merge_buf_size * 4)))
+                DIE("Could not allocate merge buffer of %llu bytes\n",
+                    (long long unsigned int)merge_buf_size);
+        }
+
+        memcpy(&merge_buf[*len],
+               &group->events_buffer[chunk->events_index],
+               chunk->num_values * 4);
+        *len += chunk->num_values;
+
+    }while ((chunk_index = chunk->prev_chunk));
+    sort_events(merge_buf, *len, num_fields);
+
+    return merge_buf;
+}
+
+static void output_group(struct extractd_ctx *ctx,
+                         const char *fname,
+                         const struct group *group)
+{
+    static char path[MAX_PATH_SIZE];
+    FILE *out;
+    Word_t *ptr;
+    Word_t cookie_id = 0;
+    uint32_t num_fields = extractd_get_num_fields(ctx->extd) + 1;
+
+    if (ctx->dir){
+        mkdir(ctx->dir, 755);
+        make_path(path, "%s/%s", ctx->dir, fname);
+    }else
+        make_path(path, "%s", fname);
+
+    /* groupby mode excludes the groupby field from results */
+    if (ctx->groupby_str)
+        --num_fields;
+
+    if (!(out = fopen(path, "w")))
+        DIE("Could not open output file at %s\n", path);
+
+    SAFE_WRITE(&num_fields, 4, path, out);
+
+    JLF(ptr, group->cookies, cookie_id);
+    while (ptr){
+        uint32_t i, num_events;
+        const uint32_t *events = merge_chunks(group,
+                                              *ptr,
+                                              num_fields,
+                                              &num_events);
+
+        for (i = 0; i < num_events; i++){
+            const uint32_t *event = &events[i * num_fields];
+            SAFE_WRITE(ptr, 4, path, out);
+            SAFE_WRITE(event, num_fields * 4, path, out);
+        }
+        JLN(ptr, group->cookies, cookie_id);
+    }
+    fclose(out);
+}
+
+void grouper_output(struct extractd_ctx *ctx)
+{
+    static char fname[MAX_PATH_SIZE];
+
+    if (ctx->groupby_str){
+        uint32_t i;
+        uint32_t groupby_field = find_groupby_field(ctx->extd,
+                                                    ctx->groupby_str);
+
+        for (i = 0; i < num_groups; i++)
+            if (groups[i].cookies){
+                const char *field = extractd_get_token(ctx->extd,
+                                                       groupby_field,
+                                                       i);
+                const char *safe = safe_filename(field);
+                make_path(fname, "trail-extract.%u.%s", i, safe);
+                output_group(ctx, fname, &groups[i]);
+            }
+    }else
+        output_group(ctx, "trail-extract", &groups[0]);
+}
