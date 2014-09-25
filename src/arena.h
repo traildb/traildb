@@ -2,6 +2,9 @@
 #ifndef __ARENA_H__
 #define __ARENA_H__
 
+#include <stdint.h>
+#include <stdio.h>
+
 #define ARENA_INCREMENT 100000000
 #define ARENA_DISK_BUFFER (1 << 23) /* must be a power of two */
 
