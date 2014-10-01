@@ -232,10 +232,15 @@ void grouper_process(struct extractd_ctx *ctx)
             Word_t cookie_idx = lookup_cookie(cookie);
 
             for (i = 0; i < num_events;){
-                const uint32_t *event = &events[i * (num_fields + 1)];
+                const uint32_t *event;
+                const uint32_t *event0 = event = &events[i * (num_fields + 1)];
                 uint32_t groupby_key = event[groupby_field];
-                uint32_t first = i;
                 uint32_t n = 1;
+
+                /*
+                if (event[0] < 1400000000)
+                    DIE("Strange timestamp osid %u\n", event[0]);
+                */
 
                 /* Optimization 1 (see above):
                    Add all consecutive events with the same key in one operation. */
@@ -250,7 +255,7 @@ void grouper_process(struct extractd_ctx *ctx)
                 add_chunk(groupby_key,
                           groupby_field,
                           cookie_idx,
-                          &events[first],
+                          event0,
                           n,
                           num_fields + 1);
             }
@@ -314,8 +319,11 @@ static void sort_events(uint32_t *merge_buf, uint32_t len, uint32_t num_fields)
         if (merge_buf[i] < prev_tstamp)
             break;
         prev_tstamp = merge_buf[i];
+        /*
+        if (prev_tstamp < 1400000000)
+            DIE("Strange timestamp %u\n", prev_tstamp);
+        */
     }
-
     if (i != len)
         /* timestamps are not increasing -> sort */
         qsort(merge_buf, len / num_fields, num_fields * 4, event_cmp);
