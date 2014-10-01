@@ -5,6 +5,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include <hex_encode.h>
 #include <util.h>
@@ -65,6 +67,37 @@ const char *safe_filename(const char *value)
     return safe;
 }
 
+static void output_fields(const struct extractd_ctx *ctx)
+{
+    static char path[MAX_PATH_SIZE];
+    uint32_t i, j, k;
+    FILE *out;
+
+    for (i = 0, k = 0; i < extractd_get_num_fields(ctx->extd); i++){
+        const char *field = extractd_get_field_name(ctx->extd, i);
+        const char *safe = safe_filename(field);
+
+        if (ctx->groupby_str && !strcmp(field, ctx->groupby_str))
+            continue;
+
+        if (ctx->dir)
+            make_path(path, "%s/trail-field.%u.%s.csv", ctx->dir, k, safe);
+        else
+            make_path(path, "trail-field.%u.%s.csv", k, safe);
+
+        if (!(out = fopen(path, "w")))
+            DIE("Could not open output file at %s\n", path);
+
+        for (j = 0; j < extractd_num_tokens(ctx->extd, k); j++){
+            const char *token = extractd_get_token(ctx->extd, k, j);
+            SAFE_FPRINTF(out, path, "%s\n", token);
+        }
+
+        ++k;
+        fclose(out);
+    }
+}
+
 int main(int argc, char **argv)
 {
     static struct extractd_ctx ctx;
@@ -116,8 +149,11 @@ int main(int argc, char **argv)
     if (ctx.show)
         show(&ctx);
     else{
+        if (ctx.dir)
+            mkdir(ctx.dir, 0755);
         grouper_process(&ctx);
         grouper_output(&ctx);
+        output_fields(&ctx);
     }
 
     return 0;

@@ -14,5 +14,5 @@ gcc -Wall\
     -lJudy\
     -static
 
-ar ruv ../libextractd.a extractd.o util.o
+ar ruv ../libextractd.a extractd.o util.o ../src/dSFMT.o
 ranlib ../libextractd.a

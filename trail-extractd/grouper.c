@@ -2,8 +2,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
 #include <util.h>
 #include <arena.h>
@@ -368,11 +366,11 @@ static void output_group(struct extractd_ctx *ctx,
     Word_t *ptr;
     Word_t cookie_id = 0;
     uint32_t num_fields = extractd_get_num_fields(ctx->extd) + 1;
+    uint32_t tmp;
 
-    if (ctx->dir){
-        mkdir(ctx->dir, 0755);
+    if (ctx->dir)
         make_path(path, "%s/%s", ctx->dir, fname);
-    }else
+    else
         make_path(path, "%s", fname);
 
     /* groupby mode excludes the groupby field from results */
@@ -382,7 +380,8 @@ static void output_group(struct extractd_ctx *ctx,
     if (!(out = fopen(path, "w")))
         DIE("Could not open output file at %s\n", path);
 
-    SAFE_WRITE(&num_fields, 4, path, out);
+    tmp = num_fields + 1;
+    SAFE_WRITE(&tmp, 4, path, out);
 
     JLF(ptr, group->cookies, cookie_id);
     while (ptr){
