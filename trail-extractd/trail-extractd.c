@@ -88,8 +88,8 @@ static void output_fields(const struct extractd_ctx *ctx)
         if (!(out = fopen(path, "w")))
             DIE("Could not open output file at %s\n", path);
 
-        for (j = 0; j < extractd_num_tokens(ctx->extd, k); j++){
-            const char *token = extractd_get_token(ctx->extd, k, j);
+        for (j = 0; j < extractd_num_tokens(ctx->extd, i); j++){
+            const char *token = extractd_get_token(ctx->extd, i, j);
             SAFE_FPRINTF(out, path, "%s\n", token);
         }
 
