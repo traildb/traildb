@@ -1,11 +1,8 @@
 
-#include <stdint.h>
-
 #include "ddb_bits.h"
+#include "decode.h"
 #include "huffman.h"
-#include "ddb_profile.h"
-
-#include "breadcrumbs_decoder.h"
+#include "util.h"
 
 uint32_t bd_trail_decode(struct breadcrumbs *bd,
                          uint32_t trail_index,

@@ -1,15 +1,11 @@
 
-#define _GNU_SOURCE
-
+#include <fcntl.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <fcntl.h>
 
-#include <Judy.h>
-
+#include "encode.h"
 #include "util.h"
-#include "trail_encode.h"
 
 #define SAMPLE_SIZE (0.1 * RAND_MAX)
 #define RANDOM_SEED 238713
@@ -20,7 +16,8 @@
 
 typedef void (*logline_op)(const uint32_t *encoded,
                            int n,
-                           const struct cookie_logline *line);
+                           const struct cookie_logline *line,
+                           void *state);
 
 static uint32_t get_sample_size()
 {
@@ -40,7 +37,8 @@ static void logline_fold(logline_op op,
                          FILE *grouped,
                          uint64_t num_loglines,
                          const uint32_t *values,
-                         uint32_t num_fields)
+                         uint32_t num_fields,
+                         void *state)
 {
     uint32_t *prev_values = NULL;
     uint32_t *encoded = NULL;
@@ -55,7 +53,6 @@ static void logline_fold(logline_op op,
             num_fields);
 
     rewind(grouped);
-    readahead(fileno(grouped), 0, num_loglines * sizeof(struct cookie_logline));
     fread(&line, sizeof(struct cookie_logline), 1, grouped);
 
     /* this function scans through *all* unencoded data, takes a sample
@@ -84,7 +81,7 @@ static void logline_fold(logline_op op,
                                                     prev_values,
                                                     &line);
 
-                    op(encoded, n, &line);
+                    op(encoded, n, &line, state);
                 }
                 fread(&line, sizeof(struct cookie_logline), 1, grouped);
             }
@@ -229,89 +226,117 @@ static Pvoid_t find_candidates(const Pvoid_t unigram_freqs)
     return candidates;
 }
 
+
+struct ngram_state{
+  Pvoid_t candidates;
+  Pvoid_t ngram_freqs;
+  Pvoid_t final_freqs;
+  uint64_t *grams;
+  struct gram_bufs gbufs;
+};
+
+void all_bigrams(const uint32_t *encoded,
+                 int n,
+                 const struct cookie_logline *line,
+                 void *state){
+
+  struct ngram_state *g = (struct ngram_state *)state;
+  Word_t *ptr;
+  int set, i, j;
+
+  for (i = -1; i < n; i++){
+    uint64_t unigram1;
+    if (i == -1)
+      unigram1 = line->timestamp;
+    else
+      unigram1 = encoded[i];
+
+    J1T(set, g->candidates, unigram1);
+    if (set){
+      for (j = i + 1; j < n; j++){
+        uint64_t unigram2 = encoded[j];
+        J1T(set, g->candidates, unigram2);
+        if (set){
+          Word_t bigram = unigram1 | (unigram2 << 32);
+          JLI(ptr, g->ngram_freqs, bigram);
+          ++*ptr;
+        }
+      }
+    }
+  }
+}
+
+void choose_bigrams(const uint32_t *encoded,
+                    int num_encoded,
+                    const struct cookie_logline *line,
+                    void *state){
+
+  struct ngram_state *g = (struct ngram_state *)state;
+  Word_t *ptr;
+
+  uint32_t n = choose_grams(encoded,
+                            num_encoded,
+                            g->ngram_freqs,
+                            &g->gbufs,
+                            g->grams,
+                            line);
+  while (n--){
+    JLI(ptr, g->final_freqs, g->grams[n]);
+    ++*ptr;
+  }
+}
+
 Pvoid_t make_grams(FILE *grouped,
                    uint64_t num_loglines,
                    const uint32_t *values,
                    uint32_t num_fields,
                    const Pvoid_t unigram_freqs)
 {
-    Pvoid_t bigram_freqs = NULL;
-    Pvoid_t final_freqs = NULL;
-    Word_t *ptr;
+    struct ngram_state g = {};
     Word_t tmp;
-    uint64_t *grams;
-    struct gram_bufs gbufs;
 
-    init_gram_bufs(&gbufs, num_fields);
+    init_gram_bufs(&g.gbufs, num_fields);
 
     /* below is a very simple version of the Apriori algorithm
        for finding frequent sets (bigrams) */
 
     /* find unigrams that are sufficiently frequent */
-    Pvoid_t candidates = find_candidates(unigram_freqs);
+    g.candidates = find_candidates(unigram_freqs);
 
-    if (!(grams = malloc(num_fields * 8)))
+    if (!(g.grams = malloc(num_fields * 8)))
         DIE("Could not allocate grams buf (%u fields)\n", num_fields);
 
-    /* first, collect frequencies of *all* occurring bigrams of
-       candidate unigrams */
-    void all_bigrams(const uint32_t *encoded,
-                     int n,
-                     const struct cookie_logline *line){
+    /* collect frequencies of *all* occurring bigrams of candidate unigrams */
+    logline_fold(all_bigrams, grouped, num_loglines, values, num_fields, (void *)&g);
+    /* collect frequencies of non-overlapping bigrams and unigrams
+       (exact covering set for each logline) */
+    logline_fold(choose_bigrams, grouped, num_loglines, values, num_fields, (void *)&g);
 
-        int set, i, j;
-
-        for (i = -1; i < n; i++){
-            uint64_t unigram1;
-            if (i == -1)
-                unigram1 = line->timestamp;
-            else
-                unigram1 = encoded[i];
-
-            J1T(set, candidates, unigram1);
-            if (set){
-                for (j = i + 1; j < n; j++){
-                    uint64_t unigram2 = encoded[j];
-                    J1T(set, candidates, unigram2);
-                    if (set){
-                        Word_t bigram = unigram1 | (unigram2 << 32);
-                        JLI(ptr, bigram_freqs, bigram);
-                        ++*ptr;
-                    }
-                }
-            }
-        }
-    }
-
-    /* secondly, collect frequencies of non-overlapping bigrams and
-       unigrams (exact covering set for each logline) */
-    void choose_bigrams(const uint32_t *encoded,
-                        int num_encoded,
-                        const struct cookie_logline *line){
-
-        uint32_t n = choose_grams(encoded,
-                                  num_encoded,
-                                  bigram_freqs,
-                                  &gbufs,
-                                  grams,
-                                  line);
-        while (n--){
-            JLI(ptr, final_freqs, grams[n]);
-            ++*ptr;
-        }
-    }
-
-    /* execute the above operation, scanning over data twice */
-    logline_fold(all_bigrams, grouped, num_loglines, values, num_fields);
-    logline_fold(choose_bigrams, grouped, num_loglines, values, num_fields);
-
-    J1FA(tmp, candidates);
-    JLFA(tmp, bigram_freqs);
-    free_gram_bufs(&gbufs);
+    J1FA(tmp, g.candidates);
+    JLFA(tmp, g.ngram_freqs);
+    free_gram_bufs(&g.gbufs);
 
     /* final_freqs is a combination of bigrams and unigrams with their actual,
        non-overlapping frequencies */
-    return final_freqs;
+    return g.final_freqs;
+}
+
+void all_freqs(const uint32_t *encoded,
+               int n,
+               const struct cookie_logline *line,
+               void *state){
+
+    struct ngram_state *g = (struct ngram_state *)state;
+    Word_t *ptr;
+
+    while (n--){
+      JLI(ptr, g->ngram_freqs, encoded[n]);
+      ++*ptr;
+    }
+
+    /* include frequencies for timestamp deltas */
+    JLI(ptr, g->ngram_freqs, line->timestamp);
+    ++*ptr;
 }
 
 Pvoid_t collect_unigrams(FILE *grouped,
@@ -319,27 +344,10 @@ Pvoid_t collect_unigrams(FILE *grouped,
                          const uint32_t *values,
                          uint32_t num_fields)
 {
-    Pvoid_t unigram_freqs = NULL;
+    struct ngram_state g = {};
 
     /* calculate frequencies of all values */
-
-    void op(const uint32_t *encoded,
-            int n,
-            const struct cookie_logline *line){
-
-        Word_t *ptr;
-
-        while (n--){
-            JLI(ptr, unigram_freqs, encoded[n]);
-            ++*ptr;
-        }
-
-        /* include frequencies for timestamp deltas */
-        JLI(ptr, unigram_freqs, line->timestamp);
-        ++*ptr;
-    }
-
-    logline_fold(op, grouped, num_loglines, values, num_fields);
-    return unigram_freqs;
+    logline_fold(all_freqs, grouped, num_loglines, values, num_fields, (void *)&g);
+    return g.ngram_freqs;
 }
 

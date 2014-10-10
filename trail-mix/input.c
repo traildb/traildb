@@ -3,15 +3,11 @@
 
 #include <Judy.h>
 
-#include <breadcrumbs_decoder.h>
-#include <hex_decode.h>
-
-#include "util.h"
+#include "traildb.h"
 #include "arena.h"
-
-#include "trail-mix.h"
-
-#include <ddb_profile.h>
+#include "hex.h"
+#include "util.h"
+#include "mix.h"
 
 static struct arena input_ids = {.arena_increment = 1000000,
                                  .item_size = 16};

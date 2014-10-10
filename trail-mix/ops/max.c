@@ -1,6 +1,5 @@
 
-#include <util.h>
-#include <trail-mix.h>
+#include "mix.h"
 
 void op_help_max()
 {

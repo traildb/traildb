@@ -35,14 +35,13 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <netdb.h>
 
-#include <breadcrumbs_decoder.h>
-
-#include <util.h>
-#include <trail-mix.h>
+#include "mix.h"
 
 #define BUF_INC 1000000
 #define SEND_BUF_MAX 256000
