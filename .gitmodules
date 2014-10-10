@@ -1,0 +1,3 @@
+[submodule "deps/discodb"]
+	path = deps/discodb
+	url = https://github.com/jflatow/discodb.git

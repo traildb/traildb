@@ -1,18 +1,20 @@
 
-#ifndef __DIE_H__
-#define __DIE_H__
+#ifndef __TRAILDB_UTIL_H__
+#define __TRAILDB_UTIL_H__
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
 
 #include <Judy.h>
 
-#include "breadcrumbs.h"
-
 #define DSFMT_MEXP 521
 #include "dsfmt/dSFMT.h"
+
+#include "ddb_profile.h"
+#include "traildb.h"
 
 #define DIE_ON_ERROR(msg)\
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -76,4 +78,4 @@ uint64_t parse_uint64(const char *str, const char *ctx);
 
 void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed);
 
-#endif /* __DIE_H__ */
+#endif /* __TRAILDB_UTIL_H__ */

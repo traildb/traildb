@@ -1,6 +1,6 @@
 
-#ifndef __BREADCRUMBS_HUFFMAN__
-#define __BREADCRUMBS_HUFFMAN__
+#ifndef __HUFFMAN_H__
+#define __HUFFMAN_H__
 
 #include <stdint.h>
 
@@ -66,6 +66,6 @@ static inline uint64_t huff_decode_value(const struct huff_codebook *codebook,
         *offset += 1 + fstats->field_id_bits + fstats->field_bits[field_id];
         return field_id | (field_val << 8);
     }
-} __attribute__((unused))
+}
 
-#endif /* __BREADCRUMBS_HUFFMAN__ */
+#endif /* __HUFFMAN_H__ */

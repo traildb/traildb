@@ -1,4 +1,3 @@
-
 #define _GNU_SOURCE
 
 #include <sys/types.h>
@@ -9,17 +8,10 @@
 #include <string.h>
 #include <stdint.h>
 
-#include <breadcrumbs_decoder.h>
-#include <util.h>
+#include <Judy.h>
 
-#ifdef ENABLE_DISCODB
-    #include <discodb.h>
-    #include <Judy.h>
-#else
-    #include "ddb_structs.h"
-#endif
-
-#include <trail-mix.h>
+#include "discodb.h"
+#include "mix.h"
 
 #define MAX_EVENT_QUERY_LEN 1000000
 
@@ -130,7 +122,6 @@ static struct ddb_query_clause *parse_query(char *query,
     return clauses;
 }
 
-#ifdef ENABLE_DISCODB
 static struct ddb *open_index(const char *root)
 {
     char path[MAX_PATH_SIZE];
@@ -187,8 +178,6 @@ static int match_index(struct trail_ctx *ctx, const struct qctx *q)
     return 0;
 }
 
-#endif
-
 void op_help_q()
 {
 
@@ -222,7 +211,6 @@ void *op_init_q(struct trail_ctx *ctx,
 
     *flags = 0;
 
-#ifdef ENABLE_DISCODB
 
     if (!ctx->db_index && !ctx->opt_no_index)
         if (!(ctx->db_index = open_index(ctx->db_path)))
@@ -249,10 +237,6 @@ void *op_init_q(struct trail_ctx *ctx,
     }else
         *flags |= TRAIL_OP_EVENT;
 
-#else
-    *flags |= TRAIL_OP_EVENT;
-#endif
-
     if (!(*flags & TRAIL_OP_DB))
         MSG(ctx, "Query index is disabled\n");
 
@@ -269,11 +253,6 @@ int op_exec_q(struct trail_ctx *ctx,
 {
     const struct qctx *q = (const struct qctx*)arg;
     uint32_t j, i = 0;
-
-#ifdef ENABLE_DISCODB
-    if (mode == TRAIL_OP_DB)
-        return match_index(ctx, q);
-#endif
 
     /* Check if event matches the given query. See
        the description of the event_query structure

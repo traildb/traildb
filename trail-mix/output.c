@@ -4,11 +4,10 @@
 
 #include <Judy.h>
 
-#include <util.h>
-#include <breadcrumbs_decoder.h>
-
-#include "trail-mix.h"
-#include "hex_encode.h"
+#include "traildb.h"
+#include "hex.h"
+#include "util.h"
+#include "mix.h"
 
 #define TRAIL_BUF_INCREMENT 1000000
 
@@ -74,7 +73,7 @@ static FILE *open_output(const struct trail_ctx *ctx, const char **path)
 
 void output_matches(struct trail_ctx *ctx)
 {
-    Word_t row_id;
+    Word_t row_id = 0;
     int cont;
     const char *path;
     FILE *out = open_output(ctx, &path);
@@ -87,7 +86,6 @@ void output_matches(struct trail_ctx *ctx)
     if (ctx->output_file || ctx->opt_binary)
         setvbuf(out, NULL, _IOFBF, 10485760);
 
-    row_id = 0;
     J1F(cont, ctx->matched_rows, row_id);
     while (cont){
         const char *id;
@@ -113,7 +111,7 @@ void output_matches(struct trail_ctx *ctx)
 
 static Pvoid_t serialize_trails(FILE *out, struct trail_ctx *ctx)
 {
-    uint64_t row_id = 0;
+    Word_t row_id = 0;
     int cont, tmp;
     uint32_t *trail = NULL;
     uint32_t trail_size = 0;

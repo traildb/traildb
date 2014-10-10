@@ -1,11 +1,7 @@
 
-#include <Judy.h>
-
-#include "util.h"
 #include "ddb_queue.h"
-#include "ddb_profile.h"
-
 #include "huffman.h"
+#include "util.h"
 
 #define MIN(a,b) ((a)>(b)?(b):(a))
 

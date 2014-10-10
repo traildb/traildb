@@ -1,0 +1,9 @@
+*.a
+*.o
+*.so
+lib/python/build
+bin/encode
+bin/index
+bin/merge
+bin/mix
+bin/trail

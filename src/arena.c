@@ -3,9 +3,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#include "util.h"
-
 #include "arena.h"
+#include "util.h"
 
 void arena_flush(const struct arena *a)
 {

@@ -1,7 +1,5 @@
 
-#include <trail-mix.h>
-
-#include <util.h>
+#include "mix.h"
 
 void op_help_count()
 {

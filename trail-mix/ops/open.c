@@ -1,10 +1,5 @@
 
-//#include <trail-util.h>
-
-#include <util.h>
-#include <breadcrumbs_decoder.h>
-
-#include <trail-mix.h>
+#include "mix.h"
 
 void op_help_open()
 {

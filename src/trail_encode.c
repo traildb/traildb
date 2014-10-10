@@ -1,19 +1,12 @@
 
-#define _GNU_SOURCE
-
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
 
-#include <Judy.h>
-
-#include "ddb_profile.h"
-#include "huffman.h"
 #include "ddb_bits.h"
+#include "encode.h"
+#include "huffman.h"
 #include "util.h"
-
-#include "breadcrumbs_encoder.h"
-#include "trail_encode.h"
 
 #define GROUPBUF_INCREMENT 10000000
 #define READ_BUFFER_SIZE (1000000 * sizeof(struct cookie_logline))
@@ -222,14 +215,13 @@ static void encode_trails(const uint32_t *values,
         DIE("Could not allocate 512MB in encode_trails\n");
 
     if (!(prev_values = malloc(num_fields * 4)))
-        DIE("Could not allocated %u fields in edge_encode_values\n",
+        DIE("Could not allocate %u fields in edge_encode_values\n",
             num_fields);
 
     if (!(grams = malloc(num_fields * 8)))
         DIE("Could not allocate %u grams\n", num_fields);
 
     rewind(grouped);
-    readahead(fileno(grouped), 0, num_loglines * sizeof(struct cookie_logline));
     fread(&line, sizeof(struct cookie_logline), 1, grouped);
 
     while (i < num_loglines){
@@ -447,4 +439,3 @@ void store_trails(const uint64_t *cookie_pointers,
     free(read_buf);
     free(fstats);
 }
-
