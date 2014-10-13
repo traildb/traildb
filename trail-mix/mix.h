@@ -4,11 +4,9 @@
 
 #include <Judy.h>
 
-#ifdef ENABLE_DISCODB
-#include <discodb.h>
-#endif
+#include "discodb.h"
 
-#include "traildb.h"
+#include "tdb_internal.h"
 #include "util.h"
 
 #define TRAIL_ATTR_SCALAR 1
@@ -35,9 +33,9 @@ typedef void* (*op_init_t)(struct trail_ctx *ctx,
 
 typedef int (*op_exec_t)(struct trail_ctx *ctx,
                          int mode,
-                         uint64_t row_id,
-                         const uint32_t *fields,
-                         const uint32_t num_fields,
+                         uint64_t cookie_id,
+                         const tdb_item *trail,
+                         const uint32_t trail_size,
                          void *arg);
 
 struct trail_available_op{
@@ -89,7 +87,7 @@ struct trail_ctx{
     int attr_type;
 
     /* trail db */
-    struct breadcrumbs *db;
+    tdb *db;
     const char *db_path;
 
     struct ddb *db_index;

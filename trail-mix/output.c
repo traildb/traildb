@@ -4,7 +4,7 @@
 
 #include <Judy.h>
 
-#include "traildb.h"
+#include "tdb_internal.h"
 #include "hex.h"
 #include "util.h"
 #include "mix.h"
@@ -31,7 +31,7 @@ static void finalize_attributes(struct trail_ctx *ctx)
 }
 
 static void output_binary(FILE *out,
-                          const char *id,
+                          tdb_cookie cookie,
                           Word_t *attr,
                           const char *path)
 {
@@ -39,12 +39,12 @@ static void output_binary(FILE *out,
 }
 
 static void output_text(FILE *out,
-                        const char *id,
+                        tdb_cookie cookie,
                         Word_t *attr,
                         const char *path)
 {
     static char hexencoded[32];
-    hex_encode((const uint8_t*)id, hexencoded);
+    hex_encode(cookie, hexencoded);
 
     if (attr){
         SAFE_FPRINTF(out,
@@ -52,8 +52,9 @@ static void output_text(FILE *out,
                      "%s %llu\n",
                      hexencoded,
                      (long long unsigned int)*attr);
-    }else
+    }else{
         SAFE_FPRINTF(out, path, "%s\n", hexencoded);
+    }
 }
 
 static FILE *open_output(const struct trail_ctx *ctx, const char **path)
@@ -73,7 +74,7 @@ static FILE *open_output(const struct trail_ctx *ctx, const char **path)
 
 void output_matches(struct trail_ctx *ctx)
 {
-    Word_t row_id = 0;
+    Word_t cookie_id = 0;
     int cont;
     const char *path;
     FILE *out = open_output(ctx, &path);
@@ -86,24 +87,24 @@ void output_matches(struct trail_ctx *ctx)
     if (ctx->output_file || ctx->opt_binary)
         setvbuf(out, NULL, _IOFBF, 10485760);
 
-    J1F(cont, ctx->matched_rows, row_id);
+    J1F(cont, ctx->matched_rows, cookie_id);
     while (cont){
-        const char *id;
+        tdb_cookie cookie;
         Word_t *attr;
 
         if (ctx->db)
-            id = bd_lookup_cookie(ctx->db, row_id);
+            cookie = tdb_get_cookie(ctx->db, cookie_id);
         else
-            id = &ctx->input_ids[row_id * 16];
+            cookie = (tdb_cookie)&ctx->input_ids[cookie_id * 16];
 
-        JLG(attr, ctx->attributes, row_id);
+        JLG(attr, ctx->attributes, cookie_id);
 
         if (ctx->opt_binary)
-            output_binary(out, id, attr, path);
+            output_binary(out, cookie, attr, path);
         else
-            output_text(out, id, attr, path);
+            output_text(out, cookie, attr, path);
 
-        J1N(cont, ctx->matched_rows, row_id);
+        J1N(cont, ctx->matched_rows, cookie_id);
     }
 
     SAFE_CLOSE(out, path);
@@ -111,14 +112,14 @@ void output_matches(struct trail_ctx *ctx)
 
 static Pvoid_t serialize_trails(FILE *out, struct trail_ctx *ctx)
 {
-    Word_t row_id = 0;
+    Word_t cookie_id = 0;
     int cont, tmp;
     uint32_t *trail = NULL;
     uint32_t trail_size = 0;
     uint32_t i, n, len = 0;
-    Pvoid_t fieldset = NULL;
+    Pvoid_t items = NULL;
 
-    J1F(cont, ctx->matched_rows, row_id);
+    J1F(cont, ctx->matched_rows, cookie_id);
     while (cont){
         /*
           A serialized trail is structured as follows:
@@ -126,15 +127,15 @@ static Pvoid_t serialize_trails(FILE *out, struct trail_ctx *ctx)
           NUMBER-OF-EVENTS: 4-byte uint
           TRAILS:
             TIMESTAMP: 4-byte uint
-            N*FIELD-VALUE: 4-byte uint, maps to lexicon, where N = len(fields)
+            N*ITEM-VALUE: 4-byte uint, maps to lexicon, where N = len(items)
         */
-        const char *id = bd_lookup_cookie(ctx->db, row_id);
+        tdb_cookie cookie = tdb_get_cookie(ctx->db, cookie_id);
 
-        while ((len = bd_trail_decode(ctx->db,
-                                      row_id,
-                                      trail,
-                                      trail_size,
-                                      0)) == trail_size){
+        while ((len = tdb_decode_trail(ctx->db,
+                                       cookie_id,
+                                       trail,
+                                       trail_size,
+                                       0)) == trail_size){
             free(trail);
             trail_size += TRAIL_BUF_INCREMENT;
             if (!(trail = malloc(trail_size * 4)))
@@ -147,7 +148,7 @@ static Pvoid_t serialize_trails(FILE *out, struct trail_ctx *ctx)
            that if the writes fail, e.g. due to running out of disk space,
            one of the subsequent writes will fail too and capture the error.
         */
-        fwrite(id, 16, 1, out);
+        fwrite(cookie, 16, 1, out);
 
         /* count the number of events by checking the number of end markers */
         n = 0;
@@ -163,7 +164,7 @@ static Pvoid_t serialize_trails(FILE *out, struct trail_ctx *ctx)
                 if (trail[i]){ /* skip event delimitiers */
                     if (trail[i] >> 8){
                         fwrite(&trail[i], 4, 1, out);
-                        J1S(tmp, fieldset, trail[i]);
+                        J1S(tmp, items, trail[i]);
                     }else{
                         /* FIXME this is a bit strange format */
                         /* we should include field id in the null values */
@@ -172,18 +173,18 @@ static Pvoid_t serialize_trails(FILE *out, struct trail_ctx *ctx)
                     }
                 }else{
                     /* write timestamp that follows event delimiter,
-                       don't add it to fieldset */
+                       don't add it to items */
                     if (++i < len)
                         fwrite(&trail[i], 4, 1, out);
                 }
             }
         }
 
-        J1N(cont, ctx->matched_rows, row_id);
+        J1N(cont, ctx->matched_rows, cookie_id);
     }
 
     free(trail);
-    return fieldset;
+    return items;
 }
 
 static void serialize_fields(FILE *out, struct trail_ctx *ctx)
@@ -204,23 +205,23 @@ static void serialize_fields(FILE *out, struct trail_ctx *ctx)
 }
 
 static void serialize_lexicon(FILE *out,
-                              const Pvoid_t fieldset,
+                              const Pvoid_t items,
                               struct trail_ctx *ctx)
 {
-    Word_t field = 0;
+    Word_t item = 0;
     int cont;
 
-    J1F(cont, fieldset, field);
+    J1F(cont, items, item);
     while (cont){
-        const char *str = bd_lookup_value(ctx->db, field);
+        const char *str = tdb_get_item_value(ctx->db, item);
         uint32_t len = strlen(str);
 
         /* see a comment above about fwrite */
-        fwrite(&field, 4, 1, out);
+        fwrite(&item, 4, 1, out);
         fwrite(&len, 4, 1, out);
         fwrite(str, len, 1, out);
 
-        J1N(cont, fieldset, field);
+        J1N(cont, items, item);
     }
 }
 
@@ -230,7 +231,7 @@ void output_trails(struct trail_ctx *ctx)
     FILE *out = open_output(ctx, &path);
     char *buf = NULL;
     size_t buf_size = 0;
-    Pvoid_t fieldset = NULL;
+    Pvoid_t items = NULL;
     uint64_t tmp;
     uint64_t offset = 24;
     uint64_t sizes[3];
@@ -250,7 +251,7 @@ void output_trails(struct trail_ctx *ctx)
 
     SAFE_SEEK(out, 24, path);
 
-    fieldset = serialize_trails(out, ctx);
+    items = serialize_trails(out, ctx);
     SAFE_TELL(out, tmp, path);
     sizes[0] = tmp - offset;
     offset = tmp;
@@ -260,7 +261,7 @@ void output_trails(struct trail_ctx *ctx)
     sizes[1] = tmp - offset;
     offset = tmp;
 
-    serialize_lexicon(out, fieldset, ctx);
+    serialize_lexicon(out, items, ctx);
     SAFE_TELL(out, tmp, path);
     sizes[2] = tmp - offset;
 
@@ -277,5 +278,5 @@ void output_trails(struct trail_ctx *ctx)
 
     SAFE_CLOSE(out, path);
     free(buf);
-    J1FA(tmp, fieldset);
+    J1FA(tmp, items);
 }

@@ -7,7 +7,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "traildb.h"
+#include "tdb_internal.h"
 #include "util.h"
 #include "mix.h"
 #include "ops.h"
@@ -258,7 +258,7 @@ static void initialize(int argc, char **argv)
         init_ops(optind, argc, argv);
 
         if (ctx.db){
-            if ((ctx.has_cookie_index = bd_has_cookie_index(ctx.db))){
+            if ((ctx.has_cookie_index = tdb_has_cookie_index(ctx.db))){
                 MSG(&ctx, "Cookie index enabled\n");
             }else{
                 MSG(&ctx, "Cookie index disabled\n");
@@ -331,9 +331,9 @@ static uint32_t *filter_ops(uint64_t include,
     All operations must match any single event in the trail.
     No early stopping. All events are evaluated.
 */
-static inline int exec_match_events(const uint32_t *trail,
+static inline int exec_match_events(const tdb_item *trail,
                                     uint32_t len,
-                                    uint64_t row_id,
+                                    uint64_t cookie_id,
                                     const uint32_t *eveops,
                                     uint32_t num_eveops)
 {
@@ -351,7 +351,7 @@ static inline int exec_match_events(const uint32_t *trail,
             int idx = eveops[j];
             int ret = ctx.ops[idx].op->exec(&ctx,
                                             TRAIL_OP_EVENT,
-                                            row_id,
+                                            cookie_id,
                                             &trail[event_start],
                                             event_start - i,
                                             ctx.ops[idx].arg);
@@ -380,16 +380,16 @@ event_done:
     the same one. We can early-stop as soon as all ops have found a
     matching event.
 */
-static inline int exec_match_trail(const uint32_t *trail,
-                                   uint32_t len,
-                                   uint64_t row_id,
+static inline int exec_match_trail(const tdb_item *trail,
+                                   uint32_t trail_size,
+                                   uint64_t cookie_id,
                                    const uint32_t *eveops,
                                    uint32_t num_eveops)
 {
     uint64_t match_ops = 0;
     uint32_t event_start, i, j, eveops_left = num_eveops;
 
-    for (i = 0; i < len;){
+    for (i = 0; i < trail_size;){
 
         /* find next event */
         event_start = i++;
@@ -405,7 +405,7 @@ static inline int exec_match_trail(const uint32_t *trail,
 
             if (!ctx.ops[idx].op->exec(&ctx,
                                        TRAIL_OP_EVENT,
-                                       row_id,
+                                       cookie_id,
                                        &trail[event_start],
                                        event_start - i,
                                        ctx.ops[idx].arg)){
@@ -424,11 +424,11 @@ static inline int exec_match_trail(const uint32_t *trail,
 
 static void exec_ops()
 {
-    Word_t row_id = 0;
+    Word_t cookie_id = 0;
     uint32_t i;
     int tmp, cont;
 
-    uint32_t *trail = NULL;
+    tdb_item *trail = NULL;
     uint32_t trail_size = 0;
 
     uint32_t num_postops, num_eveops, num_preops, num_dbops, num_finops;
@@ -466,7 +466,7 @@ static void exec_ops()
         ctx.ops[idx].op->exec(&ctx, TRAIL_OP_DB, 0, NULL, 0, ctx.ops[idx].arg);
     }
 
-    J1F(cont, ctx.matched_rows, row_id);
+    J1F(cont, ctx.matched_rows, cookie_id);
     while (cont){
         uint32_t len = 0;
 
@@ -476,7 +476,7 @@ static void exec_ops()
             int idx = preops[i];
             if (ctx.ops[idx].op->exec(&ctx,
                                       TRAIL_OP_PRE_TRAIL,
-                                      row_id,
+                                      cookie_id,
                                       NULL,
                                       0,
                                       ctx.ops[idx].arg))
@@ -488,11 +488,11 @@ static void exec_ops()
         if (ctx.db){
 
             if (num_eveops || num_postops){
-                while ((len = bd_trail_decode(ctx.db,
-                                              row_id,
-                                              trail,
-                                              trail_size,
-                                              0)) == trail_size){
+                while ((len = tdb_decode_trail(ctx.db,
+                                               cookie_id,
+                                               trail,
+                                               trail_size,
+                                               0)) == trail_size){
                     free(trail);
                     trail_size += TRAIL_BUF_INCREMENT;
                     if (!(trail = malloc(trail_size * 4)))
@@ -506,13 +506,13 @@ static void exec_ops()
                 if (ctx.opt_match_events)
                     skip = exec_match_events(trail,
                                              len,
-                                             row_id,
+                                             cookie_id,
                                              eveops,
                                              num_eveops);
                 else
                     skip = exec_match_trail(trail,
                                             len,
-                                            row_id,
+                                            cookie_id,
                                             eveops,
                                             num_eveops);
                 if (skip)
@@ -526,7 +526,7 @@ static void exec_ops()
             int idx = postops[i];
             if (ctx.ops[idx].op->exec(&ctx,
                                       TRAIL_OP_POST_TRAIL,
-                                      row_id,
+                                      cookie_id,
                                       trail,
                                       len,
                                       ctx.ops[idx].arg))
@@ -535,10 +535,10 @@ static void exec_ops()
 
         goto accept;
 reject:
-        /* Reject this row_id: Remove it from matched_rows */
-        J1U(tmp, ctx.matched_rows, row_id);
+        /* Reject this cookie_id: Remove it from matched_rows */
+        J1U(tmp, ctx.matched_rows, cookie_id);
 accept:
-        J1N(cont, ctx.matched_rows, row_id);
+        J1N(cont, ctx.matched_rows, cookie_id);
     }
 
     /* FINALIZE-LEVEL OPERATIONS */
@@ -584,35 +584,35 @@ void write_counter(const char *name, long long int val)
 int main(int argc, char **argv)
 {
     long long unsigned int count;
-    DDB_TIMER_DEF
+    TDB_TIMER_DEF
 
-    DDB_TIMER_START
+    TDB_TIMER_START
     initialize(argc, argv);
     if (ctx.opt_verbose){
-        DDB_TIMER_END("initialization");
+        TDB_TIMER_END("initialization");
     }
 
     J1C(count, ctx.matched_rows, 0, -1);
     write_counter("main.input-trails", count);
     MSG(&ctx, "Number of input trails: %llu\n", count);
 
-    DDB_TIMER_START
+    TDB_TIMER_START
     exec_ops();
     if (ctx.opt_verbose){
-        DDB_TIMER_END("operations");
+        TDB_TIMER_END("operations");
     }
 
     J1C(count, ctx.matched_rows, 0, -1);
     write_counter("main.output-trails", count);
     MSG(&ctx, "Number of output trails: %llu\n", count);
 
-    DDB_TIMER_START
+    TDB_TIMER_START
     if (ctx.opt_output_trails)
         output_trails(&ctx);
     else
         output_matches(&ctx);
     if (ctx.opt_verbose){
-        DDB_TIMER_END("output");
+        TDB_TIMER_END("output");
     }
 
     if (ctx.counters_file)

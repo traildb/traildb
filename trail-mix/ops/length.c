@@ -23,9 +23,9 @@ void *op_init_length(struct trail_ctx *ctx,
 
 int op_exec_length(struct trail_ctx *ctx,
                    int mode,
-                   uint64_t row_id,
-                   const uint32_t *trail,
-                   uint32_t trail_len,
+                   uint64_t cookie_id,
+                   const tdb_item *trail,
+                   uint32_t trail_size,
                    const void *arg)
 {
     Word_t *ptr;
@@ -36,8 +36,8 @@ int op_exec_length(struct trail_ctx *ctx,
     }else
         ctx->attr_type = TRAIL_ATTR_SCALAR;
 
-    JLI(ptr, ctx->attributes, row_id);
-    *ptr += trail_len;
+    JLI(ptr, ctx->attributes, cookie_id);
+    *ptr += trail_size;
 
     return 0;
 }

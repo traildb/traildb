@@ -1,4 +1,4 @@
-cp libbreadcrumbs.so dsrc/
+cp libtraildb.so dsrc/
 cd dsrc/
-dmd -L-L./ -L-lbreadcrumbs examples.d TrailDB.d
+dmd -L-L./ -L-ltraildb examples.d TrailDB.d
 cd ../

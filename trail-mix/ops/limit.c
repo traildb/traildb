@@ -37,18 +37,18 @@ void *op_init_limit(struct trail_ctx *ctx,
 static uint64_t sum_and_shuffle(const struct trail_ctx *ctx, uint64_t *rows)
 {
     int cont;
-    Word_t row_id = 0;
+    Word_t cookie_id = 0;
     uint64_t total = 0;
     uint32_t i = 0;
     Word_t *ptr;
 
-    J1F(cont, ctx->matched_rows, row_id);
+    J1F(cont, ctx->matched_rows, cookie_id);
     while (cont){
-        JLG(ptr, ctx->attributes, row_id);
+        JLG(ptr, ctx->attributes, cookie_id);
         if (ptr)
             total += *ptr;
-        rows[i++] = row_id;
-        J1N(cont, ctx->matched_rows, row_id);
+        rows[i++] = cookie_id;
+        J1N(cont, ctx->matched_rows, cookie_id);
     }
 
     dsfmt_shuffle(rows, i, ctx->random_seed);
@@ -58,9 +58,9 @@ static uint64_t sum_and_shuffle(const struct trail_ctx *ctx, uint64_t *rows)
 
 int op_exec_limit(struct trail_ctx *ctx,
                   int mode,
-                  uint64_t row_id,
-                  const uint32_t *fields,
-                  uint32_t num_fields,
+                  uint64_t cookie_id,
+                  const tdb_item *trail,
+                  uint32_t trail_size,
                   const void *arg)
 {
     if (ctx->attr_type == TRAIL_ATTR_SCALAR){

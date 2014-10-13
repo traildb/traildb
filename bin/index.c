@@ -6,6 +6,7 @@
 #include <cmph.h>
 
 #include "discodb.h"
+#include "tdb_internal.h"
 #include "util.h"
 
 #define DECODE_BUF_INCREMENT 1000000
@@ -14,8 +15,8 @@
 #define MIN_NUMBER_OF_COOKIES 100
 
 struct cookie_ctx{
-    uint32_t index;
-    struct breadcrumbs *db;
+    uint32_t id;
+    tdb *db;
     char key[16];
 };
 
@@ -26,23 +27,23 @@ void ci_dispose(void *data, char *key, cmph_uint32 l)
 void ci_rewind(void *data)
 {
     struct cookie_ctx *ctx = (struct cookie_ctx*)data;
-    ctx->index = 0;
+    ctx->id = 0;
 }
 
 int ci_read(void *data, char **p, cmph_uint32 *len)
 {
     struct cookie_ctx *ctx = (struct cookie_ctx*)data;
-    const char *id = bd_lookup_cookie(ctx->db, ctx->index);
+    tdb_cookie cookie = tdb_get_cookie(ctx->db, ctx->id);
 
-    memcpy(ctx->key, id, 16);
+    memcpy(ctx->key, cookie, 16);
     *p = ctx->key;
     *len = 16;
 
-    ++ctx->index;
+    ++ctx->id;
     return *len;
 }
 
-void create_cookie_index(const char *path, struct breadcrumbs *bd)
+void create_cookie_index(const char *path, tdb *db)
 {
     void *data;
     cmph_config_t *config;
@@ -51,13 +52,13 @@ void create_cookie_index(const char *path, struct breadcrumbs *bd)
     uint32_t size;
 
     struct cookie_ctx ctx = {
-        .index = 0,
-        .db = bd
+        .id = 0,
+        .db = db
     };
 
     cmph_io_adapter_t r = {
         .data = &ctx,
-        .nkeys = bd_num_cookies(bd),
+        .nkeys = tdb_num_cookies(db),
         .read = ci_read,
         .dispose = ci_dispose,
         .rewind = ci_rewind
@@ -90,27 +91,25 @@ void create_cookie_index(const char *path, struct breadcrumbs *bd)
     free(data);
 }
 
-static void make_key(struct ddb_entry *key,
-                     struct breadcrumbs *bd,
-                     uint32_t field_value)
+static void make_key(struct ddb_entry *key, tdb *db, tdb_item item)
 {
     static char keybuf[KEY_BUFFER_SIZE];
-    const char *str = bd_lookup_value(bd, field_value);
-    uint32_t idx = bd_field_index(field_value);
+    const char *value = tdb_get_item_value(db, item);
+    tdb_field field = tdb_item_field(item);
 
     key->data = keybuf;
-    key->length = snprintf(keybuf, KEY_BUFFER_SIZE, "%u:%s", idx, str);
+    key->length = snprintf(keybuf, KEY_BUFFER_SIZE, "%u:%s", field, value);
 
     if (key->length >= KEY_BUFFER_SIZE)
         DIE("Key too long. Increase KEY_BUFFER_SIZE\n");
 }
 
-static void add_trails(struct breadcrumbs *bd, struct ddb_cons *cons)
+static void add_trails(tdb *db, struct ddb_cons *cons)
 {
     uint32_t *buf = NULL;
     uint32_t buf_size = 0;
     uint32_t i, j;
-    uint32_t num_cookies = bd_num_cookies(bd);
+    uint32_t num_cookies = tdb_num_cookies(db);
 
     for (i = 0; i < num_cookies; i++){
         const struct ddb_entry value = {.data = (const char*)&i, .length = 4};
@@ -121,7 +120,7 @@ static void add_trails(struct breadcrumbs *bd, struct ddb_cons *cons)
 
         /* decode trail - no need to edge decode since we are only interest
            in unique field values */
-        while ((n = bd_trail_decode(bd, i, buf, buf_size, 1)) == buf_size){
+        while ((n = tdb_decode_trail(db, i, buf, buf_size, 1)) == buf_size){
             free(buf);
             buf_size += DECODE_BUF_INCREMENT;
             if (!(buf = malloc(buf_size * 4)))
@@ -133,7 +132,7 @@ static void add_trails(struct breadcrumbs *bd, struct ddb_cons *cons)
             /* exclude end-of-event markers */
             if (buf[j]){
                 /* exclude null values */
-                if (bd_field_value(buf[j]))
+                if (tdb_item_val(buf[j]))
                     J1S(tmp, uniques, buf[j]);
             }else
                 /* exclude timestamps */
@@ -144,7 +143,7 @@ static void add_trails(struct breadcrumbs *bd, struct ddb_cons *cons)
         J1F(tmp, uniques, field_value);
         while (tmp){
             struct ddb_entry key;
-            make_key(&key, bd, field_value);
+            make_key(&key, db, field_value);
             if (ddb_cons_add(cons, &key, &value))
                 DIE("Could not add key (cookie %u)\n", i);
             J1N(tmp, uniques, field_value);
@@ -161,7 +160,7 @@ static void add_trails(struct breadcrumbs *bd, struct ddb_cons *cons)
     free(buf);
 }
 
-static void create_trail_index(const char *path, struct breadcrumbs *bd)
+static void create_trail_index(const char *path, tdb *db)
 {
     struct ddb_cons *cons;
     uint64_t length;
@@ -174,7 +173,7 @@ static void create_trail_index(const char *path, struct breadcrumbs *bd)
     if (!(cons = ddb_cons_new()))
         DIE("Could not allocate discodb\n");
 
-    add_trails(bd, cons);
+    add_trails(db, cons);
 
     if (!(data = ddb_cons_finalize(cons, &length, DDB_OPT_UNIQUE_ITEMS)))
         DIE("Finalizing index failed\n");
@@ -188,35 +187,35 @@ static void create_trail_index(const char *path, struct breadcrumbs *bd)
 
 int main(int argc, char **argv)
 {
-    char path[MAX_PATH_SIZE];
-    struct breadcrumbs *bd;
-    DDB_TIMER_DEF
+    char path[TDB_MAX_PATH_SIZE];
+    tdb *db;
+    TDB_TIMER_DEF
 
     if (argc < 2)
         DIE("USAGE: %s db-root\n", argv[0]);
 
-    if (!(bd = bd_open(argv[1])))
+    if (!(db = tdb_open(argv[1])))
         DIE("Could not load traildb\n");
 
-    if (bd->error_code)
-        DIE("%s\n", bd->error);
+    if (db->error_code)
+        DIE("%s\n", db->error);
 
-    DDB_TIMER_START
-    make_path(path, "%s/trails.index", argv[1]);
-    create_trail_index(path, bd);
-    DDB_TIMER_END("trails.index");
+    TDB_TIMER_START
+    tdb_path(path, "%s/trails.index", argv[1]);
+    create_trail_index(path, db);
+    TDB_TIMER_END("trails.index");
 
     /*
     CMPH may fail for a very small number of keys. We don't need an
     index for a small number of cookies anyways, so let's not even try.
     */
-    if (bd_num_cookies(bd) > MIN_NUMBER_OF_COOKIES){
-        DDB_TIMER_START
-        make_path(path, "%s/cookies.index", argv[1]);
-        create_cookie_index(path, bd);
-        DDB_TIMER_END("cookies.index");
+    if (tdb_num_cookies(db) > MIN_NUMBER_OF_COOKIES){
+        TDB_TIMER_START
+        tdb_path(path, "%s/cookies.index", argv[1]);
+        create_cookie_index(path, db);
+        TDB_TIMER_END("cookies.index");
     }
 
-    bd_close(bd);
+    tdb_close(db);
     return 0;
 }

@@ -28,15 +28,15 @@ void *op_init_equals(struct trail_ctx *ctx,
 
 int op_exec_equals(struct trail_ctx *ctx,
                 int mode,
-                uint64_t row_id,
-                const uint32_t *fields,
-                uint32_t num_fields,
+                uint64_t cookie_id,
+                const tdb_item *trail,
+                uint32_t trail_size,
                 const void *arg)
 {
     Word_t *ptr;
     uint64_t val = *(uint64_t*)arg;
 
-    JLG(ptr, ctx->attributes, row_id);
+    JLG(ptr, ctx->attributes, cookie_id);
     if (!ptr)
         return 1;
 

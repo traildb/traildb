@@ -6,7 +6,7 @@ import std.path : buildPath;
 import std.stdio;
 import std.string : format, toStringz;
 
-import breadcrumbs;
+import traildb;
 
 
 immutable static BUFFER_SIZE = 1 << 18;
@@ -34,9 +34,9 @@ class TrailDB {
     this(string db_path)
     {
         _db_path = db_path;
-        _db = bd_open(toStringz(db_path));
-        _numCookies = bd_num_cookies(_db);
-        _numDims = bd_num_fields(_db);
+        _db = tdb_open(toStringz(db_path));
+        _numCookies = tdb_num_cookies(_db);
+        _numDims = tdb_num_fields(_db);
         read_dim_names();
 
         // store index of log line type dim.
@@ -50,18 +50,18 @@ class TrailDB {
 
     void close()
     {
-        bd_close(_db);
+        tdb_close(_db);
     }
 
     @property uint numCookies(){ return _numCookies; }
     @property uint numDimensions(){ return _numDims; }
     @property string[] dimNames(){ return _dimNames; }
-    @property bool hasCookieIndex() { return bd_has_cookie_index(_db) == 1; }
+    @property bool hasCookieIndex() { return tdb_has_cookie_index(_db) == 1; }
 
     /* Returns the 16 bytes cookie ID at a given position in the DB. */
     void getCookieByInd(uint ind, ref ubyte[16] res)
     {
-        auto raw_val = bd_lookup_cookie(_db, ind);
+        auto raw_val = tdb_get_cookie(_db, ind);
         res[] = raw_val[0..16];
     }
 
@@ -86,7 +86,7 @@ class TrailDB {
         if(!this.hasCookieIndex)
             throw new Exception("This Database doesn't have cookie indexing." ~
                 " Impossible to perform reverse lookup.");
-        long val = bd_rlookup_cookie(_db, cookie);
+        long val = tdb_get_cookie_id(_db, cookie);
         return val;
     }
 
@@ -117,7 +117,7 @@ class TrailDB {
     // returns the number of events
     uint _rawDecode(uint index)
     {
-        uint len = bd_trail_decode(_db, index, _buff.ptr, BUFFER_SIZE, 0);
+        uint len = tdb_decode_trail(_db, index, _buff.ptr, BUFFER_SIZE, 0);
         if((len % (_numDims + 2)) != 0)
             return 0;
         //assert((len % (_numDims + 2)) == 0); <- some cookies fail this test
@@ -141,8 +141,7 @@ class TrailDB {
 
         uint tot_events = _rawDecode(index);
 
-        uint evt_type_encoded = bd_lookup_token(
-            _db, toStringz(type), _eventTypeInd);
+        uint evt_type_encoded = tdb_get_val(_db, _eventTypeInd, toStringz(type));
 
         uint cnt = 0;
         for(int i = 0; i < tot_events; ++i)
@@ -157,7 +156,7 @@ class TrailDB {
 
     char[] decode_val(uint val)
     {
-        char* raw_val = bd_lookup_value(_db, val);
+        char* raw_val = tdb_get_item_value(_db, val);
         return to!(char[])(raw_val);
     }
 

@@ -2,6 +2,7 @@
 CFLAGS = -fPIC -O3 -Wall
 CINCL  = -I src -I deps/discodb/src
 CLIBS  = $(foreach L,Judy cmph m,-l$(L))
+CHDRS  = $(wildcard src/*.h)
 CSRCS  = $(wildcard src/*.c src/dsfmt/dSFMT.c deps/discodb/src/*.c)
 COBJS  = $(patsubst %.c,%.o,$(CSRCS))
 
@@ -9,9 +10,9 @@ PYTHON = python
 
 .PHONY: all bins libs clean python
 
-all: bins libs
+all: libs bins
 
-bins: bin/encode bin/index bin/merge #bin/mix
+bins: bin/encode bin/index bin/merge bin/mix
 
 libs: lib/libtraildb.a lib/libtraildb.so
 
@@ -44,8 +45,8 @@ lib/libtraildb.so: $(COBJS)
 src/dsfmt/%.o: src/dsfmt/%.c
 	$(CC) $(CFLAGS) $(CINCL) -DDSFMT_MEXP=521 -DHAVE_SSE2=1 -msse2 -c -o $@ $^
 
-%.o: %.c
-	$(CC) $(CFLAGS) $(CINCL) -DENABLE_COOKIE_INDEX -c -o $@ $^
+src/%.o: src/%.c $(CHDRS)
+	$(CC) $(CFLAGS) $(CINCL) -DENABLE_COOKIE_INDEX -c -o $@ $<
 
 trail-mix/%.c: trail-mix/ops.h
 

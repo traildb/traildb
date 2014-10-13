@@ -471,7 +471,7 @@ Parse the next trail from the active chunk. Replace mapper-local token
 IDs with global IDs.
 */
 static void parse_next_trail(struct extractd *ext,
-                             const char **cookie,
+                             tdb_cookie *cookie,
                              const uint32_t **events,
                              uint32_t *num_events)
 {
@@ -488,7 +488,7 @@ static void parse_next_trail(struct extractd *ext,
     if (ext->active_chunk_offs > ext->active_chunk_len)
         DIE("Truncated trail: Missing header\n");
     else{
-        *cookie = p;
+        *cookie = (tdb_cookie)p;
         num_values = *(uint32_t*)&p[16];
     }
 
@@ -530,7 +530,7 @@ Get the next trail from the active chunk. If no
 more trails are left in the chunk, receive a new chunk from next_chunk().
 */
 int extractd_next_trail(struct extractd *ext,
-                        const char **cookie,
+                        tdb_cookie *cookie,
                         const uint32_t **events,
                         uint32_t *num_events,
                         uint32_t *num_fields,
@@ -595,7 +595,7 @@ Returns the field name for the given field.
 
 Note: Returns NULL before the first call to extractd_next_trail().
 */
-const char *extractd_get_field_name(const struct extractd *ext, uint32_t field)
+const char *extractd_get_field_name(const struct extractd *ext, tdb_field field)
 {
     if (field < ext->num_fields)
         return ext->fields[field].name;
@@ -609,7 +609,7 @@ Returns the total number of tokens for the given field.
 Note: It doesn't make much sense to call this function before all data has
 been consumed, i.e. extractd_next_trail() returns 0.
 */
-uint32_t extractd_num_tokens(const struct extractd *ext, uint32_t field)
+uint32_t extractd_num_tokens(const struct extractd *ext, tdb_field field)
 {
     if (field < ext->num_fields)
         return ext->fields[field].num_tokens;
@@ -623,7 +623,7 @@ Returns the token (string) for the given field and index.
 Note: Returns NULL before the first call to extractd_next_trail().
 */
 const char *extractd_get_token(const struct extractd *ext,
-                               uint32_t field,
+                               tdb_field field,
                                uint32_t index)
 {
     if (field < ext->num_fields && index < ext->fields[field].num_tokens){
@@ -640,7 +640,7 @@ is not found.
 Note: Returns -1 before the first call to extractd_next_trail().
 */
 int64_t extractd_get_index(const struct extractd *ext,
-                           uint32_t field,
+                           tdb_field field,
                            char *token)
 {
     if (field < ext->num_fields){

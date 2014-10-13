@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "tdb_internal.h"
 #include "merge.h"
 #include "arena.h"
 #include "util.h"
@@ -66,7 +67,7 @@ static struct arena trail_chunks = {
 };
 
 /* lookup a 16 byte cookie by doing two 8-byte lookups */
-static inline Word_t lookup_cookie(const char *cookie)
+static inline Word_t lookup_cookie(tdb_cookie cookie)
 {
     Word_t cookie_lo = *(Word_t*)cookie;
     Word_t cookie_hi = *(Word_t*)&cookie[8];
@@ -207,7 +208,7 @@ static inline void add_chunk(uint32_t groupby_key,
 
 void grouper_process(struct extractd_ctx *ctx)
 {
-    const char *cookie;
+    tdb_cookie cookie;
     const uint32_t *events;
     uint32_t i, groupby_field, num_fields, num_events;
     int ret;
@@ -368,7 +369,7 @@ static void output_group(struct extractd_ctx *ctx,
                          const char *fname,
                          const struct group *group)
 {
-    static char path[MAX_PATH_SIZE];
+    static char path[TDB_MAX_PATH_SIZE];
     FILE *out;
     Word_t *ptr;
     Word_t cookie_id = 0;
@@ -376,9 +377,9 @@ static void output_group(struct extractd_ctx *ctx,
     uint32_t tmp;
 
     if (ctx->dir)
-        make_path(path, "%s/%s", ctx->dir, fname);
+        tdb_path(path, "%s/%s", ctx->dir, fname);
     else
-        make_path(path, "%s", fname);
+        tdb_path(path, "%s", fname);
 
     /* groupby mode excludes the groupby field from results */
     if (ctx->groupby_str)
@@ -411,7 +412,7 @@ static void output_group(struct extractd_ctx *ctx,
 
 void grouper_output(struct extractd_ctx *ctx)
 {
-    static char fname[MAX_PATH_SIZE];
+    static char fname[TDB_MAX_PATH_SIZE];
 
     if (ctx->groupby_str){
         uint32_t i;
@@ -424,7 +425,7 @@ void grouper_output(struct extractd_ctx *ctx)
                                                        groupby_field,
                                                        i);
                 const char *safe = safe_filename(field);
-                make_path(fname, "trail-extract.%u.%s", i, safe);
+                tdb_path(fname, "trail-extract.%u.%s", i, safe);
                 output_group(ctx, fname, &groups[i]);
             }
     }else

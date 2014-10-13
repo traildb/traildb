@@ -64,7 +64,7 @@ static struct ddb_query_clause *parse_query(char *query,
     char *clauseptr;
     struct ddb_query_clause *clauses;
     uint32_t max_num_clauses = num_chars(query, '&') + 1;
-    const struct breadcrumbs *db = ctx->db;
+    const tdb *db = ctx->db;
 
     *event_query_len = *num_clauses = 0;
 
@@ -87,12 +87,12 @@ static struct ddb_query_clause *parse_query(char *query,
         while (termptr){
             char *term;
             char *field_name = strsep(&termptr, ":");
-            int field_idx = bd_lookup_field_index(db, field_name);
+            int field = tdb_get_field(db, field_name);
 
-            if (field_idx == -1)
+            if (field == -1)
                 DIE("Unrecognized field in q: %s\n", field_name);
 
-            if (asprintf(&term, "%d:%s", field_idx + 1, termptr) == -1)
+            if (asprintf(&term, "%d:%s", field + 1, termptr) == -1)
                 DIE("Malloc failed in q/parse_query\n");
 
             clause->terms[num_terms].key.data = term;
@@ -103,9 +103,7 @@ static struct ddb_query_clause *parse_query(char *query,
                 DIE("Too many terms in the query (found %u)\n",
                     *event_query_len);
 
-            event_query[++*event_query_len] = bd_lookup_token(db,
-                                                              termptr,
-                                                              field_idx);
+            event_query[++*event_query_len] = tdb_get_val(db, field, termptr);
             if (!event_query[*event_query_len])
                 MSG(ctx, "Unknown term '%s'\n", term);
 
@@ -124,11 +122,11 @@ static struct ddb_query_clause *parse_query(char *query,
 
 static struct ddb *open_index(const char *root)
 {
-    char path[MAX_PATH_SIZE];
+    char path[TDB_MAX_PATH_SIZE];
     struct ddb *db;
     int fd;
 
-    make_path(path, "%s/trails.index", root);
+    tdb_path(path, "%s/trails.index", root);
 
     if ((fd = open(path, O_RDONLY)) == -1)
         return NULL;
@@ -148,34 +146,34 @@ static struct ddb *open_index(const char *root)
 
 static int match_index(struct trail_ctx *ctx, const struct qctx *q)
 {
-    struct ddb_cursor *cur;
-    const struct ddb_entry *e;
-    int tst, err;
-    Word_t tmp;
+  struct ddb_cursor *cur;
+  const struct ddb_entry *e;
+  int tst, err;
+  Word_t tmp;
 
-    Pvoid_t new_matches = NULL;
-    if (!(cur = ddb_query(ctx->db_index, q->clauses, q->num_clauses)))
-        DIE("Query init failed (out of memory?)\n");
+  Pvoid_t new_matches = NULL;
+  if (!(cur = ddb_query(ctx->db_index, q->clauses, q->num_clauses)))
+    DIE("Query init failed (out of memory?)\n");
 
-    while ((e = ddb_next(cur, &err))){
-        Word_t row_id = *(uint32_t*)e->data;
+  while ((e = ddb_next(cur, &err))){
+    Word_t cookie_id = *(uint32_t*)e->data;
 
-        if (err)
-            DIE("Query execution failed (out of memory?)\n");
+    if (err)
+      DIE("Query execution failed (out of memory?)\n");
 
-        /* Intersect result set from the index with the currently
-           matched rows */
-        J1T(tst, ctx->matched_rows, row_id);
-        if (tst)
-            J1S(tst, new_matches, row_id);
-    }
+    /* Intersect result set from the index with the currently
+       matched rows */
+    J1T(tst, ctx->matched_rows, cookie_id);
+    if (tst)
+      J1S(tst, new_matches, cookie_id);
+  }
 
-    ddb_free_cursor(cur);
-    J1FA(tmp, ctx->matched_rows);
-    /* Intersection replaces the old set of matched_rows */
-    ctx->matched_rows = new_matches;
+  ddb_free_cursor(cur);
+  J1FA(tmp, ctx->matched_rows);
+  /* Intersection replaces the old set of matched_rows */
+  ctx->matched_rows = new_matches;
 
-    return 0;
+  return 0;
 }
 
 void op_help_q()
@@ -246,28 +244,31 @@ void *op_init_q(struct trail_ctx *ctx,
 
 int op_exec_q(struct trail_ctx *ctx,
               int mode,
-              uint64_t row_id,
-              const uint32_t *fields,
-              uint32_t num_fields,
+              uint64_t cookie_id,
+              const tdb_item *trail,
+              uint32_t trail_size,
               const void *arg)
 {
     const struct qctx *q = (const struct qctx*)arg;
     uint32_t j, i = 0;
 
+    if (mode == TRAIL_OP_DB)
+      return match_index(ctx, q);
+
     /* Check if event matches the given query. See
        the description of the event_query structure
        above.
 
-       The key observation here is that 'fields' (events)
-       contains exactly one value for each field, so we
-       can look up values by field index efficiently.
+       The key observation here is that 'trail'
+       contains exactly one value for each item, so we
+       can look up values by item index efficiently.
     */
     while (i < q->event_query_len){
         uint32_t clause_len = q->event_query[i++];
         /* Evaluate one clause */
         for (j = 0; j < clause_len; j++){
-            uint32_t term = q->event_query[i + j];
-            if (term && fields[term & 255] == term)
+            tdb_item term = q->event_query[i + j];
+            if (term && trail[tdb_item_field(term)] == term)
                 /* One of the terms match, clause ok */
                 goto next_clause;
         }

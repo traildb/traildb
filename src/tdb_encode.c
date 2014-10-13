@@ -4,17 +4,20 @@
 #include <sys/types.h>
 
 #include "ddb_bits.h"
-#include "encode.h"
+#include "tdb_internal.h"
+#include "tdb_encode_model.h"
 #include "huffman.h"
 #include "util.h"
 
+#define EDGE_INCREMENT     1000000
 #define GROUPBUF_INCREMENT 10000000
-#define READ_BUFFER_SIZE (1000000 * sizeof(struct cookie_logline))
+#define READ_BUFFER_SIZE  (1000000 * sizeof(tdb_cookie_event))
+#define MAX_INVALID_RATIO  0.005
 
 static int compare(const void *p1, const void *p2)
 {
-    const struct cookie_logline *x = (const struct cookie_logline*)p1;
-    const struct cookie_logline *y = (const struct cookie_logline*)p2;
+    const tdb_cookie_event *x = (tdb_cookie_event*)p1;
+    const tdb_cookie_event *y = (tdb_cookie_event*)p2;
 
     if (x->timestamp > y->timestamp)
         return 1;
@@ -23,56 +26,55 @@ static int compare(const void *p1, const void *p2)
     return 0;
 }
 
-static void group_loglines(FILE *grouped_w,
-                           const char *path,
-                           const struct logline *loglines,
-                           const uint64_t *cookie_pointers,
-                           uint64_t num_cookies,
-                           uint32_t base_timestamp,
-                           uint32_t *max_timestamp_delta)
+static void group_events(FILE *grouped_w,
+                         const char *path,
+                         const tdb_event *events,
+                         const uint64_t *cookie_pointers,
+                         uint64_t num_cookies,
+                         uint32_t base_timestamp,
+                         uint32_t *max_timestamp_delta)
 {
     uint64_t i;
     uint64_t idx = 0;
     uint64_t num_invalid = 0;
-    struct cookie_logline *buf = NULL;
+    tdb_cookie_event *buf = NULL;
     uint32_t buf_size = 0;
 
     *max_timestamp_delta = 0;
 
     for (i = 0; i < num_cookies; i++){
-        /* find the last logline belonging to this cookie */
-        const struct logline *line = &loglines[cookie_pointers[i]];
+        /* find the last event belonging to this cookie */
+        const tdb_event *ev = &events[cookie_pointers[i]];
         uint32_t j = 0;
-        uint32_t num_lines = 0;
+        uint32_t num_events = 0;
         uint32_t prev_timestamp;
 
-        /* loop through all loglines belonging to this cookie,
+        /* loop through all events belonging to this cookie,
            following back-links */
         while (1){
             if (j >= buf_size){
                 buf_size += GROUPBUF_INCREMENT;
-                if (!(buf = realloc(buf,
-                                    buf_size * sizeof(struct cookie_logline))))
+                if (!(buf = realloc(buf, buf_size * sizeof(tdb_cookie_event))))
                     DIE("Couldn't realloc group buffer of %u items\n",
                         buf_size);
             }
             buf[j].cookie_id = i;
-            buf[j].values_offset = line->values_offset;
-            buf[j].num_values = line->num_values;
-            buf[j].timestamp = line->timestamp;
+            buf[j].item_zero = ev->item_zero;
+            buf[j].num_items = ev->num_items;
+            buf[j].timestamp = ev->timestamp;
             ++j;
-            if (line->prev_logline_idx)
-                line = &loglines[line->prev_logline_idx - 1];
+            if (ev->prev_event_idx)
+                ev = &events[ev->prev_event_idx - 1];
             else
                 break;
         }
-        num_lines = j;
+        num_events = j;
 
         /* sort events of this cookie by time */
-        qsort(buf, num_lines, sizeof(struct cookie_logline), compare);
+        qsort(buf, num_events, sizeof(tdb_cookie_event), compare);
 
         /* delta-encode timestamps */
-        for (prev_timestamp = base_timestamp, j = 0; j < num_lines; j++){
+        for (prev_timestamp = base_timestamp, j = 0; j < num_events; j++){
             uint32_t prev = buf[j].timestamp;
             buf[j].timestamp -= prev_timestamp;
             /* timestamps can be at most 2**24 seconds apart (194 days).
@@ -85,7 +87,7 @@ static void group_loglines(FILE *grouped_w,
                 buf[j].timestamp <<= 8;
                 prev_timestamp = prev;
             }else{
-                /* mark logline as invalid if it is too far in the future,
+                /* mark event as invalid if it is too far in the future,
                    most likely because of a corrupted timestamp */
                 buf[j].timestamp = 1;
                 ++num_invalid;
@@ -93,51 +95,51 @@ static void group_loglines(FILE *grouped_w,
         }
 
         SAFE_WRITE(buf,
-                   num_lines * sizeof(struct cookie_logline),
+                   num_events * sizeof(tdb_cookie_event),
                    path,
                    grouped_w);
     }
 
-    if (num_invalid / (float)idx > INVALID_RATIO)
+    if (num_invalid / (float)idx > MAX_INVALID_RATIO)
         DIE("Too many invalid timestamps (base timestamp: %u)\n",
             base_timestamp);
 
     free(buf);
 }
 
-uint32_t edge_encode_fields(const uint32_t *values,
-                            uint32_t **encoded,
-                            uint32_t *encoded_size,
-                            uint32_t *prev_values,
-                            const struct cookie_logline *line)
+uint32_t edge_encode_items(const tdb_item *items,
+                           uint32_t **encoded,
+                           uint32_t *encoded_size,
+                           tdb_item *prev_items,
+                           const tdb_cookie_event *ev)
 {
     uint32_t n = 0;
 
     /* consider only valid timestamps (first byte = 0) */
-    if ((line->timestamp & 255) == 0){
-        uint64_t j = line->values_offset;
+    if ((ev->timestamp & 255) == 0){
+        uint64_t j = ev->item_zero;
 
-        /* edge encode values: keep only fields that are different from
-           the previous logline */
-        for (; j < line->values_offset + line->num_values; j++){
-            uint32_t field = values[j] & 255;
+        /* edge encode items: keep only fields that are different from
+           the previous event */
+        for (; j < ev->item_zero + ev->num_items; j++){
+            tdb_field field = tdb_item_field(items[j]);
 
-            if (prev_values[field] != values[j]){
+            if (prev_items[field] != items[j]){
                 if (n == *encoded_size){
                     *encoded_size += EDGE_INCREMENT;
                     if (!(*encoded = realloc(*encoded, *encoded_size * 4)))
                         DIE("Could not allocate encoding buffer of %u items\n",
                             *encoded_size);
                 }
-                (*encoded)[n++] = prev_values[field] = values[j];
+                (*encoded)[n++] = prev_items[field] = items[j];
             }
         }
     }
     return n;
 }
 
-static void timestamp_range(const struct logline *loglines,
-                            uint64_t num_loglines,
+static void timestamp_range(const tdb_event *events,
+                            uint64_t num_events,
                             uint32_t *min_timestamp,
                             uint32_t *max_timestamp)
 {
@@ -145,15 +147,15 @@ static void timestamp_range(const struct logline *loglines,
     *min_timestamp = UINT32_MAX;
     *max_timestamp = 0;
 
-    for (i = 0; i < num_loglines; i++){
-        if (loglines[i].timestamp < *min_timestamp)
-            *min_timestamp = loglines[i].timestamp;
-        if (loglines[i].timestamp > *max_timestamp)
-            *max_timestamp = loglines[i].timestamp;
+    for (i = 0; i < num_events; i++){
+        if (events[i].timestamp < *min_timestamp)
+            *min_timestamp = events[i].timestamp;
+        if (events[i].timestamp > *max_timestamp)
+            *max_timestamp = events[i].timestamp;
     }
 }
 
-static void store_info(uint64_t num_loglines,
+static void store_info(uint64_t num_events,
                        uint64_t num_cookies,
                        uint32_t min_timestamp,
                        uint32_t max_timestamp,
@@ -169,7 +171,7 @@ static void store_info(uint64_t num_loglines,
                  path,
                  "%llu %llu %u %u %u\n",
                  (long long unsigned int)num_cookies,
-                 (long long unsigned int)num_loglines,
+                 (long long unsigned int)num_events,
                  min_timestamp,
                  max_timestamp,
                  max_timestamp_delta);
@@ -177,9 +179,9 @@ static void store_info(uint64_t num_loglines,
     SAFE_CLOSE(out, path);
 }
 
-static void encode_trails(const uint32_t *values,
+static void encode_trails(const tdb_item *items,
                           FILE *grouped,
-                          uint64_t num_loglines,
+                          uint64_t num_events,
                           uint64_t num_cookies,
                           uint32_t num_fields,
                           const Pvoid_t codemap,
@@ -188,7 +190,7 @@ static void encode_trails(const uint32_t *values,
                           const char *path)
 {
     uint64_t *grams = NULL;
-    uint32_t *prev_values = NULL;
+    tdb_item *prev_items = NULL;
     uint32_t *encoded = NULL;
     uint32_t encoded_size = 0;
     uint64_t i = 0;
@@ -196,7 +198,7 @@ static void encode_trails(const uint32_t *values,
     FILE *out;
     uint64_t file_offs = (num_cookies + 1) * 4;
     struct gram_bufs gbufs;
-    struct cookie_logline line;
+    tdb_cookie_event ev;
 
     init_gram_bufs(&gbufs, num_fields);
 
@@ -209,46 +211,45 @@ static void encode_trails(const uint32_t *values,
     /* reserve space for TOC */
     SAFE_SEEK(out, file_offs, path);
 
-    /* huff_encode_values guarantees that it writes fewer
+    /* huff_encode_grams guarantees that it writes fewer
        than UINT32_MAX bits per buffer, or it fails */
     if (!(buf = calloc(1, UINT32_MAX / 8 + 8)))
         DIE("Could not allocate 512MB in encode_trails\n");
 
-    if (!(prev_values = malloc(num_fields * 4)))
-        DIE("Could not allocate %u fields in edge_encode_values\n",
-            num_fields);
+    if (!(prev_items = malloc(num_fields * 4)))
+        DIE("Could not allocate %u fields\n", num_fields);
 
     if (!(grams = malloc(num_fields * 8)))
         DIE("Could not allocate %u grams\n", num_fields);
 
     rewind(grouped);
-    fread(&line, sizeof(struct cookie_logline), 1, grouped);
+    fread(&ev, sizeof(tdb_cookie_event), 1, grouped);
 
-    while (i < num_loglines){
-        /* encode trail for one cookie (multiple loglines) */
+    while (i < num_events){
+        /* encode trail for one cookie (multiple events) */
 
         /* reserve 3 bits in the head of the trail for a length residual:
            Length of a trail is measured in bytes but the last byte may
            be short. The residual indicates how many bits in the end we
            should ignore. */
         uint64_t offs = 3;
-        uint64_t cookie_id = line.cookie_id;
+        uint64_t cookie_id = ev.cookie_id;
         uint64_t trail_size;
 
         /* write offset to TOC */
         SAFE_SEEK(out, cookie_id * 4, path);
         SAFE_WRITE(&file_offs, 4, path, out);
 
-        memset(prev_values, 0, num_fields * 4);
+        memset(prev_items, 0, num_fields * 4);
 
-        for (;i < num_loglines && line.cookie_id == cookie_id; i++){
+        for (;i < num_events && ev.cookie_id == cookie_id; i++){
 
-            /* 1) produce an edge-encoded set of values for this logline */
-            uint32_t n = edge_encode_fields(values,
-                                            &encoded,
-                                            &encoded_size,
-                                            prev_values,
-                                            &line);
+            /* 1) produce an edge-encoded set of items for this event */
+            uint32_t n = edge_encode_items(items,
+                                           &encoded,
+                                           &encoded_size,
+                                           prev_items,
+                                           &ev);
 
             /* 2) cover the encoded set with a set of unigrams and bigrams */
             uint32_t m = choose_grams(encoded,
@@ -256,7 +257,7 @@ static void encode_trails(const uint32_t *values,
                                       gram_freqs,
                                       &gbufs,
                                       grams,
-                                      &line);
+                                      &ev);
 
             /* 3) huffman-encode grams */
             huff_encode_grams(codemap,
@@ -266,7 +267,7 @@ static void encode_trails(const uint32_t *values,
                               &offs,
                               fstats);
 
-            fread(&line, sizeof(struct cookie_logline), 1, grouped);
+            fread(&ev, sizeof(tdb_cookie_event), 1, grouped);
         }
 
         /* write the length residual */
@@ -299,7 +300,7 @@ static void encode_trails(const uint32_t *values,
     free_gram_bufs(&gbufs);
     free(grams);
     free(encoded);
-    free(prev_values);
+    free(prev_items);
 }
 
 static void store_codebook(const Pvoid_t codemap, const char *path)
@@ -317,18 +318,18 @@ static void store_codebook(const Pvoid_t codemap, const char *path)
     SAFE_CLOSE(out, path);
 }
 
-void store_trails(const uint64_t *cookie_pointers,
-                  uint64_t num_cookies,
-                  struct logline *loglines,
-                  uint64_t num_loglines,
-                  const uint32_t *values,
-                  uint64_t num_values,
-                  uint32_t num_fields,
-                  const uint64_t *field_cardinalities,
-                  const char *root)
+void tdb_encode(const uint64_t *cookie_pointers,
+                uint64_t num_cookies,
+                tdb_event *events,
+                uint64_t num_events,
+                const tdb_item *items,
+                uint64_t num_items,
+                uint32_t num_fields,
+                const uint64_t *field_cardinalities,
+                const char *root)
 {
-    char path[MAX_PATH_SIZE];
-    char grouped_path[MAX_PATH_SIZE];
+    char path[TDB_MAX_PATH_SIZE];
+    char grouped_path[TDB_MAX_PATH_SIZE];
     struct field_stats *fstats;
     uint32_t min_timestamp, max_timestamp, max_timestamp_delta;
     Pvoid_t unigram_freqs;
@@ -339,28 +340,28 @@ void store_trails(const uint64_t *cookie_pointers,
     FILE *grouped_r;
     char *read_buf;
 
-    DDB_TIMER_DEF
+    TDB_TIMER_DEF
 
     /* 1. find minimum timestamp (for delta-encoding) */
-    DDB_TIMER_START
-    timestamp_range(loglines, num_loglines, &min_timestamp, &max_timestamp);
-    DDB_TIMER_END("trail/timestamp_range");
+    TDB_TIMER_START
+    timestamp_range(events, num_events, &min_timestamp, &max_timestamp);
+    TDB_TIMER_END("trail/timestamp_range");
 
-    /* 2. group loglines by cookie, sort events of each cookie by time,
+    /* 2. group events by cookie, sort events of each cookie by time,
           and delta-encode timestamps */
-    DDB_TIMER_START
+    TDB_TIMER_START
 
-    make_path(grouped_path, "%s/tmp.grouped.%d", root, getpid());
+    tdb_path(grouped_path, "%s/tmp.grouped.%d", root, getpid());
     if (!(grouped_w = fopen(grouped_path, "w")))
         DIE("Could not open tmp file at %s\n", path);
 
-    group_loglines(grouped_w,
-                   grouped_path,
-                   loglines,
-                   cookie_pointers,
-                   num_cookies,
-                   min_timestamp,
-                   &max_timestamp_delta);
+    group_events(grouped_w,
+                 grouped_path,
+                 events,
+                 cookie_pointers,
+                 num_cookies,
+                 min_timestamp,
+                 &max_timestamp_delta);
 
     SAFE_CLOSE(grouped_w, grouped_path);
     if (!(grouped_r = fopen(grouped_path, "r")))
@@ -369,65 +370,65 @@ void store_trails(const uint64_t *cookie_pointers,
         DIE("Could not allocate read buffer of %lu bytes\n", READ_BUFFER_SIZE);
     setvbuf(grouped_r, read_buf, _IOFBF, READ_BUFFER_SIZE);
 
-    DDB_TIMER_END("trail/group_loglines");
+    TDB_TIMER_END("trail/group_events");
 
-    /* not the most clean separation of ownership here, but loglines is huge
+    /* not the most clean separation of ownership here, but events is huge
        so keeping it around unecessarily is expensive */
-    free(loglines);
+    free(events);
 
     /* 3. store metatadata */
-    DDB_TIMER_START
-    make_path(path, "%s/info", root);
-    store_info(num_loglines,
+    TDB_TIMER_START
+    tdb_path(path, "%s/info", root);
+    store_info(num_events,
                num_cookies,
                min_timestamp,
                max_timestamp,
                max_timestamp_delta,
                path);
-    DDB_TIMER_END("trail/info");
+    TDB_TIMER_END("trail/info");
 
     /* 4. collect value (unigram) frequencies, including delta-encoded
           timestamps */
-    DDB_TIMER_START
-    unigram_freqs = collect_unigrams(grouped_r, num_loglines, values, num_fields);
-    DDB_TIMER_END("trail/collect_unigrams");
+    TDB_TIMER_START
+    unigram_freqs = collect_unigrams(grouped_r, num_events, items, num_fields);
+    TDB_TIMER_END("trail/collect_unigrams");
 
     /* 5. construct uni/bi-grams */
-    DDB_TIMER_START
+    TDB_TIMER_START
     gram_freqs = make_grams(grouped_r,
-                            num_loglines,
-                            values,
+                            num_events,
+                            items,
                             num_fields,
                             unigram_freqs);
-    DDB_TIMER_END("trail/gram_freqs");
+    TDB_TIMER_END("trail/gram_freqs");
 
     /* 6. build a huffman codebook and stats struct for encoding grams */
-    DDB_TIMER_START
+    TDB_TIMER_START
     codemap = huff_create_codemap(gram_freqs);
     fstats = huff_field_stats(field_cardinalities,
                               num_fields,
                               max_timestamp_delta);
-    DDB_TIMER_END("trail/huff_create_codemap");
+    TDB_TIMER_END("trail/huff_create_codemap");
 
     /* 7. encode and write trails to disk */
-    DDB_TIMER_START
-    make_path(path, "%s/trails.data", root);
-    encode_trails(values,
+    TDB_TIMER_START
+    tdb_path(path, "%s/trails.data", root);
+    encode_trails(items,
                   grouped_r,
-                  num_loglines,
+                  num_events,
                   num_cookies,
                   num_fields,
                   codemap,
                   gram_freqs,
                   fstats,
                   path);
-    DDB_TIMER_END("trail/encode_trails");
+    TDB_TIMER_END("trail/encode_trails");
 
     /* 8. write huffman codebook to disk */
-    DDB_TIMER_START
-    make_path(path, "%s/trails.codebook", root);
+    TDB_TIMER_START
+    tdb_path(path, "%s/trails.codebook", root);
     store_codebook(codemap, path);
-    DDB_TIMER_END("trail/store_codebook");
+    TDB_TIMER_END("trail/store_codebook");
 
     JLFA(tmp, unigram_freqs);
     JLFA(tmp, gram_freqs);

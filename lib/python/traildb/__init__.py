@@ -4,36 +4,37 @@ import string
 from ctypes import CDLL, c_char_p, c_ubyte, POINTER, c_void_p, c_int, c_uint
 
 cd = os.path.dirname(os.path.abspath(__file__))
-bc = CDLL(os.path.join(cd, '_traildb.so'))
-bc.bd_error.restype = c_char_p
+lib = CDLL(os.path.join(cd, '_traildb.so'))
 
-bc.bd_lookup_cookie.argtypes = [c_void_p, c_uint]
-bc.bd_lookup_cookie.restype = POINTER(c_ubyte)
+lib.tdb_get_cookie.argtypes = [c_void_p, c_uint]
+lib.tdb_get_cookie.restype = POINTER(c_ubyte)
 
-bc.bd_num_cookies.argtypes = [c_void_p]
-bc.bd_num_cookies.restype = c_uint
+lib.tdb_num_cookies.argtypes = [c_void_p]
+lib.tdb_num_cookies.restype = c_uint
 
-bc.bd_lookup_value.argtypes = [c_void_p, c_uint]
-bc.bd_lookup_value.restype = c_char_p
+lib.tdb_get_item_value.argtypes = [c_void_p, c_uint]
+lib.tdb_get_item_value.restype = c_char_p
 
-bc.bd_trail_decode.argtypes = [c_void_p,
-                               c_uint,
-                               POINTER(c_uint),
-                               c_uint,
-                               c_uint]
-bc.bd_open.argtypes = [c_char_p]
-bc.bd_open.restype = c_void_p
+lib.tdb_decode_trail.argtypes = [c_void_p,
+                                c_uint,
+                                POINTER(c_uint),
+                                c_uint,
+                                c_uint]
+lib.tdb_decode_trail.restype = c_uint
 
-bc.bd_lexicon_size.argtypes = [c_void_p, c_uint, POINTER(c_uint)]
-bc.bd_lexicon_size.restype = c_int
+lib.tdb_open.argtypes = [c_char_p]
+lib.tdb_open.restype = c_void_p
+
+lib.tdb_lexicon_size.argtypes = [c_void_p, c_uint, POINTER(c_uint)]
+lib.tdb_lexicon_size.restype = c_int
 
 class TrailDB(object):
 
     TRAIL_SIZE_INCREMENT = 1000000
 
     def __init__(self, path):
-        self._chunk = bc.bd_open(path)
-        self._max_idx = bc.bd_num_cookies(self._chunk)
+        self._chunk = lib.tdb_open(path)
+        self._max_idx = lib.tdb_num_cookies(self._chunk)
         self._fields = map(string.strip, open(os.path.join(path, 'fields')))
         self._trail_buf_size = 0
         self._grow_buffer()
@@ -50,11 +51,11 @@ class TrailDB(object):
 
     def get_trail(self, idx, lookup_values=True):
         while True:
-            num = bc.bd_trail_decode(self._chunk,
-                                     idx,
-                                     self._trail_buf,
-                                     self._trail_buf_size,
-                                     0)
+            num = lib.tdb_decode_trail(self._chunk,
+                                      idx,
+                                      self._trail_buf,
+                                      self._trail_buf_size,
+                                      0)
             if num == 0:
                 raise IndexError("Cookie index out of range")
             elif num == self._trail_buf_size:
@@ -71,7 +72,7 @@ class TrailDB(object):
             while i < num and buf[i]:
                 if lookup_values:
                     if buf[i] >> 8:
-                        fields.append(bc.bd_lookup_value(self._chunk, buf[i]))
+                        fields.append(lib.tdb_get_item_value(self._chunk, buf[i]))
                     else:
                         fields.append('')
                 else:
@@ -84,7 +85,7 @@ class TrailDB(object):
             yield tstamp, fields
 
     def get_cookie(self, idx, raw_bytes=False):
-        c = bc.bd_lookup_cookie(self._chunk, idx)
+        c = lib.tdb_get_cookie(self._chunk, idx)
         if c:
             if raw_bytes:
                 return c[:16]
@@ -93,13 +94,13 @@ class TrailDB(object):
         else:
             raise IndexError("Cookie index out of range")
 
-    def lookup_value(self, field):
-        return bc.bd_lookup_value(self._chunk, field)
+    def get_item_value(self, field):
+        return lib.tdb_get_item_value(self._chunk, field)
 
     def get_fields(self):
         return self._fields
 
     def get_lexicon_size(self, field):
         size = (c_uint)()
-        bc.bd_lexicon_size(self._chunk, field, size)
+        lib.tdb_lexicon_size(self._chunk, field, size)
         return size.value

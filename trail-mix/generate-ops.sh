@@ -13,7 +13,7 @@ do
     echo "
 void op_help_$OP();
 void *op_init_$OP(struct trail_ctx*, const char*, int, int, uint64_t*);
-int op_exec_$OP(struct trail_ctx*, int, uint64_t, const uint32_t*, uint32_t, void*);"
+int op_exec_$OP(struct trail_ctx*, int, uint64_t, const tdb_item*, uint32_t, void*);"
 done
 
 echo

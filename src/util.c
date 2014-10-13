@@ -1,9 +1,5 @@
 
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -57,56 +53,6 @@ uint32_t bits_needed(uint32_t max)
         ++bits;
     }
     return bits;
-}
-
-void make_path(char path[MAX_PATH_SIZE], char *fmt, ...)
-{
-    va_list aptr;
-
-    va_start(aptr, fmt);
-    if (vsnprintf(path, MAX_PATH_SIZE, fmt, aptr) >= MAX_PATH_SIZE)
-        DIE("Path too long (fmt %s)\n", fmt);
-    va_end(aptr);
-}
-
-void bderror(struct breadcrumbs *bd, char *fmt, ...)
-{
-    if (bd){
-        va_list aptr;
-
-        va_start(aptr, fmt);
-        vsnprintf(bd->error, BD_ERROR_SIZE, fmt, aptr);
-        va_end(aptr);
-    }
-}
-
-
-int mmap_file(const char *path, struct bdfile *dst, struct breadcrumbs *bd)
-{
-    int fd;
-    struct stat stats;
-
-    if ((fd = open(path, O_RDONLY)) == -1){
-        bderror(bd, "Could not open path: %s", path);
-        return -1;
-    }
-
-    if (fstat(fd, &stats)){
-        bderror(bd, "Could not stat path: %s", path);
-        close(fd);
-        return -1;
-    }
-    dst->size = stats.st_size;
-
-    dst->data = mmap(NULL, stats.st_size, PROT_READ, MAP_SHARED, fd, 0);
-    if (dst->data == MAP_FAILED){
-        bderror(bd, "Could not mmap path: %s", path);
-        close(fd);
-        return -1;
-    }
-
-    close(fd);
-    return 0;
 }
 
 uint64_t parse_uint64(const char *str, const char *ctx)

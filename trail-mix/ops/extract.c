@@ -48,7 +48,7 @@
 #define CONNECT_TIMEOUT_SECS 30
 
 struct extract_ctx{
-    uint32_t *fields;
+    tdb_field *fields;
     uint32_t num_fields;
 
     /* trail_buf buffers events of a single trail */
@@ -167,27 +167,27 @@ static void close_connection(const struct trail_ctx *ctx, int sock)
 }
 
 static void write_fields(FILE *memio,
-                         const struct breadcrumbs *bd,
+                         const tdb *db,
                          const struct extract_ctx *ectx)
 {
     uint32_t i;
 
     SAFE_WRITE(&ectx->num_fields, 4, "memory", memio);
     for (i = 0; i < ectx->num_fields; i++){
-        const char *name = bd->field_names[ectx->fields[i]];
+        const char *name = db->field_names[ectx->fields[i]];
         int len = strlen(name);
         SAFE_WRITE(name, len + 1, "memory", memio);
     }
 }
 
-static void write_lexicon(uint32_t field,
+static void write_lexicon(tdb_field field,
                           FILE *memio,
-                          const struct breadcrumbs *bd,
+                          const tdb *db,
                           const struct extract_ctx *ectx)
 {
     uint32_t i, lexsize;
 
-    if (bd_lexicon_size(bd, field, &lexsize))
+    if (tdb_lexicon_size(db, field, &lexsize))
         DIE("Could not get lexicon size for field %u\n", field);
     ++lexsize;
 
@@ -198,7 +198,7 @@ static void write_lexicon(uint32_t field,
     SAFE_WRITE(&i, 1, "memory", memio);
 
     for (i = 1; i < lexsize; i++){
-        const char *value = bd_lookup_value2(bd, field, i);
+        const char *value = tdb_get_value(db, field, i);
         int len = strlen(value);
         SAFE_WRITE(value, len + 1, "memory", memio);
     }
@@ -239,8 +239,8 @@ static void send_header(const struct extract_ctx *ectx,
 }
 
 static void add_event(struct extract_ctx *ectx,
-                      const uint32_t *fields,
-                      uint32_t num_fields)
+                      const tdb_item *trail,
+                      uint32_t trail_size)
 {
     uint32_t i;
 
@@ -252,11 +252,11 @@ static void add_event(struct extract_ctx *ectx,
                  ectx->trail_buf_size);
     }
     /* add timestamp */
-    ectx->trail_buf[ectx->trail_buf_len++] = fields[0];
+    ectx->trail_buf[ectx->trail_buf_len++] = trail[0];
     for (i = 0; i < ectx->num_fields; i++)
-        /* add fields - just values (24 bits), not field indices */
+        /* add just the vals, not the fields */
         ectx->trail_buf[ectx->trail_buf_len++] =
-            fields[ectx->fields[i] + 1] >> 8;
+            tdb_item_val(trail[ectx->fields[i] + 1]);
 }
 
 static void flush_send_buf(struct extract_ctx *ectx)
@@ -265,7 +265,7 @@ static void flush_send_buf(struct extract_ctx *ectx)
     ectx->send_buf_len = 0;
 }
 
-static void flush_trail_buf(struct extract_ctx *ectx, const char *cookie)
+static void flush_trail_buf(struct extract_ctx *ectx, tdb_cookie cookie)
 {
     uint32_t size = ectx->trail_buf_len * 4 + 4 + 16;
     char *p;
@@ -296,7 +296,7 @@ static void init_ectx(char *arg,
 {
     char *tok = strsep(&arg, ",");
     char *addr;
-    int idx;
+    tdb_field field;
     int port;
 
     if (memcmp(tok, "tcp://", 6))
@@ -313,12 +313,12 @@ static void init_ectx(char *arg,
 
     while (arg){
         tok = strsep(&arg, ",");
-        idx = bd_lookup_field_index(ctx->db, tok);
+        field = tdb_get_field(ctx->db, tok);
 
-        if (idx < 0)
+        if (field < 0)
             DIE("Unknown field in extract: %s\n", tok);
 
-        ectx->fields[ectx->num_fields++] = idx;
+        ectx->fields[ectx->num_fields++] = field;
     }
 }
 
@@ -349,7 +349,7 @@ void *op_init_extract(struct trail_ctx *ctx,
     if (!(ectx = calloc(1, sizeof(struct extract_ctx))))
         DIE("Malloc failed in op_init_extract\n");
 
-    if (!(ectx->fields = malloc(bd_num_fields(ctx->db) * 4)))
+    if (!(ectx->fields = malloc(tdb_num_fields(ctx->db) * 4)))
         DIE("Malloc failed in op_init_extract\n");
 
     if (!(marg = strdup(arg)))
@@ -369,9 +369,9 @@ void *op_init_extract(struct trail_ctx *ctx,
 
 int op_exec_extract(struct trail_ctx *ctx,
                     int mode,
-                    uint64_t row_id,
-                    const uint32_t *fields,
-                    uint32_t num_fields,
+                    uint64_t cookie_id,
+                    const tdb_item *trail,
+                    uint32_t trail_size,
                     void *arg)
 {
     struct extract_ctx *ectx = (struct extract_ctx*)arg;
@@ -382,12 +382,12 @@ int op_exec_extract(struct trail_ctx *ctx,
             break;
 
         case TRAIL_OP_EVENT:
-            add_event(ectx, fields, num_fields);
+            add_event(ectx, trail, trail_size);
             break;
 
         case TRAIL_OP_POST_TRAIL:
             if (ectx->trail_buf_len > 0){
-                const char *cookie = bd_lookup_cookie(ctx->db, row_id);
+                tdb_cookie cookie = tdb_get_cookie(ctx->db, cookie_id);
                 flush_trail_buf(ectx, cookie);
             }
             break;

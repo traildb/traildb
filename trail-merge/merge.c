@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "tdb_internal.h"
 #include "merge.h"
 #include "hex.h"
 #include "util.h"
@@ -17,7 +18,7 @@
 static void show(struct extractd_ctx *ctx)
 {
     static char hex_cookie[33];
-    const char *cookie;
+    tdb_cookie cookie;
     const uint32_t *events;
     uint32_t i, j, k, num_fields, num_events;
     int ret;
@@ -31,7 +32,7 @@ static void show(struct extractd_ctx *ctx)
         if (ret == -1)
             DIE("Timeout");
 
-        hex_encode((const uint8_t*)cookie, hex_cookie);
+        hex_encode(cookie, hex_cookie);
         printf("%s", hex_cookie);
         for (i = 0, k = 0; i < num_events; i++){
             if (i > 0)
@@ -53,10 +54,10 @@ static void print_usage_and_exit()
 
 const char *safe_filename(const char *value)
 {
-    static char safe[MAX_PATH_SIZE];
+    static char safe[TDB_MAX_PATH_SIZE];
     uint32_t i;
 
-    for (i = 0; i < MAX_PATH_SIZE - 1 && value[i]; i++)
+    for (i = 0; i < TDB_MAX_PATH_SIZE - 1 && value[i]; i++)
         if (isalnum(value[i]))
             safe[i] = value[i];
         else
@@ -68,7 +69,7 @@ const char *safe_filename(const char *value)
 
 static void output_fields(const struct extractd_ctx *ctx)
 {
-    static char path[MAX_PATH_SIZE];
+    static char path[TDB_MAX_PATH_SIZE];
     uint32_t i, j, k;
     FILE *out;
 
@@ -80,9 +81,9 @@ static void output_fields(const struct extractd_ctx *ctx)
             continue;
 
         if (ctx->dir)
-            make_path(path, "%s/trail-field.%u.%s.csv", ctx->dir, k, safe);
+            tdb_path(path, "%s/trail-field.%u.%s.csv", ctx->dir, k, safe);
         else
-            make_path(path, "trail-field.%u.%s.csv", k, safe);
+            tdb_path(path, "trail-field.%u.%s.csv", k, safe);
 
         if (!(out = fopen(path, "w")))
             DIE("Could not open output file at %s\n", path);

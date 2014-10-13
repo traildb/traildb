@@ -1,6 +1,6 @@
 
-#ifndef __TRAILDB_UTIL_H__
-#define __TRAILDB_UTIL_H__
+#ifndef __UTIL_H__
+#define __UTIL_H__
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -12,9 +12,6 @@
 
 #define DSFMT_MEXP 521
 #include "dsfmt/dSFMT.h"
-
-#include "ddb_profile.h"
-#include "traildb.h"
 
 #define DIE_ON_ERROR(msg)\
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -64,13 +61,7 @@ struct sortpair{
     Word_t value;
 };
 
-void bderror(struct breadcrumbs *bd, char *fmt, ...);
-
 struct sortpair *sort_judyl(const Pvoid_t judy, Word_t *num_items);
-
-void make_path(char path[MAX_PATH_SIZE], char *fmt, ...);
-
-int mmap_file(const char *path, struct bdfile *dst, struct breadcrumbs *bd);
 
 uint32_t bits_needed(uint32_t max);
 
@@ -78,4 +69,4 @@ uint64_t parse_uint64(const char *str, const char *ctx);
 
 void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed);
 
-#endif /* __TRAILDB_UTIL_H__ */
+#endif /* __UTIL_H__ */
