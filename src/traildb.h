@@ -88,9 +88,12 @@ int tdb_lexicon_read(const tdb *db, tdb_lexicon *lex, tdb_field field);
 int tdb_lexicon_size(const tdb *db, tdb_field field, uint32_t *size);
 
 int tdb_get_field(const tdb *db, const char *field_name);
+const char *tdb_get_field_name(const tdb *db, tdb_field field);
+
 tdb_val tdb_get_val(const tdb *db, tdb_field field, const char *value);
 const char *tdb_get_value(const tdb *db, tdb_field field, tdb_val val);
 const char *tdb_get_item_value(const tdb *db, tdb_item item);
+
 tdb_cookie tdb_get_cookie(const tdb *db, uint64_t cookie_id);
 int64_t tdb_get_cookie_id(const tdb *db, const tdb_cookie cookie);
 int tdb_has_cookie_index(const tdb *db);

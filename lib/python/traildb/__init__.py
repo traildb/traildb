@@ -6,11 +6,23 @@ from ctypes import CDLL, c_char_p, c_ubyte, POINTER, c_void_p, c_int, c_uint
 cd = os.path.dirname(os.path.abspath(__file__))
 lib = CDLL(os.path.join(cd, '_traildb.so'))
 
+lib.tdb_open.argtypes = [c_char_p]
+lib.tdb_open.restype = c_void_p
+
+lib.tdb_lexicon_size.argtypes = [c_void_p, c_uint, POINTER(c_uint)]
+lib.tdb_lexicon_size.restype = c_int
+
+lib.tdb_get_field_name.argtypes = [c_void_p, c_uint]
+lib.tdb_get_field_name.restype = c_char_p
+
 lib.tdb_get_cookie.argtypes = [c_void_p, c_uint]
 lib.tdb_get_cookie.restype = POINTER(c_ubyte)
 
 lib.tdb_num_cookies.argtypes = [c_void_p]
 lib.tdb_num_cookies.restype = c_uint
+
+lib.tdb_num_fields.argtypes = [c_void_p]
+lib.tdb_num_fields.restype = c_uint
 
 lib.tdb_get_item_value.argtypes = [c_void_p, c_uint]
 lib.tdb_get_item_value.restype = c_char_p
@@ -22,20 +34,14 @@ lib.tdb_decode_trail.argtypes = [c_void_p,
                                 c_uint]
 lib.tdb_decode_trail.restype = c_uint
 
-lib.tdb_open.argtypes = [c_char_p]
-lib.tdb_open.restype = c_void_p
-
-lib.tdb_lexicon_size.argtypes = [c_void_p, c_uint, POINTER(c_uint)]
-lib.tdb_lexicon_size.restype = c_int
-
 class TrailDB(object):
 
     TRAIL_SIZE_INCREMENT = 1000000
 
     def __init__(self, path):
-        self._chunk = lib.tdb_open(path)
-        self._max_idx = lib.tdb_num_cookies(self._chunk)
-        self._fields = map(string.strip, open(os.path.join(path, 'fields')))
+        self._db = db = lib.tdb_open(path)
+        self._max_idx = lib.tdb_num_cookies(db)
+        self._fields = [lib.tdb_get_field_name(db, i) for i in xrange(lib.tdb_num_fields(db))]
         self._trail_buf_size = 0
         self._grow_buffer()
 
@@ -51,7 +57,7 @@ class TrailDB(object):
 
     def get_trail(self, idx, lookup_values=True):
         while True:
-            num = lib.tdb_decode_trail(self._chunk,
+            num = lib.tdb_decode_trail(self._db,
                                       idx,
                                       self._trail_buf,
                                       self._trail_buf_size,
@@ -72,7 +78,7 @@ class TrailDB(object):
             while i < num and buf[i]:
                 if lookup_values:
                     if buf[i] >> 8:
-                        fields.append(lib.tdb_get_item_value(self._chunk, buf[i]))
+                        fields.append(lib.tdb_get_item_value(self._db, buf[i]))
                     else:
                         fields.append('')
                 else:
@@ -85,7 +91,7 @@ class TrailDB(object):
             yield tstamp, fields
 
     def get_cookie(self, idx, raw_bytes=False):
-        c = lib.tdb_get_cookie(self._chunk, idx)
+        c = lib.tdb_get_cookie(self._db, idx)
         if c:
             if raw_bytes:
                 return c[:16]
@@ -95,12 +101,12 @@ class TrailDB(object):
             raise IndexError("Cookie index out of range")
 
     def get_item_value(self, field):
-        return lib.tdb_get_item_value(self._chunk, field)
+        return lib.tdb_get_item_value(self._db, field)
 
     def get_fields(self):
         return self._fields
 
     def get_lexicon_size(self, field):
         size = (c_uint)()
-        lib.tdb_lexicon_size(self._chunk, field, size)
+        lib.tdb_lexicon_size(self._db, field, size)
         return size.value

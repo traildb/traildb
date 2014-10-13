@@ -274,11 +274,16 @@ int tdb_lexicon_size(const tdb *db, tdb_field field, uint32_t *size)
 
 int tdb_get_field(const tdb *db, const char *field_name)
 {
-    int i;
+    tdb_field i;
     for (i = 0; i < db->num_fields; i++)
         if (!strcmp(field_name, db->field_names[i]))
             return i;
     return -1;
+}
+
+const char *tdb_get_field_name(const tdb *db, tdb_field field)
+{
+    return db->field_names[field];
 }
 
 tdb_val tdb_get_val(const tdb *db, tdb_field field, const char *value)
