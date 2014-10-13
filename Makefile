@@ -21,13 +21,13 @@ clean:
 	rm -f bin/encode bin/index bin/mix
 	rm -f lib/libtraildb.*
 
-bin/merge: trail-merge/*.c $(COBJS)
+bin/merge: src/bin/merge/*.c $(COBJS)
 	$(CC) $(CFLAGS) $(CINCL) -I $(<D) $(CLIBS) -o $@ $^
 
-bin/mix: trail-mix/*.c trail-mix/ops/*.c $(COBJS)
+bin/mix: src/bin/mix/*.c src/bin/mix/ops/*.c $(COBJS)
 	$(CC) $(CFLAGS) $(CINCL) -I $(<D) $(CLIBS) -o $@ $^
 
-bin/%: bin/%.c $(COBJS)
+bin/%: src/bin/%.c $(COBJS)
 	$(CC) $(CFLAGS) $(CINCL) $(CLIBS) -o $@ $^
 
 deps/discodb/src/%.o:
@@ -48,9 +48,9 @@ src/dsfmt/%.o: src/dsfmt/%.c
 src/%.o: src/%.c $(CHDRS)
 	$(CC) $(CFLAGS) $(CINCL) -DENABLE_COOKIE_INDEX -c -o $@ $<
 
-trail-mix/%.c: trail-mix/ops.h
+src/bin/mix/%.c: src/bin/mix/ops.h
 
-trail-mix/ops.h: trail-mix/generate-ops.sh Makefile
+src/bin/mix/ops.h: src/bin/mix/generate-ops.sh Makefile
 	$< > $@
 
 python: CMD = build
