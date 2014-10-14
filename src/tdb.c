@@ -248,7 +248,7 @@ void tdb_close(tdb *db)
     }
 }
 
-int tdb_lexicon_read(const tdb *db, tdb_lexicon *lex, tdb_field field)
+int tdb_lexicon_read(tdb *db, tdb_lexicon *lex, tdb_field field)
 {
     if (field < db->num_fields){
         lex->size = *(uint32_t*)db->lexicons[field].data;
@@ -256,37 +256,39 @@ int tdb_lexicon_read(const tdb *db, tdb_lexicon *lex, tdb_field field)
         lex->data = (const char*)db->lexicons[field].data;
         return 0;
     }
+    tdb_err(db, "Invalid field: %d", field);
     return -1;
 }
 
-int tdb_lexicon_size(const tdb *db, tdb_field field, uint32_t *size)
+int tdb_lexicon_size(tdb *db, tdb_field field, uint32_t *size)
 {
     tdb_lexicon lex;
 
-    if (tdb_lexicon_read(db, &lex, field)){
-        *size = 0;
-        return -1;
-    }else{
+    if (!tdb_lexicon_read(db, &lex, field)){
         *size = lex.size;
         return 0;
     }
+    return -1;
 }
 
-int tdb_get_field(const tdb *db, const char *field_name)
+int tdb_get_field(tdb *db, const char *field_name)
 {
     tdb_field i;
     for (i = 0; i < db->num_fields; i++)
         if (!strcmp(field_name, db->field_names[i]))
             return i;
+    tdb_err(db, "Field not found: %s", field_name);
     return -1;
 }
 
-const char *tdb_get_field_name(const tdb *db, tdb_field field)
+const char *tdb_get_field_name(tdb *db, tdb_field field)
 {
-    return db->field_names[field];
+    if (field < db->num_fields)
+        return db->field_names[field];
+    return NULL;
 }
 
-tdb_val tdb_get_val(const tdb *db, tdb_field field, const char *value)
+tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
 {
     tdb_lexicon lex;
     if (!tdb_lexicon_read(db, &lex, field)){
@@ -303,7 +305,7 @@ tdb_val tdb_get_val(const tdb *db, tdb_field field, const char *value)
     return 0;
 }
 
-const char *tdb_get_value(const tdb *db, tdb_field field, tdb_val val)
+const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val)
 {
     tdb_lexicon lex;
     if (val && !tdb_lexicon_read(db, &lex, field) && (val - 1) < lex.size)
@@ -311,21 +313,20 @@ const char *tdb_get_value(const tdb *db, tdb_field field, tdb_val val)
     return NULL;
 }
 
-const char *tdb_get_item_value(const tdb *db, tdb_item item)
+const char *tdb_get_item_value(tdb *db, tdb_item item)
 {
     return tdb_get_value(db, tdb_item_field(item) - 1, tdb_item_val(item));
 }
 
-tdb_cookie tdb_get_cookie(const tdb *db, uint64_t cookie_id)
+tdb_cookie tdb_get_cookie(tdb *db, uint64_t cookie_id)
 {
-    if (cookie_id < db->num_cookies){
+    if (cookie_id < db->num_cookies)
         return (tdb_cookie)&db->cookies.data[cookie_id * 16];
-    }
     return NULL;
 }
 
 /* Returns -1 if cookie not found, or -2 if cookie_index is disabled */
-int64_t tdb_get_cookie_id(const tdb *db, const tdb_cookie cookie)
+int64_t tdb_get_cookie_id(tdb *db, const tdb_cookie cookie)
 {
 #ifdef ENABLE_COOKIE_INDEX
     /* (void*) cast is horrible below. I don't know why cmph_search_packed
@@ -348,7 +349,7 @@ int64_t tdb_get_cookie_id(const tdb *db, const tdb_cookie cookie)
 #endif
 }
 
-int tdb_has_cookie_index(const tdb *db)
+int tdb_has_cookie_index(tdb *db)
 {
 #ifdef ENABLE_COOKIE_INDEX
     return db->cookie_index.data ? 1: 0;

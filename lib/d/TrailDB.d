@@ -141,7 +141,7 @@ class TrailDB {
 
         uint tot_events = _rawDecode(index);
 
-        uint evt_type_encoded = tdb_get_val(_db, _eventTypeInd, toStringz(type));
+        uint evt_type_encoded = tdb_get_item(_db, _eventTypeInd, toStringz(type));
 
         uint cnt = 0;
         for(int i = 0; i < tot_events; ++i)

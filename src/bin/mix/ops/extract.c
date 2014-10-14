@@ -167,7 +167,7 @@ static void close_connection(const struct trail_ctx *ctx, int sock)
 }
 
 static void write_fields(FILE *memio,
-                         const tdb *db,
+                         tdb *db,
                          const struct extract_ctx *ectx)
 {
     uint32_t i;
@@ -182,7 +182,7 @@ static void write_fields(FILE *memio,
 
 static void write_lexicon(tdb_field field,
                           FILE *memio,
-                          const tdb *db,
+                          tdb *db,
                           const struct extract_ctx *ectx)
 {
     uint32_t i, lexsize;

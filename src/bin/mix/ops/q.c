@@ -64,7 +64,7 @@ static struct ddb_query_clause *parse_query(char *query,
     char *clauseptr;
     struct ddb_query_clause *clauses;
     uint32_t max_num_clauses = num_chars(query, '&') + 1;
-    const tdb *db = ctx->db;
+    tdb *db = ctx->db;
 
     *event_query_len = *num_clauses = 0;
 
@@ -103,7 +103,7 @@ static struct ddb_query_clause *parse_query(char *query,
                 DIE("Too many terms in the query (found %u)\n",
                     *event_query_len);
 
-            event_query[++*event_query_len] = tdb_get_val(db, field, termptr);
+            event_query[++*event_query_len] = tdb_get_item(db, field, termptr);
             if (!event_query[*event_query_len])
                 MSG(ctx, "Unknown term '%s'\n", term);
 

@@ -2,6 +2,7 @@ import os
 
 from collections import namedtuple
 from ctypes import CDLL, c_char_p, c_ubyte, POINTER, c_void_p, c_int, c_uint
+from ctypes import Structure
 from datetime import datetime
 
 cd = os.path.dirname(os.path.abspath(__file__))
@@ -19,7 +20,7 @@ api(lib.tdb_lexicon_size, [c_void_p, c_uint, POINTER(c_uint)], c_int)
 api(lib.tdb_get_field, [c_void_p, c_char_p], c_uint)
 api(lib.tdb_get_field_name, [c_void_p, c_uint], c_char_p)
 
-api(lib.tdb_get_val, [c_void_p, c_uint, c_char_p], c_uint)
+api(lib.tdb_get_item, [c_void_p, c_uint, c_char_p], c_uint)
 api(lib.tdb_get_value, [c_void_p, c_uint, c_uint], c_char_p)
 api(lib.tdb_get_item_value, [c_void_p, c_uint], c_char_p)
 
@@ -56,11 +57,18 @@ class TrailDB(object):
         self._trail_buf = (c_uint * self._trail_buf_size)()
         return self._trail_buf, self._trail_buf_size
 
+    def __contains__(self, cookie):
+        pass # XXX: like on get_cookie_id but don't use an exception
+
     def __len__(self):
         return self.num_cookies
 
     def __getitem__(self, id):
         return self.trail(id)
+
+    def crumbs(self, **kwds):
+        for i in xrange(len(self)):
+            yield self.cookie(i), self.trail(i, **kwds)
 
     def trail(self, id, expand=True, ptime=False):
         db, cls = self._db, self._evcls
@@ -76,7 +84,7 @@ class TrailDB(object):
                 break
 
         if expand:
-            value = lambda f, v: lib.tdb_get_value(db, f, v)
+            value = lambda f, v: lib.tdb_get_value(db, f - 1, v)
         else:
             value = lambda f, v: v
 
@@ -86,11 +94,21 @@ class TrailDB(object):
                 values = []
                 i += 1
                 while i < num and buf[i]:
-                    values.append(value(buf[i] & 255 - 1, buf[i] >> 8))
+                    values.append(value(buf[i] & 255, buf[i] >> 8))
                     i += 1
                 i += 1
                 yield cls(tstamp, *values)
         return gen()
+
+    def time_range(self, ptime=False):
+        tmin = lib.tdb_min_timestamp(self._db)
+        tmax = lib.tdb_max_timestamp(self._db)
+        if ptime:
+            return datetime.fromtimestamp(tmin), datetime.fromtimestamp(tmax)
+        return tmin, tmax
+
+    def has_cookie_index(self):
+        return True if lib.tdb_has_cookie_index(self._db) else False
 
     def cookie(self, id, raw=False):
         c = lib.tdb_get_cookie(self._db, id)
@@ -100,7 +118,33 @@ class TrailDB(object):
             return ''.join('%.2x' % x for x in c[:16])
         raise IndexError("Cookie index out of range")
 
+    def cookie_id(self, cookie):
+        i = lib.tdb_get_cookie_id(self._db, cookie.decode('hex'))
+        if i >= 0:
+            return i
+        elif i == -2: # NB: no cookie index
+            # XXX: how do we tell if was too small vs not created?
+            for i in xrange(len(self)):
+                if self.cookie(i) == cookie:
+                    return i
+        raise IndexError("Cookie '%s' not found" % cookie)
+
+    def value(self, field, val):
+        # XXX: timestamps? 1-based indexing is really strange here
+        v = lib.tdb_get_value(self._db, field - 1, val)
+        if v:
+            return v
+        raise ValueError("Field %d, val %d does not exist" % (field, val))
+
+    def lexicon(self, field):
+        # XXX: 1-based indexing is really strange here
+        if isinstance(field, basestring):
+            return self.lexicon(self.fields.index(field) + 1)
+        return [self.value(field, i) for i in xrange(1, self.lexicon_size(field) + 1)]
+
     def lexicon_size(self, field):
+        # XXX: 1-based indexing is really strange here
         size = (c_uint)()
-        lib.tdb_lexicon_size(self._db, field, size)
+        if lib.tdb_lexicon_size(self._db, field - 1, size):
+            raise ValueError(lib.tdb_error(self._db))
         return size.value
