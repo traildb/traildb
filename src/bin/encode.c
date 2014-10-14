@@ -16,7 +16,6 @@
 #define TSTAMP_MIN 1325404800 /* 2012-01-01 */
 #define TSTAMP_MAX 1483257600 /* 2017-01-01 */
 
-#define MAX_NUM_INPUTS 10000000
 #define MAX_INVALID_RATIO 0.005
 
 static Pvoid_t cookie_index;
@@ -26,17 +25,6 @@ static Word_t *lexicon_counters;
 
 static struct arena events = {.item_size = sizeof(tdb_event)};
 static struct arena items = {.item_size = sizeof(tdb_item)};
-
-static long parse_int_arg(const char *str, const char *type, long max)
-{
-    char *endp;
-    long n = strtol(str, &endp, 10);
-    if (n < 1)
-        DIE("invalid number of %s: %s\n", type, str);
-    if (n >= max)
-        DIE("too many %s: %ld >= %ld\n", type, n, max);
-    return n;
-}
 
 static long parse_num_fields(const char *str)
 {
@@ -123,29 +111,21 @@ static int parse_line(char *line, long num_fields)
     return 0;
 }
 
-static void read_inputs(long num_fields, long num_inputs)
+static void read_input(long num_fields)
 {
     char *line = NULL;
     size_t line_size = 0;
     long long unsigned int num_lines = 0;
     long long unsigned int num_invalid = 0;
+    ssize_t n;
 
-    while (num_inputs){
-        ssize_t n = getline(&line, &line_size, stdin);
-
-        if (n < 1)
-            DIE("Truncated input\n");
-
+    while ((n = getline(&line, &line_size, stdin)) > 0){
         /* remove trailing newline */
         line[n - 1] = 0;
 
-        if (!strcmp(line, "**DONE**"))
-            --num_inputs;
-        else{
-            ++num_lines;
-            if (parse_line(line, num_fields))
-                ++num_invalid;
-        }
+        ++num_lines;
+        if (parse_line(line, num_fields))
+          ++num_invalid;
 
         if (!(num_lines & 65535))
             fprintf(stderr, "%llu lines processed (%llu invalid)\n",
@@ -319,19 +299,18 @@ void dump_cookie_pointers(uint64_t *cookie_pointers)
 
 int main(int argc, char **argv)
 {
+    char *outdir;
     char items_tmp_path[TDB_MAX_PATH_SIZE];
     tdb_file items_mmaped;
     uint64_t *cookie_pointers;
     long num_fields;
-    long num_inputs;
     int i;
     TDB_TIMER_DEF
 
-    if (argc < 4)
-        DIE("Usage: %s 'fields' number-of-inputs output-dir\n", argv[0]);
+    if (argc < 3)
+        DIE("Usage: %s 'fields' outdir\n", argv[0]);
 
     num_fields = parse_num_fields(argv[1]);
-    num_inputs = parse_int_arg(argv[2], "inputs", MAX_NUM_INPUTS);
 
     if (num_fields < 2)
         DIE("Too few fields: At least cookie and timestamp are required\n");
@@ -341,9 +320,10 @@ int main(int argc, char **argv)
 
     /* Opportunistically try to create the output directory. We don't
        care if it fails, e.g. because it already exists */
-    mkdir(argv[3], 0755);
+    outdir = argv[2];
+    mkdir(outdir, 0755);
 
-    tdb_path(items_tmp_path, "%s/tmp.items.%d", argv[3], getpid());
+    tdb_path(items_tmp_path, "%s/tmp.items.%d", outdir, getpid());
     if (!(items.fd = fopen(items_tmp_path, "wx")))
         DIE("Could not open temp file at %s\n", items_tmp_path);
 
@@ -354,7 +334,7 @@ int main(int argc, char **argv)
         DIE("Could not allocate lexicon counters\n");
 
     TDB_TIMER_START
-    read_inputs(num_fields, num_inputs);
+    read_input(num_fields);
     TDB_TIMER_END("encoder/read_inputs")
 
     /* finalize event items */
@@ -367,7 +347,7 @@ int main(int argc, char **argv)
 
     /* finalize lexicon */
     TDB_TIMER_START
-    store_lexicons(argv[1], num_fields - 2, argv[3]);
+    store_lexicons(argv[1], num_fields - 2, outdir);
     TDB_TIMER_END("encoder/store_lexicons")
 
     for (i = 0; i < num_fields - 2; i++){
@@ -389,7 +369,7 @@ int main(int argc, char **argv)
                items.next, /* number of items */
                num_fields, /* number of fields */
                (const uint64_t*)lexicon_counters, /* field cardinalities */
-               argv[3]); /* output directory */
+               outdir); /* output directory */
     TDB_TIMER_END("encoder/store_trails")
 
     unlink(items_tmp_path);
