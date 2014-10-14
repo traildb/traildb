@@ -1,112 +1,106 @@
-import sys
 import os
-import string
+
+from collections import namedtuple
 from ctypes import CDLL, c_char_p, c_ubyte, POINTER, c_void_p, c_int, c_uint
+from datetime import datetime
 
 cd = os.path.dirname(os.path.abspath(__file__))
 lib = CDLL(os.path.join(cd, '_traildb.so'))
 
-lib.tdb_open.argtypes = [c_char_p]
-lib.tdb_open.restype = c_void_p
+def api(fun, args, res=None):
+    fun.argtypes = args
+    fun.restype = res
 
-lib.tdb_lexicon_size.argtypes = [c_void_p, c_uint, POINTER(c_uint)]
-lib.tdb_lexicon_size.restype = c_int
+api(lib.tdb_open, [c_char_p], c_void_p)
+api(lib.tdb_close, [c_void_p])
 
-lib.tdb_get_field_name.argtypes = [c_void_p, c_uint]
-lib.tdb_get_field_name.restype = c_char_p
+api(lib.tdb_lexicon_size, [c_void_p, c_uint, POINTER(c_uint)], c_int)
 
-lib.tdb_get_cookie.argtypes = [c_void_p, c_uint]
-lib.tdb_get_cookie.restype = POINTER(c_ubyte)
+api(lib.tdb_get_field, [c_void_p, c_char_p], c_uint)
+api(lib.tdb_get_field_name, [c_void_p, c_uint], c_char_p)
 
-lib.tdb_num_cookies.argtypes = [c_void_p]
-lib.tdb_num_cookies.restype = c_uint
+api(lib.tdb_get_val, [c_void_p, c_uint, c_char_p], c_uint)
+api(lib.tdb_get_value, [c_void_p, c_uint, c_uint], c_char_p)
+api(lib.tdb_get_item_value, [c_void_p, c_uint], c_char_p)
 
-lib.tdb_num_fields.argtypes = [c_void_p]
-lib.tdb_num_fields.restype = c_uint
+api(lib.tdb_get_cookie, [c_void_p, c_uint], POINTER(c_ubyte))
+api(lib.tdb_get_cookie_id, [c_void_p, c_char_p], c_int)
+api(lib.tdb_has_cookie_index, [c_void_p], c_int)
 
-lib.tdb_get_item_value.argtypes = [c_void_p, c_uint]
-lib.tdb_get_item_value.restype = c_char_p
+api(lib.tdb_error, [c_void_p], c_char_p)
 
-lib.tdb_decode_trail.argtypes = [c_void_p,
-                                c_uint,
-                                POINTER(c_uint),
-                                c_uint,
-                                c_uint]
-lib.tdb_decode_trail.restype = c_uint
+api(lib.tdb_num_cookies, [c_void_p], c_uint)
+api(lib.tdb_num_events, [c_void_p], c_uint)
+api(lib.tdb_num_fields, [c_void_p], c_uint)
+api(lib.tdb_min_timestamp, [c_void_p], c_uint)
+api(lib.tdb_max_timestamp, [c_void_p], c_uint)
+
+api(lib.tdb_decode_trail, [c_void_p, c_uint, POINTER(c_uint), c_uint, c_int], c_uint)
 
 class TrailDB(object):
-
-    TRAIL_SIZE_INCREMENT = 1000000
-
     def __init__(self, path):
         self._db = db = lib.tdb_open(path)
-        self._max_idx = lib.tdb_num_cookies(db)
-        self._fields = [lib.tdb_get_field_name(db, i) for i in xrange(lib.tdb_num_fields(db))]
+        self.num_cookies = lib.tdb_num_cookies(db)
+        self.num_events = lib.tdb_num_events(db)
+        self.num_fields = lib.tdb_num_fields(db)
+        self.fields = [lib.tdb_get_field_name(db, i) for i in xrange(self.num_fields)]
+        self._evcls = namedtuple('event', ['time'] + self.fields)
         self._trail_buf_size = 0
         self._grow_buffer()
 
-    def _grow_buffer(self):
-        self._trail_buf_size += self.TRAIL_SIZE_INCREMENT
+    def __del__(self):
+        lib.tdb_close(self._db)
+
+    def _grow_buffer(self, increment=1000000):
+        self._trail_buf_size += increment
         self._trail_buf = (c_uint * self._trail_buf_size)()
+        return self._trail_buf, self._trail_buf_size
 
     def __len__(self):
-        return self._max_idx
+        return self.num_cookies
 
-    def __getitem__(self, idx):
-        return self.get_trail(idx)
+    def __getitem__(self, id):
+        return self.trail(id)
 
-    def get_trail(self, idx, lookup_values=True):
+    def trail(self, id, expand=True, ptime=False):
+        db, cls = self._db, self._evcls
+        buf, size = self._trail_buf, self._trail_buf_size
+
         while True:
-            num = lib.tdb_decode_trail(self._db,
-                                      idx,
-                                      self._trail_buf,
-                                      self._trail_buf_size,
-                                      0)
+            num = lib.tdb_decode_trail(db, id, buf, size, 0)
             if num == 0:
                 raise IndexError("Cookie index out of range")
-            elif num == self._trail_buf_size:
-                self._grow_buffer()
+            elif num == size:
+                buf, size = self._grow_buffer()
             else:
-                buf = self._trail_buf
                 break
 
-        i = 0
-        while i < num:
-            tstamp = buf[i]
-            i += 1
-            fields = []
-            while i < num and buf[i]:
-                if lookup_values:
-                    if buf[i] >> 8:
-                        fields.append(lib.tdb_get_item_value(self._db, buf[i]))
-                    else:
-                        fields.append('')
-                else:
-                    if buf[i] >> 8:
-                        fields.append(buf[i])
-                    else:
-                        fields.append(0)
-                i += 1
-            i += 1
-            yield tstamp, fields
-
-    def get_cookie(self, idx, raw_bytes=False):
-        c = lib.tdb_get_cookie(self._db, idx)
-        if c:
-            if raw_bytes:
-                return c[:16]
-            else:
-                return ''.join('%.2x' % x for x in c[:16])
+        if expand:
+            value = lambda f, v: lib.tdb_get_value(db, f, v)
         else:
-            raise IndexError("Cookie index out of range")
+            value = lambda f, v: v
 
-    def get_item_value(self, field):
-        return lib.tdb_get_item_value(self._db, field)
+        def gen(i=0):
+            while i < num:
+                tstamp = datetime.fromtimestamp(buf[i]) if ptime else buf[i]
+                values = []
+                i += 1
+                while i < num and buf[i]:
+                    values.append(value(buf[i] & 255 - 1, buf[i] >> 8))
+                    i += 1
+                i += 1
+                yield cls(tstamp, *values)
+        return gen()
 
-    def get_fields(self):
-        return self._fields
+    def cookie(self, id, raw=False):
+        c = lib.tdb_get_cookie(self._db, id)
+        if c:
+            if raw:
+                return c[:16]
+            return ''.join('%.2x' % x for x in c[:16])
+        raise IndexError("Cookie index out of range")
 
-    def get_lexicon_size(self, field):
+    def lexicon_size(self, field):
         size = (c_uint)()
         lib.tdb_lexicon_size(self._db, field, size)
         return size.value

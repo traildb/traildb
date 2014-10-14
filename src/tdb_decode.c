@@ -5,7 +5,7 @@
 #include "util.h"
 
 uint32_t tdb_decode_trail(tdb *db,
-                          uint32_t trail_index,
+                          uint64_t cookie_id,
                           uint32_t *dst,
                           uint32_t dst_size,
                           int raw_values)
@@ -19,12 +19,12 @@ uint32_t tdb_decode_trail(tdb *db,
     uint32_t tstamp = db->min_timestamp;
     const struct field_stats *fstats = db->field_stats;
 
-    if (trail_index >= db->num_cookies)
+    if (cookie_id >= db->num_cookies)
         return 0;
 
     toc = (const uint32_t*)db->trails.data;
-    data = &db->trails.data[toc[trail_index]];
-    size = 8 * (toc[trail_index + 1] - toc[trail_index]);
+    data = &db->trails.data[toc[cookie_id]];
+    size = 8 * (toc[cookie_id + 1] - toc[cookie_id]);
     size -= read_bits(data, 0, 3);
     offs = 3;
     if (raw_values){

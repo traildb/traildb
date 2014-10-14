@@ -71,14 +71,14 @@ typedef struct {
     uint64_t item_zero;
     uint32_t num_items;
     uint32_t timestamp;
-    uint64_t prev_event_idx; // XXX: unify
+    uint64_t prev_event_idx;
 } tdb_event;
 
 typedef struct {
     uint64_t item_zero;
     uint32_t num_items;
     uint32_t timestamp;
-    uint64_t cookie_id; // XXX: shouldn't this be uint32_t?
+    uint64_t cookie_id;
 } tdb_cookie_event;
 
 tdb *tdb_open(const char *root);
@@ -107,7 +107,7 @@ uint32_t tdb_min_timestamp(const tdb *db);
 uint32_t tdb_max_timestamp(const tdb *db);
 
 uint32_t tdb_decode_trail(tdb *db,
-                          uint32_t trail_index,
+                          uint64_t cookie_id,
                           uint32_t *dst,
                           uint32_t dst_size,
                           int raw_values);

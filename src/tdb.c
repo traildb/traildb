@@ -255,8 +255,8 @@ int tdb_lexicon_read(const tdb *db, tdb_lexicon *lex, tdb_field field)
         lex->toc = (const uint32_t*)&db->lexicons[field].data[4];
         lex->data = (const char*)db->lexicons[field].data;
         return 0;
-    }else
-        return -1;
+    }
+    return -1;
 }
 
 int tdb_lexicon_size(const tdb *db, tdb_field field, uint32_t *size)
@@ -295,9 +295,10 @@ tdb_val tdb_get_val(const tdb *db, tdb_field field, const char *value)
             for (i = 0; i < lex.size; i++)
                 if (!strcmp(&lex.data[lex.toc[i]], value))
                     return (field + 1) | ((i + 1) << 8);
-        }else
+        }else{
             /* valid empty value */
             return field + 1;
+        }
     }
     return 0;
 }
@@ -305,7 +306,7 @@ tdb_val tdb_get_val(const tdb *db, tdb_field field, const char *value)
 const char *tdb_get_value(const tdb *db, tdb_field field, tdb_val val)
 {
     tdb_lexicon lex;
-    if (val && !tdb_lexicon_read(db, &lex, field) && val - 1 < lex.size)
+    if (val && !tdb_lexicon_read(db, &lex, field) && (val - 1) < lex.size)
         return &lex.data[lex.toc[val - 1]];
     return NULL;
 }
