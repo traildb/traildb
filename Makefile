@@ -22,13 +22,13 @@ clean:
 	rm -f lib/libtraildb.*
 
 bin/merge: src/bin/merge/*.c $(COBJS)
-	$(CC) $(CFLAGS) $(CINCL) -I $(<D) $(CLIBS) -o $@ $^
+	$(CC) $(CFLAGS) $(CINCL) -I $(<D) -o $@ $^ $(CLIBS)
 
 bin/mix: src/bin/mix/*.c src/bin/mix/ops/*.c $(COBJS)
-	$(CC) $(CFLAGS) $(CINCL) -I $(<D) $(CLIBS) -o $@ $^
+	$(CC) $(CFLAGS) $(CINCL) -I $(<D) -o $@ $^ $(CLIBS)
 
 bin/%: src/bin/%.c $(COBJS)
-	$(CC) $(CFLAGS) $(CINCL) $(CLIBS) -o $@ $^
+	$(CC) $(CFLAGS) $(CINCL) -o $@ $^ $(CLIBS)
 
 deps/discodb/src/%.o:
 	make -C deps/discodb CFLAGS="$(CFLAGS)"
@@ -40,7 +40,7 @@ lib/libtraildb.a: $(COBJS)
 	$(AR) -ruvs $@ $^
 
 lib/libtraildb.so: $(COBJS)
-	$(CC) $(CFLAGS) $(CINCL) $(CLIBS) -shared -o $@ $^
+	$(CC) $(CFLAGS) $(CINCL) -shared -o $@ $^ $(CLIBS)
 
 src/dsfmt/%.o: src/dsfmt/%.c
 	$(CC) $(CFLAGS) $(CINCL) -DDSFMT_MEXP=521 -DHAVE_SSE2=1 -msse2 -c -o $@ $^
