@@ -202,8 +202,9 @@ static inline void add_chunk(uint32_t groupby_key,
             for (j = groupby_field + 1; j < num_fields + 1; j++)
                 ev[k++] = event[j];
         }
-    }else
+    }else{
         memcpy(ev, events, num_events * num_fields * 4);
+    }
 }
 
 void grouper_process(struct extractd_ctx *ctx)

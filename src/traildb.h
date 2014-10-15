@@ -4,11 +4,12 @@
 
 #include <stdint.h>
 
-#define TDB_MAX_PATH_SIZE  1024
-#define TDB_MAX_ERROR_SIZE (TDB_MAX_PATH_SIZE + 512)
-#define TDB_MAX_FIELD_SIZE 1024
-#define TDB_MAX_NUM_FIELDS 255
-#define TDB_MAX_NUM_VALUES ((1 << 24) - 1)
+#define TDB_MAX_PATH_SIZE   1024
+#define TDB_MAX_ERROR_SIZE  (TDB_MAX_PATH_SIZE + 512)
+#define TDB_MAX_NUM_COOKIES (1LLU << 60)  // Lexicon needs C * 16 space
+#define TDB_MAX_NUM_EVENTS  (1LLU << 54)  // Merge needs E * F * 4 space
+#define TDB_MAX_NUM_FIELDS  (1LLU << 8)
+#define TDB_MAX_NUM_VALUES  (1LLU << 24)
 
 /*
    Internally we deal with ids:

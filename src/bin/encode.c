@@ -16,7 +16,9 @@
 #define TSTAMP_MIN 1325404800 /* 2012-01-01 */
 #define TSTAMP_MAX 1483257600 /* 2017-01-01 */
 
-#define MAX_INVALID_RATIO 0.005
+#define MAX_LEXICON_SIZE    UINT32_MAX
+#define MAX_FIELD_NAME_SIZE 1024
+#define MAX_INVALID_RATIO   0.005
 
 static Pvoid_t cookie_index;
 static uint64_t num_cookies;
@@ -26,9 +28,9 @@ static Word_t *lexicon_counters;
 static struct arena events = {.item_size = sizeof(tdb_event)};
 static struct arena items = {.item_size = sizeof(tdb_item)};
 
-static long parse_num_fields(const char *str)
+static int parse_num_fields(const char *str)
 {
-    long num_fields = 0;
+    int num_fields = 0;
     int i = 0;
     while (str[i])
         if (str[i++] == ' ')
@@ -37,7 +39,7 @@ static long parse_num_fields(const char *str)
     return num_fields + 1;
 }
 
-static int parse_line(char *line, long num_fields)
+static int parse_line(char *line, int num_fields)
 {
     static uint64_t cookie_bytes[2];
     int i;
@@ -54,8 +56,6 @@ static int parse_line(char *line, long num_fields)
 
     if (hex_decode(cookie_str, (uint8_t *)cookie_bytes))
         return 1;
-
-    //printf("Str %s -> %016lx%016lx\n", cookie_str, cookie_bytes[0], cookie_bytes[1]);
 
     tstamp = strtoll(strsep(&line, " "), &tmp, 10);
 
@@ -88,15 +88,15 @@ static int parse_line(char *line, long num_fields)
         tdb_field field = i + 1;
         tdb_item item = field;
 
-        if (field_size >= TDB_MAX_FIELD_SIZE)
-            field_name[TDB_MAX_FIELD_SIZE - 1] = 0;
+        if (field_size >= MAX_FIELD_NAME_SIZE)
+            field_name[MAX_FIELD_NAME_SIZE - 1] = 0;
 
         if (field_size > 0){
             Word_t *val_p;
             JSLI(val_p, lexicon[i], (uint8_t*)field_name);
             if (!*val_p){
                 *val_p = ++lexicon_counters[i];
-                if (*val_p > TDB_MAX_NUM_VALUES)
+                if (*val_p >= TDB_MAX_NUM_VALUES)
                     DIE("Too many values for field %d!\n", i);
             }
             item |= (*val_p) << 8;
@@ -111,7 +111,7 @@ static int parse_line(char *line, long num_fields)
     return 0;
 }
 
-static void read_input(long num_fields)
+static void read_input(int num_fields)
 {
     char *line = NULL;
     size_t line_size = 0;
@@ -120,8 +120,8 @@ static void read_input(long num_fields)
     ssize_t n;
 
     while ((n = getline(&line, &line_size, stdin)) > 0){
-        if (num_events >= UINT64_MAX)
-            DIE("Over 2^64 events!\n");
+        if (num_events >= TDB_MAX_NUM_EVENTS)
+            DIE("Too many events (%llu)\n", num_events);
 
         /* remove trailing newline */
         line[n - 1] = 0;
@@ -158,10 +158,11 @@ void store_cookies(const Pvoid_t cookie_index,
     if (!(out = fopen(path, "w")))
         DIE("Could not create cookie file: %s\n", path);
 
+    if (num_cookies > TDB_MAX_NUM_COOKIES)
+        DIE("Too many cookies (%llu)\n", num_cookies);
+
     if (ftruncate(fileno(out), num_cookies * 16LLU))
-        DIE("Could not initialize lexicon file (%llu bytes): %s\n",
-            (long long unsigned int)(num_cookies * 16),
-            path);
+        DIE("Could not init lexicon (%llu cookies): %s\n", num_cookies, path);
 
     cookie_bytes[0] = 0;
     JLF(ptr, cookie_index, cookie_bytes[0]);
@@ -180,7 +181,7 @@ void store_cookies(const Pvoid_t cookie_index,
 
 static uint64_t lexicon_size(const Pvoid_t lexicon, uint64_t *size)
 {
-    uint8_t token[TDB_MAX_FIELD_SIZE];
+    uint8_t token[MAX_FIELD_NAME_SIZE];
     Word_t *ptr;
     uint64_t count = 0;
 
@@ -196,7 +197,7 @@ static uint64_t lexicon_size(const Pvoid_t lexicon, uint64_t *size)
 
 void store_lexicon(const Pvoid_t lexicon, const char *path)
 {
-    uint8_t token[TDB_MAX_FIELD_SIZE];
+    uint8_t token[MAX_FIELD_NAME_SIZE];
     uint64_t size = 0;
     uint64_t count = lexicon_size(lexicon, &size);
     uint64_t offset;
@@ -205,7 +206,7 @@ void store_lexicon(const Pvoid_t lexicon, const char *path)
 
     size += (count + 1) * 4;
 
-    if (count > UINT32_MAX || size > UINT32_MAX)
+    if (size > MAX_LEXICON_SIZE)
         DIE("Lexicon %s would be huge! %llu items, %llu bytes\n",
             path,
             (long long unsigned int)count,
@@ -227,7 +228,7 @@ void store_lexicon(const Pvoid_t lexicon, const char *path)
     while (token_id){
         uint32_t len = strlen((char*)token);
 
-        /* note: token IDs start 1, otherwise we would need to +1 */
+        /* NOTE: token IDs start 1, otherwise we would need to +1 */
         SAFE_SEEK(out, *token_id * 4, path);
         SAFE_WRITE(&offset, 4, path, out);
 
@@ -277,8 +278,7 @@ void dump_cookie_pointers(uint64_t *cookie_pointers)
     uint64_t idx = 0;
 
     /* NOTE: The code below must populate cookie_pointers
-       in the same order as what gets stored by store_cookies()
-    */
+       in the same order as what gets stored by store_cookies() */
     cookie_bytes[0] = 0;
     JLF(ptr, cookie_index, cookie_bytes[0]);
     while (ptr){
@@ -303,8 +303,7 @@ int main(int argc, char **argv)
     char items_tmp_path[TDB_MAX_PATH_SIZE];
     tdb_file items_mmaped;
     uint64_t *cookie_pointers;
-    long num_fields;
-    int i;
+    int i, num_fields;
     TDB_TIMER_DEF
 
     if (argc < 3)
@@ -316,7 +315,7 @@ int main(int argc, char **argv)
         DIE("Too few fields: At least cookie and timestamp are required\n");
 
     if (num_fields > TDB_MAX_NUM_FIELDS)
-        DIE("Too many fields: %ld > %d\n", num_fields, TDB_MAX_NUM_FIELDS);
+        DIE("Too many fields (%d)\n", num_fields);
 
     /* Opportunistically try to create the output directory. We don't
        care if it fails, e.g. because it already exists */
@@ -361,15 +360,15 @@ int main(int argc, char **argv)
     dump_cookie_pointers(cookie_pointers);
 
     TDB_TIMER_START
-    tdb_encode(cookie_pointers, /* pointer to last event by cookie */
-               num_cookies, /* number of cookies */
-               (tdb_event*)events.data, /* events */
-               events.next, /* number of events */
+    tdb_encode(cookie_pointers,                    /* last event by cookie */
+               num_cookies,                        /* number of cookies */
+               (tdb_event*)events.data,            /* all events */
+               events.next,                        /* number of events */
                (const tdb_item*)items_mmaped.data, /* all items */
-               items.next, /* number of items */
-               num_fields, /* number of fields */
-               (const uint64_t*)lexicon_counters, /* field cardinalities */
-               outdir); /* output directory */
+               items.next,                         /* number of items */
+               num_fields,                         /* number of fields */
+               (const uint64_t*)lexicon_counters,  /* field cardinalities */
+               outdir);                            /* output directory */
     TDB_TIMER_END("encoder/store_trails")
 
     unlink(items_tmp_path);

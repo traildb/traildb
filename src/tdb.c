@@ -94,7 +94,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
     }
 
     if (!(db->field_names = calloc(db->num_fields, sizeof(char*)))){
-        tdb_err(db, "Could not alloc %u values", db->num_fields);
+        tdb_err(db, "Could not alloc %u field names", db->num_fields);
         fclose(f);
         return -1;
     }
@@ -111,7 +111,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
         line[strlen(line) - 1] = 0;
 
         if (!(db->field_names[i] = strdup(line))){
-            tdb_err(db, "Could not allocate field name");
+            tdb_err(db, "Could not allocate field name %d", i);
             fclose(f);
             return -1;
         }
