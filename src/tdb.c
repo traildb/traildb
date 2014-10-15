@@ -132,7 +132,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
 
 static int init_field_stats(tdb *db)
 {
-    uint32_t i;
+    tdb_field i;
     uint64_t *field_cardinalities;
 
     if (!(field_cardinalities = malloc((db->num_fields + 1) * 8)))
@@ -171,8 +171,8 @@ static int read_info(tdb *db, const char *path)
 
     if (fscanf(f,
                "%llu %llu %u %u %u",
-               (long long unsigned int*)&db->num_cookies,
-               (long long unsigned int*)&db->num_events,
+               (uint64_t*)&db->num_cookies,
+               (uint64_t*)&db->num_events,
                &db->min_timestamp,
                &db->max_timestamp,
                &db->max_timestamp_delta) != 5){
@@ -229,7 +229,7 @@ err:
 void tdb_close(tdb *db)
 {
     if (db){
-        int i = db->num_fields;
+        tdb_field i = db->num_fields;
 
         while (i--){
             free((char*)db->field_names[i]);
@@ -292,7 +292,7 @@ tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
 {
     tdb_lexicon lex;
     if (!tdb_lexicon_read(db, &lex, field)){
-        uint32_t i;
+        tdb_val i;
         if (*value){
             for (i = 0; i < lex.size; i++)
                 if (!strcmp(&lex.data[lex.toc[i]], value))
@@ -363,12 +363,12 @@ const char *tdb_error(const tdb *db)
     return db->error;
 }
 
-uint32_t tdb_num_cookies(const tdb *db)
+uint64_t tdb_num_cookies(const tdb *db)
 {
     return db->num_cookies;
 }
 
-uint32_t tdb_num_events(const tdb *db)
+uint64_t tdb_num_events(const tdb *db)
 {
     return db->num_events;
 }

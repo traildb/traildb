@@ -115,35 +115,35 @@ static void read_input(long num_fields)
 {
     char *line = NULL;
     size_t line_size = 0;
-    long long unsigned int num_lines = 0;
-    long long unsigned int num_invalid = 0;
+    uint64_t num_events = 0;
+    uint64_t num_invalid = 0;
     ssize_t n;
 
     while ((n = getline(&line, &line_size, stdin)) > 0){
+        if (num_events >= UINT64_MAX)
+            DIE("Over 2^64 events!\n");
+
         /* remove trailing newline */
         line[n - 1] = 0;
 
-        ++num_lines;
+        ++num_events;
         if (parse_line(line, num_fields))
           ++num_invalid;
 
-        if (!(num_lines & 65535))
+        if (!(num_events & 65535))
             fprintf(stderr, "%llu lines processed (%llu invalid)\n",
-                    num_lines, num_invalid);
-
-        if (num_lines >= UINT32_MAX)
-            DIE("Over 2^32 events!\n");
+                    num_events, num_invalid);
     }
 
-    if (num_invalid / (float)num_lines > MAX_INVALID_RATIO)
+    if (num_invalid / (float)num_events > MAX_INVALID_RATIO)
         DIE("Too many invalid lines (%llu / %llu)\n",
             num_invalid,
-            num_lines);
+            num_events);
     else
         fprintf(stderr,
                 "All inputs consumed successfully: "
                 "%llu valid lines, %llu invalid\n",
-                num_lines,
+                num_events,
                 num_invalid);
 }
 

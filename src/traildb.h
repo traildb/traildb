@@ -100,8 +100,8 @@ int tdb_has_cookie_index(tdb *db);
 
 const char *tdb_error(const tdb *db);
 
-uint32_t tdb_num_cookies(const tdb *db);
-uint32_t tdb_num_events(const tdb *db);
+uint64_t tdb_num_cookies(const tdb *db);
+uint64_t tdb_num_events(const tdb *db);
 uint32_t tdb_num_fields(const tdb *db);
 uint32_t tdb_min_timestamp(const tdb *db);
 uint32_t tdb_max_timestamp(const tdb *db);
