@@ -1,9 +1,9 @@
 
 CFLAGS = -fPIC -O3 -Wall
-CINCL  = -I src -I deps/discodb/src
-CLIBS  = $(foreach L,Judy cmph m,-l$(L))
+CINCL  = -I src -I deps/discodb/src -L lib
+CLIBS  = $(foreach L,discodb Judy cmph m,-l$(L))
 CHDRS  = $(wildcard src/*.h)
-CSRCS  = $(wildcard src/*.c src/dsfmt/dSFMT.c deps/discodb/src/*.c)
+CSRCS  = $(wildcard src/*.c src/dsfmt/dSFMT.c)
 COBJS  = $(patsubst %.c,%.o,$(CSRCS))
 
 PYTHON = python
@@ -14,7 +14,7 @@ all: libs bins
 
 bins: bin/encode bin/index bin/merge bin/mix
 
-libs: lib/libtraildb.a lib/libtraildb.so
+libs: lib/libdiscodb.a lib/libtraildb.a lib/libtraildb.so
 
 clean:
 	rm -f $(COBJS)
@@ -30,11 +30,12 @@ bin/mix: src/bin/mix/*.c src/bin/mix/ops/*.c $(COBJS)
 bin/%: src/bin/%.c $(COBJS)
 	$(CC) $(CFLAGS) $(CINCL) -o $@ $^ $(CLIBS)
 
-deps/discodb/src/%.o:
+deps/discodb/src:
+	git submodule update --init deps/$*
 	make -C deps/discodb CFLAGS="$(CFLAGS)"
 
-deps/%.git:
-	git submodule update --init $(@D)
+lib/libdiscodb.a: deps/discodb/src
+	$(AR) -ruvs $@ $(wildcard deps/discodb/src/*.o)
 
 lib/libtraildb.a: $(COBJS)
 	$(AR) -ruvs $@ $^
