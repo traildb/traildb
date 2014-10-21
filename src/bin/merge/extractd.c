@@ -471,7 +471,7 @@ Parse the next trail from the active chunk. Replace mapper-local token
 IDs with global IDs.
 */
 static void parse_next_trail(struct extractd *ext,
-                             tdb_cookie *cookie,
+                             const uint8_t **cookie,
                              const uint32_t **events,
                              uint32_t *num_events)
 {
@@ -488,7 +488,7 @@ static void parse_next_trail(struct extractd *ext,
     if (ext->active_chunk_offs > ext->active_chunk_len)
         DIE("Truncated trail: Missing header\n");
     else{
-        *cookie = (tdb_cookie)p;
+        *cookie = (uint8_t*)p;
         num_values = *(uint32_t*)&p[16];
     }
 
@@ -530,7 +530,7 @@ Get the next trail from the active chunk. If no
 more trails are left in the chunk, receive a new chunk from next_chunk().
 */
 int extractd_next_trail(struct extractd *ext,
-                        tdb_cookie *cookie,
+                        const uint8_t **cookie,
                         const uint32_t **events,
                         uint32_t *num_events,
                         uint32_t *num_fields,

@@ -10,15 +10,14 @@
 
 #include "tdb_internal.h"
 #include "merge.h"
-#include "hex.h"
 #include "util.h"
 
 #define DEFAULT_PORT 7676
 
 static void show(struct extractd_ctx *ctx)
 {
-    static char hex_cookie[33];
-    tdb_cookie cookie;
+    static uint8_t hexcookie[33];
+    const uint8_t *cookie;
     const uint32_t *events;
     uint32_t i, j, k, num_fields, num_events;
     int ret;
@@ -32,8 +31,8 @@ static void show(struct extractd_ctx *ctx)
         if (ret == -1)
             DIE("Timeout");
 
-        hex_encode(cookie, hex_cookie);
-        printf("%s", hex_cookie);
+        tdb_cookie_hex(cookie, hexcookie);
+        printf("%s", hexcookie);
         for (i = 0, k = 0; i < num_events; i++){
             if (i > 0)
                 printf(" |");

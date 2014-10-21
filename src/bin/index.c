@@ -33,7 +33,7 @@ void ci_rewind(void *data)
 int ci_read(void *data, char **p, cmph_uint32 *len)
 {
     struct cookie_ctx *ctx = (struct cookie_ctx*)data;
-    tdb_cookie cookie = tdb_get_cookie(ctx->db, ctx->id);
+    const uint8_t *cookie = tdb_get_cookie(ctx->db, ctx->id);
 
     memcpy(ctx->key, cookie, 16);
     *p = ctx->key;

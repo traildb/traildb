@@ -5,7 +5,6 @@
 
 #include "tdb_internal.h"
 #include "arena.h"
-#include "hex.h"
 #include "util.h"
 #include "mix.h"
 
@@ -19,7 +18,7 @@ static Pvoid_t index_db_ids(const struct trail_ctx *ctx)
     uint64_t i;
 
     for (i = 0; i < tdb_num_cookies(ctx->db); i++){
-        tdb_cookie c = tdb_get_cookie(ctx->db, i);
+        const uint8_t *c = tdb_get_cookie(ctx->db, i);
         Word_t *ptr;
         memcpy(cookie, c, 16);
         JHSI(ptr, index, cookie, 16);
@@ -47,7 +46,7 @@ static int parse_text(const uint8_t keybuf[33],
     unsigned long long attr_value;
     int has_attr = 0;
 
-    if (hex_decode((const char*)keybuf, cookie))
+    if (tdb_cookie_raw(keybuf, cookie))
         DIE("Invalid ID: %*s\n", 32, keybuf);
 
     if (ctx->db){

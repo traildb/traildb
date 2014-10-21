@@ -11,13 +11,13 @@
 
 #define EDGE_INCREMENT     1000000
 #define GROUPBUF_INCREMENT 10000000
-#define READ_BUFFER_SIZE  (1000000 * sizeof(tdb_cookie_event))
+#define READ_BUFFER_SIZE  (1000000 * sizeof(tdb_event))
 #define MAX_INVALID_RATIO  0.005
 
 static int compare(const void *p1, const void *p2)
 {
-    const tdb_cookie_event *x = (tdb_cookie_event*)p1;
-    const tdb_cookie_event *y = (tdb_cookie_event*)p2;
+    const tdb_event *x = (tdb_event*)p1;
+    const tdb_event *y = (tdb_event*)p2;
 
     if (x->timestamp > y->timestamp)
         return 1;
@@ -28,7 +28,7 @@ static int compare(const void *p1, const void *p2)
 
 static void group_events(FILE *grouped_w,
                          const char *path,
-                         const tdb_event *events,
+                         const tdb_cons_event *events,
                          const uint64_t *cookie_pointers,
                          uint64_t num_cookies,
                          uint32_t base_timestamp,
@@ -37,14 +37,14 @@ static void group_events(FILE *grouped_w,
     uint64_t i;
     uint64_t idx = 0;
     uint64_t num_invalid = 0;
-    tdb_cookie_event *buf = NULL;
+    tdb_event *buf = NULL;
     uint32_t buf_size = 0;
 
     *max_timestamp_delta = 0;
 
     for (i = 0; i < num_cookies; i++){
         /* find the last event belonging to this cookie */
-        const tdb_event *ev = &events[cookie_pointers[i]];
+        const tdb_cons_event *ev = &events[cookie_pointers[i]];
         uint32_t j = 0;
         uint32_t num_events = 0;
         uint32_t prev_timestamp;
@@ -54,7 +54,7 @@ static void group_events(FILE *grouped_w,
         while (1){
             if (j >= buf_size){
                 buf_size += GROUPBUF_INCREMENT;
-                if (!(buf = realloc(buf, buf_size * sizeof(tdb_cookie_event))))
+                if (!(buf = realloc(buf, buf_size * sizeof(tdb_event))))
                     DIE("Couldn't realloc group buffer of %u items\n",
                         buf_size);
             }
@@ -71,7 +71,7 @@ static void group_events(FILE *grouped_w,
         num_events = j;
 
         /* sort events of this cookie by time */
-        qsort(buf, num_events, sizeof(tdb_cookie_event), compare);
+        qsort(buf, num_events, sizeof(tdb_event), compare);
 
         /* delta-encode timestamps */
         for (prev_timestamp = base_timestamp, j = 0; j < num_events; j++){
@@ -95,7 +95,7 @@ static void group_events(FILE *grouped_w,
         }
 
         SAFE_WRITE(buf,
-                   num_events * sizeof(tdb_cookie_event),
+                   num_events * sizeof(tdb_event),
                    path,
                    grouped_w);
     }
@@ -111,12 +111,12 @@ uint32_t edge_encode_items(const tdb_item *items,
                            uint32_t **encoded,
                            uint32_t *encoded_size,
                            tdb_item *prev_items,
-                           const tdb_cookie_event *ev)
+                           const tdb_event *ev)
 {
     uint32_t n = 0;
 
-    /* consider only valid timestamps (first byte = 0) */
-    if ((ev->timestamp & 255) == 0){
+    /* consider only valid timestamps (field == 0) */
+    if (tdb_item_field(ev->timestamp) == 0){
         uint64_t j = ev->item_zero;
 
         /* edge encode items: keep only fields that are different from
@@ -138,7 +138,7 @@ uint32_t edge_encode_items(const tdb_item *items,
     return n;
 }
 
-static void timestamp_range(const tdb_event *events,
+static void timestamp_range(const tdb_cons_event *events,
                             uint64_t num_events,
                             uint32_t *min_timestamp,
                             uint32_t *max_timestamp)
@@ -198,14 +198,14 @@ static void encode_trails(const tdb_item *items,
     FILE *out;
     uint64_t file_offs = (num_cookies + 1) * 4;
     struct gram_bufs gbufs;
-    tdb_cookie_event ev;
+    tdb_event ev;
 
     init_gram_bufs(&gbufs, num_fields);
 
     if (file_offs >= UINT32_MAX)
         DIE("Trail file %s over 4GB!\n", path);
 
-    if (!(out = fopen(path, "wx")))
+    if (!(out = fopen(path, "w")))
         DIE("Could not create trail file: %s\n", path);
 
     /* reserve space for TOC */
@@ -223,7 +223,7 @@ static void encode_trails(const tdb_item *items,
         DIE("Could not allocate %u grams\n", num_fields);
 
     rewind(grouped);
-    fread(&ev, sizeof(tdb_cookie_event), 1, grouped);
+    fread(&ev, sizeof(tdb_event), 1, grouped);
 
     while (i < num_events){
         /* encode trail for one cookie (multiple events) */
@@ -267,7 +267,7 @@ static void encode_trails(const tdb_item *items,
                               &offs,
                               fstats);
 
-            fread(&ev, sizeof(tdb_cookie_event), 1, grouped);
+            fread(&ev, sizeof(tdb_event), 1, grouped);
         }
 
         /* write the length residual */
@@ -320,7 +320,7 @@ static void store_codebook(const Pvoid_t codemap, const char *path)
 
 void tdb_encode(const uint64_t *cookie_pointers,
                 uint64_t num_cookies,
-                tdb_event *events,
+                tdb_cons_event *events,
                 uint64_t num_events,
                 const tdb_item *items,
                 uint64_t num_items,
@@ -387,8 +387,7 @@ void tdb_encode(const uint64_t *cookie_pointers,
                path);
     TDB_TIMER_END("trail/info");
 
-    /* 4. collect value (unigram) frequencies, including delta-encoded
-          timestamps */
+    /* 4. collect value (unigram) freqs, including delta-encoded timestamps */
     TDB_TIMER_START
     unigram_freqs = collect_unigrams(grouped_r, num_events, items, num_fields);
     TDB_TIMER_END("trail/collect_unigrams");

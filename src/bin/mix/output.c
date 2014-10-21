@@ -5,7 +5,6 @@
 #include <Judy.h>
 
 #include "tdb_internal.h"
-#include "hex.h"
 #include "util.h"
 #include "mix.h"
 
@@ -31,7 +30,7 @@ static void finalize_attributes(struct trail_ctx *ctx)
 }
 
 static void output_binary(FILE *out,
-                          tdb_cookie cookie,
+                          const uint8_t *cookie,
                           Word_t *attr,
                           const char *path)
 {
@@ -39,21 +38,21 @@ static void output_binary(FILE *out,
 }
 
 static void output_text(FILE *out,
-                        tdb_cookie cookie,
+                        const uint8_t *cookie,
                         Word_t *attr,
                         const char *path)
 {
-    static char hexencoded[32];
-    hex_encode(cookie, hexencoded);
+    static uint8_t hexcookie[32];
+    tdb_cookie_hex(cookie, hexcookie);
 
     if (attr){
         SAFE_FPRINTF(out,
                      path,
                      "%s %llu\n",
-                     hexencoded,
+                     hexcookie,
                      (long long unsigned int)*attr);
     }else{
-        SAFE_FPRINTF(out, path, "%s\n", hexencoded);
+        SAFE_FPRINTF(out, path, "%s\n", hexcookie);
     }
 }
 
@@ -89,13 +88,13 @@ void output_matches(struct trail_ctx *ctx)
 
     J1F(cont, ctx->matched_rows, cookie_id);
     while (cont){
-        tdb_cookie cookie;
+        const uint8_t *cookie;
         Word_t *attr;
 
         if (ctx->db)
             cookie = tdb_get_cookie(ctx->db, cookie_id);
         else
-            cookie = (tdb_cookie)&ctx->input_ids[cookie_id * 16];
+            cookie = (uint8_t*)&ctx->input_ids[cookie_id * 16];
 
         JLG(attr, ctx->attributes, cookie_id);
 
@@ -129,7 +128,7 @@ static Pvoid_t serialize_trails(FILE *out, struct trail_ctx *ctx)
             TIMESTAMP: 4-byte uint
             N*ITEM-VALUE: 4-byte uint, maps to lexicon, where N = len(items)
         */
-        tdb_cookie cookie = tdb_get_cookie(ctx->db, cookie_id);
+        const uint8_t *cookie = tdb_get_cookie(ctx->db, cookie_id);
 
         while ((len = tdb_decode_trail(ctx->db,
                                        cookie_id,

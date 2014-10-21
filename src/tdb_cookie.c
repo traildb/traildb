@@ -1,8 +1,5 @@
 
-#ifndef __TRAILDB_HEX_H__
-#define __TRAILDB_HEX_H__
-
-#include <stdint.h>
+#include "traildb.h"
 
 static const uint8_t HEXBYTES[] =
    {
@@ -40,20 +37,6 @@ static const uint8_t HEXBYTES[] =
      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00  // ........
    };
 
-static int hex_decode(const char *hexstr, uint8_t bytes[16])
-{
-    int i;
-    for (i = 0; i < 32; i += 2){
-        uint8_t c1 = HEXBYTES[(int)hexstr[i]];
-        uint8_t c2 = HEXBYTES[(int)hexstr[i + 1]];
-        if (c1 && c2)
-            bytes[i / 2] = ((c1 - 1) << 4) | (c2 - 1);
-        else
-            return 1;
-    }
-    return 0;
-}
-
 static const char HEXCHARS[] =
     "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
     "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
@@ -64,13 +47,26 @@ static const char HEXCHARS[] =
     "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
     "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff";
 
-static void hex_encode(const uint8_t bytes[16], char encoded[32])
+int tdb_cookie_raw(const uint8_t hexcookie[32], uint8_t cookie[16])
+{
+    int i;
+    for (i = 0; i < 32; i += 2){
+        uint8_t c1 = HEXBYTES[hexcookie[i]];
+        uint8_t c2 = HEXBYTES[hexcookie[i + 1]];
+        if (c1 && c2)
+            cookie[i / 2] = ((c1 - 1) << 4) | (c2 - 1);
+        else
+            return 1;
+    }
+    return 0;
+}
+
+int tdb_cookie_hex(const uint8_t cookie[16], uint8_t hexcookie[32])
 {
     int i;
     for (i = 0; i < 16; i++){
-        encoded[i * 2] = HEXCHARS[bytes[i] * 2];
-        encoded[i * 2 + 1] = HEXCHARS[bytes[i] * 2 + 1];
+        hexcookie[i * 2] = HEXCHARS[cookie[i] * 2];
+        hexcookie[i * 2 + 1] = HEXCHARS[cookie[i] * 2 + 1];
     }
+    return 0;
 }
-
-#endif /* __TRAILDB_HEX_H__ */

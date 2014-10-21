@@ -85,3 +85,16 @@ void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed)
         }
     }
 }
+
+char *dupstrs(const char *strs, size_t num)
+{
+    char *dup;
+    const char *str = strs;
+    size_t i, n;
+    for (i = 0; i < num; i++)
+        str += strlen(str) + 1;
+    n = str - strs;
+    if ((dup = malloc(n * sizeof(char))) == NULL)
+        return NULL;
+    return memcpy((void *)dup, strs, n);
+}

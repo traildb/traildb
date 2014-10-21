@@ -17,7 +17,7 @@ uint32_t choose_grams(const uint32_t *encoded,
                       const Pvoid_t gram_freqs,
                       struct gram_bufs *g,
                       uint64_t *grams,
-                      const tdb_cookie_event *ev);
+                      const tdb_event *ev);
 
 Pvoid_t make_grams(FILE *grouped,
                    uint64_t num_events,

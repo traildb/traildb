@@ -8,13 +8,10 @@
 
 void arena_flush(const struct arena *a)
 {
-    if (a->fd){
+    if (a->fd && a->next){
         uint64_t size = (((a->next - 1) & (ARENA_DISK_BUFFER - 1)) + 1) *
                         (uint64_t)a->item_size;
-        SAFE_WRITE(a->data,
-                   size,
-                   "tmp.values",
-                   a->fd);
+        SAFE_WRITE(a->data, size, "tmp.items", a->fd);
     }
 }
 

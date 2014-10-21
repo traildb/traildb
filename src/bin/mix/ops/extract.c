@@ -265,7 +265,7 @@ static void flush_send_buf(struct extract_ctx *ectx)
     ectx->send_buf_len = 0;
 }
 
-static void flush_trail_buf(struct extract_ctx *ectx, tdb_cookie cookie)
+static void flush_trail_buf(struct extract_ctx *ectx, const uint8_t *cookie)
 {
     uint32_t size = ectx->trail_buf_len * 4 + 4 + 16;
     char *p;
@@ -387,7 +387,7 @@ int op_exec_extract(struct trail_ctx *ctx,
 
         case TRAIL_OP_POST_TRAIL:
             if (ectx->trail_buf_len > 0){
-                tdb_cookie cookie = tdb_get_cookie(ctx->db, cookie_id);
+                const uint8_t *cookie = tdb_get_cookie(ctx->db, cookie_id);
                 flush_trail_buf(ectx, cookie);
             }
             break;

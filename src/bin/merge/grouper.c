@@ -67,7 +67,7 @@ static struct arena trail_chunks = {
 };
 
 /* lookup a 16 byte cookie by doing two 8-byte lookups */
-static inline Word_t lookup_cookie(tdb_cookie cookie)
+static inline Word_t lookup_cookie(const uint8_t *cookie)
 {
     Word_t cookie_lo = *(Word_t*)cookie;
     Word_t cookie_hi = *(Word_t*)&cookie[8];
@@ -209,7 +209,7 @@ static inline void add_chunk(uint32_t groupby_key,
 
 void grouper_process(struct extractd_ctx *ctx)
 {
-    tdb_cookie cookie;
+    const uint8_t *cookie;
     const uint32_t *events;
     uint32_t i, groupby_field, num_fields, num_events;
     int ret;

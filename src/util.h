@@ -13,17 +13,21 @@
 #define DSFMT_MEXP 521
 #include "dsfmt/dSFMT.h"
 
-#define DIE_ON_ERROR(msg)\
-    do { perror(msg); exit(EXIT_FAILURE); } while (0)
-
 #define DIE(msg, ...)\
     do { fprintf(stderr, "FAIL: ");\
          fprintf(stderr, msg, ##__VA_ARGS__);\
          exit(EXIT_FAILURE); } while (0)
 
+#define WARN(msg, ...) fprintf(stderr, msg, ##__VA_ARGS__)
+
+#define SAFE_OPEN(f, path, mode)\
+    if ((f = fopen(path, mode)) == NULL){\
+        DIE("Could not open %s\n", path);\
+    }
+
 #define SAFE_WRITE(ptr, size, path, f)\
     if (fwrite(ptr, size, 1, f) != 1){\
-        DIE("Writing to %s failed\n", path);\
+        DIE("Writing to %s failed (%p)\n", path, ptr);      \
     }
 
 #define SAFE_FPRINTF(f, path, fmt, ...)\
@@ -68,5 +72,7 @@ uint32_t bits_needed(uint32_t max);
 uint64_t parse_uint64(const char *str, const char *ctx);
 
 void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed);
+
+char *dupstrs(const char *strs, size_t num);
 
 #endif /* __UTIL_H__ */

@@ -5,4 +5,4 @@ setup(name='traildb',
       description='TrailDB stores and queries cookie trails from raw logs.',
       author='AdRoll.com',
       packages=['traildb'],
-      package_data={'traildb': ['_traildb.so']})
+      package_data={'traildb': ['libtraildb.so']})

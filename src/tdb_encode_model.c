@@ -17,7 +17,7 @@
 
 typedef void (*event_op)(const uint32_t *encoded,
                          int n,
-                         const tdb_cookie_event *ev,
+                         const tdb_event *ev,
                          void *state);
 
 static uint32_t get_sample_size()
@@ -46,13 +46,13 @@ static void event_fold(event_op op,
     uint64_t i = 0;
     unsigned int rand_state = RANDOM_SEED;
     const uint32_t sample_size = get_sample_size();
-    tdb_cookie_event ev;
+    tdb_event ev;
 
     if (!(prev_items = malloc(num_fields * sizeof(tdb_item))))
         DIE("Couldn't allocate %u items\n", num_fields);
 
     rewind(grouped);
-    fread(&ev, sizeof(tdb_cookie_event), 1, grouped);
+    fread(&ev, sizeof(tdb_event), 1, grouped);
 
     /* this function scans through *all* unencoded data, takes a sample
        of cookies, edge-encodes events for a cookie, and calls the
@@ -82,13 +82,13 @@ static void event_fold(event_op op,
 
                     op(encoded, n, &ev, state);
                 }
-                fread(&ev, sizeof(tdb_cookie_event), 1, grouped);
+                fread(&ev, sizeof(tdb_event), 1, grouped);
             }
         }else{
             /* given that we are sampling cookies, we need to skip all events
                related to a cookie not included in the sample */
             for (;i < num_events && ev.cookie_id == cookie_id; i++)
-                fread(&ev, sizeof(tdb_cookie_event), 1, grouped);
+                fread(&ev, sizeof(tdb_event), 1, grouped);
         }
     }
 
@@ -125,7 +125,7 @@ uint32_t choose_grams(const uint32_t *encoded,
                       const Pvoid_t gram_freqs,
                       struct gram_bufs *g,
                       uint64_t *grams,
-                      const tdb_cookie_event *ev)
+                      const tdb_event *ev)
 {
     uint32_t j, k, n = 0;
     int i;
@@ -237,7 +237,7 @@ struct ngram_state{
 
 void all_bigrams(const uint32_t *encoded,
                  int n,
-                 const tdb_cookie_event *ev,
+                 const tdb_event *ev,
                  void *state){
 
   struct ngram_state *g = (struct ngram_state *)state;
@@ -268,7 +268,7 @@ void all_bigrams(const uint32_t *encoded,
 
 void choose_bigrams(const uint32_t *encoded,
                     int num_encoded,
-                    const tdb_cookie_event *ev,
+                    const tdb_event *ev,
                     void *state){
 
   struct ngram_state *g = (struct ngram_state *)state;
@@ -323,7 +323,7 @@ Pvoid_t make_grams(FILE *grouped,
 
 void all_freqs(const uint32_t *encoded,
                int n,
-               const tdb_cookie_event *ev,
+               const tdb_event *ev,
                void *state){
 
     struct ngram_state *g = (struct ngram_state *)state;

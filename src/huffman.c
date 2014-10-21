@@ -159,12 +159,12 @@ struct field_stats *huff_field_stats(const uint64_t *field_cardinalities,
     uint32_t i;
     struct field_stats *fstats;
 
-    if (!(fstats = malloc(sizeof(struct field_stats) + (num_fields - 1) * 4)))
+    if (!(fstats = malloc(sizeof(struct field_stats) + num_fields * 4)))
         return NULL;
 
-    fstats->field_id_bits = bits_needed(num_fields - 1);
+    fstats->field_id_bits = bits_needed(num_fields);
     fstats->field_bits[0] = bits_needed(max_timestamp_delta);
-    for (i = 0; i < num_fields - 2; i++){
+    for (i = 0; i < num_fields - 1; i++){
         fstats->field_bits[i + 1] = bits_needed(field_cardinalities[i]);
     }
     return fstats;

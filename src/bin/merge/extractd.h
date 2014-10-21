@@ -11,7 +11,7 @@ struct extractd;
 struct extractd *extractd_init(uint32_t num_mappers, int port);
 
 int extractd_next_trail(struct extractd *ext,
-                        tdb_cookie *cookie,
+                        const uint8_t **cookie,
                         const uint32_t **events,
                         uint32_t *num_events,
                         uint32_t *num_fields,

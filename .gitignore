@@ -1,4 +1,5 @@
 *.a
+*.dSYM
 *.o
 *.so
 lib/python/build
