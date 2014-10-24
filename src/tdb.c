@@ -151,7 +151,7 @@ static int init_field_stats(tdb *db)
     }
 
     if (!(db->field_stats = huff_field_stats(field_cardinalities,
-                                             db->num_fields + 2,
+                                             db->num_fields + 1,
                                              db->max_timestamp_delta))){
         free(field_cardinalities);
         return -1;

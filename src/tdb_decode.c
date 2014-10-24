@@ -72,9 +72,6 @@ uint32_t tdb_decode_trail(tdb *db,
             item >>= 32;
             field = tdb_item_field(item);
 
-            if (field > db->num_fields) // XXX: encoding bug?
-                DIE("Incomprehensible item field: %hhu\n", field);
-
             if (item)
                 db->previous_items[field - 1] = item;
 
@@ -86,8 +83,6 @@ uint32_t tdb_decode_trail(tdb *db,
                 field = tdb_item_field(item);
                 if (field){
                     do{
-                        if (field > db->num_fields) // XXX: encoding bug?
-                            DIE("Incomprehensible item field: %hhu\n", field);
                         db->previous_items[field - 1] = item & UINT32_MAX;
                         item >>= 32;
                     }while ((field = tdb_item_field(item)));

@@ -12,7 +12,6 @@
 #define EDGE_INCREMENT     1000000
 #define GROUPBUF_INCREMENT 10000000
 #define READ_BUFFER_SIZE  (1000000 * sizeof(tdb_event))
-#define MAX_INVALID_RATIO  0.005
 
 static int compare(const void *p1, const void *p2)
 {
@@ -35,7 +34,6 @@ static void group_events(FILE *grouped_w,
                          uint32_t *max_timestamp_delta)
 {
     uint64_t i;
-    uint64_t idx = 0;
     uint64_t num_invalid = 0;
     tdb_event *buf = NULL;
     uint32_t buf_size = 0;
@@ -100,10 +98,6 @@ static void group_events(FILE *grouped_w,
                    grouped_w);
     }
 
-    if (num_invalid / (float)idx > MAX_INVALID_RATIO)
-        DIE("Too many invalid timestamps (base timestamp: %u)\n",
-            base_timestamp);
-
     free(buf);
 }
 
@@ -118,12 +112,10 @@ uint32_t edge_encode_items(const tdb_item *items,
     /* consider only valid timestamps (field == 0) */
     if (tdb_item_field(ev->timestamp) == 0){
         uint64_t j = ev->item_zero;
-
         /* edge encode items: keep only fields that are different from
            the previous event */
         for (; j < ev->item_zero + ev->num_items; j++){
             tdb_field field = tdb_item_field(items[j]);
-
             if (prev_items[field] != items[j]){
                 if (n == *encoded_size){
                     *encoded_size += EDGE_INCREMENT;
@@ -274,13 +266,11 @@ static void encode_trails(const tdb_item *items,
         if (offs & 7){
             trail_size = offs / 8 + 1;
             write_bits(buf, 0, 8 - (offs & 7));
-        }else
+        }else{
             trail_size = offs / 8;
+        }
 
         /* append trail to the end of file */
-        if (fseek(out, 0, SEEK_END) == -1)
-            DIE("Seeking to the end of %s failed\n", path);
-
         SAFE_SEEK(out, file_offs, path);
         SAFE_WRITE(buf, trail_size, path, out);
 
