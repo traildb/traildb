@@ -64,7 +64,7 @@ static void find_bigrams(struct breadcrumbs *bd, Pvoid_t freqs)
     uint32_t *values;
 
     if (!(values = malloc(bd->num_fields)))
-        DIE("Num fields malloc failed\n");
+        DIE("Num fields malloc failed");
 
     for (i = 0; i < bd->num_cookies; i++){
         const char *data = &bd->trails.data[toc[i]];

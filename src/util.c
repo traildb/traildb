@@ -30,7 +30,7 @@ struct sortpair *sort_judyl(const Pvoid_t judy, Word_t *num_items)
     JLC(*num_items, judy, 0, -1);
 
     if (!(pairs = calloc(*num_items, sizeof(struct sortpair))))
-        DIE("Couldn't allocate sortpairs (%llu pairs)\n",
+        DIE("Couldn't allocate sortpairs (%llu pairs)",
             (unsigned long long)num_items);
 
     key = i = 0;
@@ -64,7 +64,7 @@ uint64_t parse_uint64(const char *str, const char *ctx)
     n = strtoull(str, &p, 10);
 
     if (*p || errno)
-        DIE("Invalid unsigned integer '%s' (%s)\n", str, ctx);
+        DIE("Invalid unsigned integer '%s' (%s)", str, ctx);
 
     return n;
 }

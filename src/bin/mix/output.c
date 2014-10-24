@@ -63,7 +63,7 @@ static FILE *open_output(const struct trail_ctx *ctx, const char **path)
     if (ctx->output_file){
         *path = ctx->output_file;
         if (!(out = fopen(*path, "w")))
-            DIE("Could not open output file at %s\n", *path);
+            DIE("Could not open output file at %s", *path);
     }else{
         *path = "stdout";
         out = stdout;
@@ -79,7 +79,7 @@ void output_matches(struct trail_ctx *ctx)
     FILE *out = open_output(ctx, &path);
 
     if (ctx->attr_type == TRAIL_ATTR_SET && !ctx->opt_binary)
-        DIE("Set attributes require --binary\n");
+        DIE("Set attributes require --binary");
 
     finalize_attributes(ctx);
 
@@ -138,7 +138,7 @@ static Pvoid_t serialize_trails(FILE *out, struct trail_ctx *ctx)
             free(trail);
             trail_size += TRAIL_BUF_INCREMENT;
             if (!(trail = malloc(trail_size * 4)))
-                DIE("Could not allocate trail buffer of %u items\n",
+                DIE("Could not allocate trail buffer of %u items",
                      trail_size);
         }
 
@@ -246,7 +246,7 @@ void output_trails(struct trail_ctx *ctx)
 
     if (out == stdout)
         if (!(out = open_memstream(&buf, &buf_size)))
-            DIE("Could not initialize memstream in output_trails\n");
+            DIE("Could not initialize memstream in output_trails");
 
     SAFE_SEEK(out, 24, path);
 

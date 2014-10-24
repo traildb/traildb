@@ -47,7 +47,7 @@ static int parse_text(const uint8_t keybuf[33],
     int has_attr = 0;
 
     if (tdb_cookie_raw(keybuf, cookie))
-        DIE("Invalid ID: %*s\n", 32, keybuf);
+        DIE("Invalid ID: %*s", 32, keybuf);
 
     if (ctx->db){
         if (ctx->has_cookie_index){
@@ -66,7 +66,7 @@ static int parse_text(const uint8_t keybuf[33],
             memcpy(dst, cookie, 16);
             cookie_id = *ptr = input_ids.next;
             if (input_ids.next == UINT32_MAX)
-                DIE("Too many input IDs (over 2^32!)\n");
+                DIE("Too many input IDs (over 2^32!)");
         }
     }
 
@@ -76,15 +76,15 @@ static int parse_text(const uint8_t keybuf[33],
             ctx->attr_type = TRAIL_ATTR_SCALAR;
         else if (ctx->attr_type != TRAIL_ATTR_SCALAR)
             DIE("Cannot mix set and scalar attributes "
-                "(offending ID: %*s)\n", 32, keybuf);
+                "(offending ID: %*s)", 32, keybuf);
 
-        if (fscanf(input, "%llu\n", &attr_value) != 1)
+        if (fscanf(input, "%llu", &attr_value) != 1)
             DIE("Invalid attribute value "
-                "(offending ID: %*s)\n", 32, keybuf);
+                "(offending ID: %*s)", 32, keybuf);
         has_attr = 1;
 
     }else if (keybuf[32] != '\n')
-        DIE("Invalid input (offending ID: %*s)\n", 32, keybuf);
+        DIE("Invalid input (offending ID: %*s)", 32, keybuf);
 
     if (cookie_id){
         --cookie_id;
@@ -120,14 +120,14 @@ void input_parse_stdin(struct trail_ctx *ctx)
     TDB_TIMER_START
     if (ctx->input_file)
         if (!(input = fopen(ctx->input_file, "r")))
-            DIE("Could not open input file at %s\n", ctx->input_file);
+            DIE("Could not open input file at %s", ctx->input_file);
 
     while (1){
         int n = fread(keybuf, 1, 17, input);
         if (!n)
             break;
         else if (n != 17)
-            DIE("Truncated input after %llu lines\n", num_lines);
+            DIE("Truncated input after %llu lines", num_lines);
 
         ++num_lines;
 
@@ -140,7 +140,7 @@ void input_parse_stdin(struct trail_ctx *ctx)
     }
     TDB_TIMER_END("parsing");
 
-    MSG(ctx, "%llu lines read, %llu lines match\n", num_lines, num_matches);
+    MSG(ctx, "%llu lines read, %llu lines match", num_lines, num_matches);
 
     if (input != stdin)
         fclose(input);

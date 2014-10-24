@@ -3,6 +3,7 @@
 
 void op_help_count()
 {
+    INFO("help count");
 }
 
 void *op_init_count(struct trail_ctx *ctx,
@@ -12,10 +13,10 @@ void *op_init_count(struct trail_ctx *ctx,
                     uint64_t *flags)
 {
     if (arg)
-        DIE("length does not accept arguments\n");
+        DIE("length does not accept arguments");
 
     if (!ctx->db)
-        DIE("length requires a DB\n");
+        DIE("length requires a DB");
 
     *flags = TRAIL_OP_MOD_ATTR;
     if (ctx->opt_match_events)
@@ -39,10 +40,10 @@ int op_exec_count(struct trail_ctx *ctx,
 
     if (ctx->attr_type){
         if (ctx->attr_type != TRAIL_ATTR_SCALAR)
-            DIE("Can not mix attribute types (count is scalar)\n");
-    }else
+            DIE("Can not mix attribute types (count is scalar)");
+    }else{
         ctx->attr_type = TRAIL_ATTR_SCALAR;
-
+    }
     JLI(ptr, ctx->attributes, cookie_id);
     ++*ptr;
 

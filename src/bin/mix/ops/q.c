@@ -69,7 +69,7 @@ static struct ddb_query_clause *parse_query(char *query,
     *event_query_len = *num_clauses = 0;
 
     if (!(clauses = malloc(max_num_clauses * sizeof(struct ddb_query_clause))))
-        DIE("Could not allocate %u clauses\n", max_num_clauses);
+        DIE("Could not allocate %u clauses", max_num_clauses);
 
     clauseptr = strtok_r(query, "&", &saveptr);
     while (clauseptr){
@@ -82,7 +82,7 @@ static struct ddb_query_clause *parse_query(char *query,
 
         if (!(clause->terms =
               malloc(max_num_terms * sizeof(struct ddb_query_term))))
-            DIE("Could not allocate %u clauses\n", max_num_terms);
+            DIE("Could not allocate %u clauses", max_num_terms);
 
         while (termptr){
             char *term;
@@ -90,22 +90,22 @@ static struct ddb_query_clause *parse_query(char *query,
             int field = tdb_get_field(db, field_name);
 
             if (field == -1)
-                DIE("Unrecognized field in q: %s\n", field_name);
+                DIE("Unrecognized field in q: %s", field_name);
 
             if (asprintf(&term, "%d:%s", field + 1, termptr) == -1)
-                DIE("Malloc failed in q/parse_query\n");
+                DIE("Malloc failed in q/parse_query");
 
             clause->terms[num_terms].key.data = term;
             clause->terms[num_terms].key.length = strlen(term);
             clause->terms[num_terms++].nnot = 0;
 
             if (1 + *event_query_len == MAX_EVENT_QUERY_LEN)
-                DIE("Too many terms in the query (found %u)\n",
+                DIE("Too many terms in the query (found %u)",
                     *event_query_len);
 
             event_query[++*event_query_len] = tdb_get_item(db, field, termptr);
             if (!event_query[*event_query_len])
-                MSG(ctx, "Unknown term '%s'\n", term);
+                MSG(ctx, "Unknown term '%s'", term);
 
             termptr = strtok_r(NULL, " ", &saveptr1);
         }
@@ -132,12 +132,12 @@ static struct ddb *open_index(const char *root)
         return NULL;
 
     if (!(db = ddb_new()))
-        DIE("Could not initialize index\n");
+        DIE("Could not initialize index");
 
     if (ddb_load(db, fd)){
         const char *err;
         ddb_error(db, &err);
-        DIE("Could not load index at %s: %s\n", path, err);
+        DIE("Could not load index at %s: %s", path, err);
     }
 
     close(fd);
@@ -153,13 +153,13 @@ static int match_index(struct trail_ctx *ctx, const struct qctx *q)
 
   Pvoid_t new_matches = NULL;
   if (!(cur = ddb_query(ctx->db_index, q->clauses, q->num_clauses)))
-    DIE("Query init failed (out of memory?)\n");
+    DIE("Query init failed (out of memory?)");
 
   while ((e = ddb_next(cur, &err))){
     Word_t cookie_id = *(uint32_t*)e->data;
 
     if (err)
-      DIE("Query execution failed (out of memory?)\n");
+      DIE("Query execution failed (out of memory?)");
 
     /* Intersect result set from the index with the currently
        matched rows */
@@ -191,15 +191,15 @@ void *op_init_q(struct trail_ctx *ctx,
     struct qctx *q;
 
     if (!ctx->db)
-        DIE("q requires a DB\n");
+        DIE("q requires a DB");
     if (!arg)
-        DIE("q requires a string argument. See --help=q\n");
+        DIE("q requires a string argument. See --help=q");
 
     if (!(query = strdup(arg)))
-        DIE("Malloc failed in op_init_q\n");
+        DIE("Malloc failed in op_init_q");
 
     if (!(q = malloc(sizeof(struct qctx) + MAX_EVENT_QUERY_LEN * 4)))
-        DIE("Malloc failed in op_init_q\n");
+        DIE("Malloc failed in op_init_q");
 
     q->clauses = parse_query(query,
                              &q->num_clauses,
@@ -212,11 +212,11 @@ void *op_init_q(struct trail_ctx *ctx,
 
     if (!ctx->db_index && !ctx->opt_no_index)
         if (!(ctx->db_index = open_index(ctx->db_path)))
-            MSG(ctx, "Query index not found at %s/index\n", ctx->db_path);
+            MSG(ctx, "Query index not found at %s/index", ctx->db_path);
 
     if (ctx->db_index){
         *flags |= TRAIL_OP_DB;
-        MSG(ctx, "Query index is enabled\n");
+        MSG(ctx, "Query index is enabled");
 
         /* We can skip trail decoding and evaluate the query only using the
            index under the following conditions:
@@ -230,13 +230,13 @@ void *op_init_q(struct trail_ctx *ctx,
         */
         if (!(q->num_clauses == 1 && !ctx->opt_match_events)){
             *flags |= TRAIL_OP_EVENT;
-            MSG(ctx, "Query (%dth op) is index-only\n", op_index);
+            MSG(ctx, "Query (%dth op) is index-only", op_index);
         }
     }else
         *flags |= TRAIL_OP_EVENT;
 
     if (!(*flags & TRAIL_OP_DB))
-        MSG(ctx, "Query index is disabled\n");
+        MSG(ctx, "Query index is disabled");
 
     free(query);
     return q;

@@ -65,10 +65,10 @@ void create_cookie_index(const char *path, tdb *db)
     };
 
     if (!(out = fopen(path, "w")))
-        DIE("Could not open output file at %s\n", path);
+        DIE("Could not open output file at %s", path);
 
     if (!(config = cmph_config_new(&r)))
-        DIE("cmph_config failed\n");
+        DIE("cmph_config failed");
 
     cmph_config_set_algo(config, CMPH_CHM);
 
@@ -76,11 +76,11 @@ void create_cookie_index(const char *path, tdb *db)
         cmph_config_set_verbosity(config, 5);
 
     if (!(cmph = cmph_new(config)))
-        DIE("cmph_new failed\n");
+        DIE("cmph_new failed");
 
     size = cmph_packed_size(cmph);
     if (!(data = malloc(size)))
-        DIE("Could not malloc a hash of %u bytes\n", size);
+        DIE("Could not malloc a hash of %u bytes", size);
 
     cmph_pack(cmph, data);
     SAFE_WRITE(data, size, path, out);
@@ -101,7 +101,7 @@ static void make_key(struct ddb_entry *key, tdb *db, tdb_item item)
     key->length = snprintf(keybuf, KEY_BUFFER_SIZE, "%u:%s", field, value);
 
     if (key->length >= KEY_BUFFER_SIZE)
-        DIE("Key too long. Increase KEY_BUFFER_SIZE\n");
+        DIE("Key too long. Increase KEY_BUFFER_SIZE");
 }
 
 static void add_trails(tdb *db, struct ddb_cons *cons)
@@ -145,14 +145,14 @@ static void add_trails(tdb *db, struct ddb_cons *cons)
             struct ddb_entry key;
             make_key(&key, db, field_value);
             if (ddb_cons_add(cons, &key, &value))
-                DIE("Could not add key (cookie %u)\n", i);
+                DIE("Could not add key (cookie %u)", i);
             J1N(tmp, uniques, field_value);
         }
         J1FA(field_value, uniques);
 
         if (!(i & 65535))
             fprintf(stderr,
-                    "%u/%u (%2.1f%%) trails indexed\n",
+                    "%u/%u (%2.1f%%) trails indexed",
                     i,
                     num_cookies,
                     100. * i / num_cookies);
@@ -168,15 +168,15 @@ static void create_trail_index(const char *path, tdb *db)
     FILE *out;
 
     if (!(out = fopen(path, "w")))
-        DIE("Could not open output file at %s\n", path);
+        DIE("Could not open output file at %s", path);
 
     if (!(cons = ddb_cons_new()))
-        DIE("Could not allocate discodb\n");
+        DIE("Could not allocate discodb");
 
     add_trails(db, cons);
 
     if (!(data = ddb_cons_finalize(cons, &length, DDB_OPT_UNIQUE_ITEMS)))
-        DIE("Finalizing index failed\n");
+        DIE("Finalizing index failed");
 
     SAFE_WRITE(data, length, path, out);
     SAFE_CLOSE(out, path);
@@ -192,13 +192,13 @@ int main(int argc, char **argv)
     TDB_TIMER_DEF
 
     if (argc < 2)
-        DIE("USAGE: %s db-root\n", argv[0]);
+        DIE("USAGE: %s db-root", argv[0]);
 
     if (!(db = tdb_open(argv[1])))
-        DIE("Could not load traildb\n");
+        DIE("Could not load traildb");
 
     if (db->error_code)
-        DIE("%s\n", db->error);
+        DIE("%s", db->error);
 
     TDB_TIMER_START
     tdb_path(path, "%s/trails.index", argv[1]);

@@ -179,7 +179,7 @@ Pvoid_t huff_create_codemap(const Pvoid_t key_freqs)
     DDB_TIMER_DEF
 
     if (!(nodes = calloc(HUFF_CODEBOOK_SIZE, sizeof(struct hnode))))
-        DIE("Could not allocate huffman codebook\n");
+        DIE("Could not allocate huffman codebook");
 
     DDB_TIMER_START
     num_symbols = sort_symbols(key_freqs, &total_freq, nodes);
@@ -251,7 +251,7 @@ void huff_encode_grams(const Pvoid_t codemap,
     uint32_t i = 0;
     uint64_t worstcase_bits = *offs + num_grams * 2 * 33 + 64;
     if (worstcase_bits >= UINT32_MAX)
-        DIE("Cookie trail too long: %llu bits\n",
+        DIE("Cookie trail too long: %llu bits",
             (unsigned long long)worstcase_bits);
 
     for (i = 0; i < num_grams; i++)
@@ -267,7 +267,7 @@ struct huff_codebook *huff_create_codebook(const Pvoid_t codemap,
 
     *size = HUFF_CODEBOOK_SIZE * sizeof(struct huff_codebook);
     if (!(book = calloc(1, *size)))
-        DIE("Could not allocate codebook in huff_create_codebook\n");
+        DIE("Could not allocate codebook in huff_create_codebook");
 
     JLF(ptr, codemap, symbol);
     while (ptr){

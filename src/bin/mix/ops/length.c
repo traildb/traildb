@@ -3,6 +3,7 @@
 
 void op_help_length()
 {
+    INFO("help length");
 }
 
 void *op_init_length(struct trail_ctx *ctx,
@@ -12,10 +13,10 @@ void *op_init_length(struct trail_ctx *ctx,
                      uint64_t *flags)
 {
     if (arg)
-        DIE("length does not accept arguments\n");
+        DIE("length does not accept arguments");
 
     if (!ctx->db)
-        DIE("length requires a DB\n");
+        DIE("length requires a DB");
 
     *flags = TRAIL_OP_POST_TRAIL | TRAIL_OP_MOD_ATTR;
     return NULL;
@@ -32,7 +33,7 @@ int op_exec_length(struct trail_ctx *ctx,
 
     if (ctx->attr_type){
         if (ctx->attr_type != TRAIL_ATTR_SCALAR)
-            DIE("Can not mix attribute types (length is scalar)\n");
+            DIE("Can not mix attribute types (length is scalar)");
     }else
         ctx->attr_type = TRAIL_ATTR_SCALAR;
 

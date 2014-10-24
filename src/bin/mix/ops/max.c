@@ -3,7 +3,7 @@
 
 void op_help_max()
 {
-    printf("help max\n");
+    INFO("help max");
 }
 
 void *op_init_max(struct trail_ctx *ctx,
@@ -15,12 +15,12 @@ void *op_init_max(struct trail_ctx *ctx,
     uint64_t *data;
 
     if (!(data = malloc(8)))
-        DIE("Malloc failed in op_init_max\n");
+        DIE("Malloc failed in op_init_max");
 
     if (arg)
         *data = parse_uint64(arg, "max");
     else
-        DIE("max requires an integer argument (e.g. max=10)\n");
+        DIE("max requires an integer argument (e.g. max=10)");
 
     *flags = TRAIL_OP_CHECK_ATTR | TRAIL_OP_PRE_TRAIL | TRAIL_OP_POST_TRAIL;
     return data;

@@ -71,7 +71,7 @@ static const struct trail_available_op *find_available_op(const char *name)
         if (!strcmp(available_ops[i].name, name))
             return &available_ops[i];
     }
-    DIE("Unknown operation: %s\n", name);
+    DIE("Unknown operation: %s", name);
 }
 
 static void print_op_usage_and_exit(const char *name)
@@ -94,7 +94,7 @@ static void init_ops(int optidx, int argc, char **argv)
 
         ctx.num_ops = argc - optidx;
         if (!(ctx.ops = malloc(ctx.num_ops * sizeof(struct trail_op))))
-            DIE("Malloc failed in init_ops\n");
+            DIE("Malloc failed in init_ops");
 
         for (i = 0; i < ctx.num_ops; i++, optidx++){
             char *arg = argv[optidx];
@@ -114,7 +114,7 @@ static void init_ops(int optidx, int argc, char **argv)
             */
             if ((flags & TRAIL_OP_MOD_ATTR) && check_seen)
                 DIE("Attribute checks must precede ops that modify "
-                    "attributes (offending op: %s)\n", name);
+                    "attributes (offending op: %s)", name);
             if (flags & TRAIL_OP_CHECK_ATTR)
                 check_seen = 1;
 
@@ -124,7 +124,7 @@ static void init_ops(int optidx, int argc, char **argv)
                 (flags & (TRAIL_OP_PRE_TRAIL | TRAIL_OP_POST_TRAIL)) &&
                 (__builtin_popcount(flags & (TRAIL_OP_PRE_TRAIL |
                                              TRAIL_OP_POST_TRAIL)) == 2))
-                DIE("Internal error (1): Invalid attribute check %s\n", name);
+                DIE("Internal error (1): Invalid attribute check %s", name);
 
             /* RULE: Attribute mods must set exactly one scope */
             if ((flags & TRAIL_OP_MOD_ATTR) &&\
@@ -133,10 +133,10 @@ static void init_ops(int optidx, int argc, char **argv)
                                             TRAIL_OP_EVENT |
                                             TRAIL_OP_POST_TRAIL |
                                             TRAIL_OP_FINALIZE)) != 1)
-                DIE("Internal error (2): Invalid attribute modifier %s\n", name);
+                DIE("Internal error (2): Invalid attribute modifier %s", name);
 
             ctx.ops[i].flags = flags;
-            MSG(&ctx, "Operation '%s' initialized\n", name);
+            MSG(&ctx, "Operation '%s' initialized", name);
         }
     }
 }
@@ -197,7 +197,7 @@ static void initialize(int argc, char **argv)
 
             case 'C': /* --counters-file */
                 if (!(ctx.counters_file = fopen(optarg, "a")))
-                    DIE("Could not open counters file at %s\n", optarg);
+                    DIE("Could not open counters file at %s", optarg);
                 break;
 
             case 'c': /* --output-count */
@@ -259,9 +259,9 @@ static void initialize(int argc, char **argv)
 
         if (ctx.db){
             if ((ctx.has_cookie_index = tdb_has_cookie_index(ctx.db))){
-                MSG(&ctx, "Cookie index enabled\n");
+                MSG(&ctx, "Cookie index enabled");
             }else{
-                MSG(&ctx, "Cookie index disabled\n");
+                MSG(&ctx, "Cookie index disabled");
             }
         }
 
@@ -271,7 +271,7 @@ static void initialize(int argc, char **argv)
             input_choose_all_rows(&ctx);
 
         if (ctx.opt_output_trails && !ctx.db)
-            DIE("Cannot --output-trails without a DB\n");
+            DIE("Cannot --output-trails without a DB");
 
         /* MSG(num_matches) */
     }else
@@ -286,7 +286,7 @@ static uint32_t *filter_ops(uint64_t include,
     uint32_t *indices;
 
     if (!(indices = malloc(ctx.num_ops * 4)))
-        DIE("Malloc failed in filter_ops\n");
+        DIE("Malloc failed in filter_ops");
 
     for (*num_ops = 0, i = 0; i < ctx.num_ops; i++){
         if ((ctx.ops[i].flags & include) && !(ctx.ops[i].flags & exclude))
@@ -443,7 +443,7 @@ static void exec_ops()
     /* this is a convenient limit that makes trail-level matching more
        efficient to implement, see exec_match_trail() above */
     if (num_eveops > 64)
-        DIE("Maximum number of event-level operations is 64\n");
+        DIE("Maximum number of event-level operations is 64");
 
     /* disable attribute pre-trail checks if some ops modify attributes */
     for (i = 0; i < ctx.num_ops; i++)
@@ -496,7 +496,7 @@ static void exec_ops()
                     free(trail);
                     trail_size += TRAIL_BUF_INCREMENT;
                     if (!(trail = malloc(trail_size * 4)))
-                        DIE("Could not allocate trail buffer of %u items\n",
+                        DIE("Could not allocate trail buffer of %u items",
                              trail_size);
                 }
             }
@@ -574,9 +574,9 @@ void write_counter(const char *name, long long int val)
                          name,
                          val);
         if (n >= COUNTER_BUF_SIZE)
-            DIE("Counter buffer too small (value %s.%s)\n", prefix, name);
+            DIE("Counter buffer too small (value %s.%s)", prefix, name);
         else if (fwrite(buf, n, 1, ctx.counters_file) != 1)
-            DIE("Writing a counter %s.%s failed\n", prefix, name);
+            DIE("Writing a counter %s.%s failed", prefix, name);
         SAFE_FLUSH(ctx.counters_file, "counters");
     }
 }
@@ -594,7 +594,7 @@ int main(int argc, char **argv)
 
     J1C(count, ctx.matched_rows, 0, -1);
     write_counter("main.input-trails", count);
-    MSG(&ctx, "Number of input trails: %llu\n", count);
+    MSG(&ctx, "Number of input trails: %llu", count);
 
     TDB_TIMER_START
     exec_ops();
@@ -604,7 +604,7 @@ int main(int argc, char **argv)
 
     J1C(count, ctx.matched_rows, 0, -1);
     write_counter("main.output-trails", count);
-    MSG(&ctx, "Number of output trails: %llu\n", count);
+    MSG(&ctx, "Number of output trails: %llu", count);
 
     TDB_TIMER_START
     if (ctx.opt_output_trails)
@@ -618,6 +618,6 @@ int main(int argc, char **argv)
     if (ctx.counters_file)
         SAFE_CLOSE(ctx.counters_file, "counters");
 
-    MSG(&ctx, "Done!\n");
+    MSG(&ctx, "Done!");
     return 0;
 }

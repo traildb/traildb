@@ -79,14 +79,14 @@ static int connection_attempt(const struct trail_ctx *ctx,
     if ((ent = gethostbyname(host)))
         memcpy(&addr.sin_addr, ent->h_addr, ent->h_length);
     else{
-        MSG(ctx, "Name resolution failed in extract - trying again\n");
+        MSG(ctx, "Name resolution failed in extract - trying again");
         sleep(1);
         return -1;
     }
 
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (fcntl(sock, F_SETFL, O_NONBLOCK) == -1)
-        DIE("Could not make extract socket non-blocking\n");
+        DIE("Could not make extract socket non-blocking");
 
     connect(sock, (struct sockaddr*)&addr, sizeof(addr));
 
@@ -96,23 +96,23 @@ static int connection_attempt(const struct trail_ctx *ctx,
 
     switch (poll(&pfd, 1, 1000)){
         case -1:
-            MSG(ctx, "Poll() failed in extract - trying again\n");
+            MSG(ctx, "Poll() failed in extract - trying again");
             break;
         case 0:
-            MSG(ctx, "Connect() timeout in extract - trying again\n");
+            MSG(ctx, "Connect() timeout in extract - trying again");
             close(sock);
             return -1;
         case 1:
             if (pfd.revents == POLLOUT){
                 int old = fcntl(sock, F_GETFL, 0);
                 if (old == -1)
-                    DIE("Could not query socket status in extract\n");
+                    DIE("Could not query socket status in extract");
                 if (fcntl(sock, F_SETFL, old & ~O_NONBLOCK) == -1)
-                    DIE("Could not make extract socket blocking\n");
+                    DIE("Could not make extract socket blocking");
                 return sock;
             }else
                 MSG(ctx,
-                    "Connect() to %s:%d failed in extract - trying again\n",
+                    "Connect() to %s:%d failed in extract - trying again",
                     host,
                     port);
             break;
@@ -129,7 +129,7 @@ static void sendall(int sock, const char *buf, uint32_t size)
     while (sent < size){
         ssize_t ret = send(sock, &buf[sent], size - sent, 0);
         if (ret == -1)
-            DIE("Extractd closed connection prematurely: %s\n", strerror(errno));
+            DIE("Extractd closed connection prematurely: %s", strerror(errno));
         sent += ret;
     }
 }
@@ -151,10 +151,10 @@ static int open_connection(const struct trail_ctx *ctx,
     int i, sock;
     for (i = 0; i < CONNECT_TIMEOUT_SECS; i++)
         if ((sock = connection_attempt(ctx, host, port)) > 0){
-            MSG(ctx, "Extract connected to %s:%d\n", host, port);
+            MSG(ctx, "Extract connected to %s:%d", host, port);
             return sock;
         }
-    DIE("Extract could not connect to %s:%d\n", host, port);
+    DIE("Extract could not connect to %s:%d", host, port);
 }
 
 static void close_connection(const struct trail_ctx *ctx, int sock)
@@ -163,7 +163,7 @@ static void close_connection(const struct trail_ctx *ctx, int sock)
 
     send_chunk(sock, 'D', DONE, sizeof(DONE));
     close(sock);
-    MSG(ctx, "Connection to extractd closed\n");
+    MSG(ctx, "Connection to extractd closed");
 }
 
 static void write_fields(FILE *memio,
@@ -188,7 +188,7 @@ static void write_lexicon(tdb_field field,
     uint32_t i, lexsize;
 
     if (tdb_lexicon_size(db, field, &lexsize))
-        DIE("Could not get lexicon size for field %u\n", field);
+        DIE("Could not get lexicon size for field %u", field);
     ++lexsize;
 
     SAFE_WRITE(&lexsize, 4, "memory", memio);
@@ -215,7 +215,7 @@ static void send_header(const struct extract_ctx *ectx,
     uint64_t size;
 
     if (!(memio = open_memstream(&buf, &buf_size)))
-         DIE("Could not initialize memstream in extract\n");
+         DIE("Could not initialize memstream in extract");
 
     sendall(ectx->sock, VERSION, sizeof(VERSION) - 1);
 
@@ -300,12 +300,12 @@ static void init_ectx(char *arg,
     int port;
 
     if (memcmp(tok, "tcp://", 6))
-        DIE("Only tcp:// protocol is supported currently in extract\n");
+        DIE("Only tcp:// protocol is supported currently in extract");
 
     tok = &tok[6];
     addr = strsep(&tok, ":");
     if (!tok)
-        DIE("Address syntax is tcp://host:port in extract\n");
+        DIE("Address syntax is tcp://host:port in extract");
     port = parse_uint64(tok, "extractd port");
 
     ectx->sock = open_connection(ctx, addr, port);
@@ -316,7 +316,7 @@ static void init_ectx(char *arg,
         field = tdb_get_field(ctx->db, tok);
 
         if (field < 0)
-            DIE("Unknown field in extract: %s\n", tok);
+            DIE("Unknown field in extract: %s", tok);
 
         ectx->fields[ectx->num_fields++] = field;
     }
@@ -324,7 +324,7 @@ static void init_ectx(char *arg,
 
 void op_help_extract()
 {
-    printf("help extract\n");
+    INFO("help extract");
 }
 
 void *op_init_extract(struct trail_ctx *ctx,
@@ -338,22 +338,22 @@ void *op_init_extract(struct trail_ctx *ctx,
     struct extract_ctx *ectx;
 
     if (!arg)
-        DIE("extract requires an argument (see --help=extract)\n");
+        DIE("extract requires an argument (see --help=extract)");
 
     if (!ctx->db)
-        DIE("extract requires a DB\n");
+        DIE("extract requires a DB");
 
     if (!ctx->opt_match_events)
-        DIE("extract requires --match-events\n");
+        DIE("extract requires --match-events");
 
     if (!(ectx = calloc(1, sizeof(struct extract_ctx))))
-        DIE("Malloc failed in op_init_extract\n");
+        DIE("Malloc failed in op_init_extract");
 
     if (!(ectx->fields = malloc(tdb_num_fields(ctx->db) * 4)))
-        DIE("Malloc failed in op_init_extract\n");
+        DIE("Malloc failed in op_init_extract");
 
     if (!(marg = strdup(arg)))
-        DIE("Malloc failed in op_init_extract\n");
+        DIE("Malloc failed in op_init_extract");
 
     init_ectx(marg, ectx, ctx);
     send_header(ectx, ctx);

@@ -53,7 +53,7 @@ static void group_events(FILE *grouped_w,
             if (j >= buf_size){
                 buf_size += GROUPBUF_INCREMENT;
                 if (!(buf = realloc(buf, buf_size * sizeof(tdb_event))))
-                    DIE("Couldn't realloc group buffer of %u items\n",
+                    DIE("Couldn't realloc group buffer of %u items",
                         buf_size);
             }
             buf[j].cookie_id = i;
@@ -120,7 +120,7 @@ uint32_t edge_encode_items(const tdb_item *items,
                 if (n == *encoded_size){
                     *encoded_size += EDGE_INCREMENT;
                     if (!(*encoded = realloc(*encoded, *encoded_size * 4)))
-                        DIE("Could not allocate encoding buffer of %u items\n",
+                        DIE("Could not allocate encoding buffer of %u items",
                             *encoded_size);
                 }
                 (*encoded)[n++] = prev_items[field] = items[j];
@@ -157,7 +157,7 @@ static void store_info(uint64_t num_events,
     FILE *out;
 
     if (!(out = fopen(path, "w")))
-        DIE("Could not create info file: %s\n", path);
+        DIE("Could not create info file: %s", path);
 
     SAFE_FPRINTF(out,
                  path,
@@ -195,10 +195,10 @@ static void encode_trails(const tdb_item *items,
     init_gram_bufs(&gbufs, num_fields);
 
     if (file_offs >= UINT32_MAX)
-        DIE("Trail file %s over 4GB!\n", path);
+        DIE("Trail file %s over 4GB!", path);
 
     if (!(out = fopen(path, "w")))
-        DIE("Could not create trail file: %s\n", path);
+        DIE("Could not create trail file: %s", path);
 
     /* reserve space for TOC */
     SAFE_SEEK(out, file_offs, path);
@@ -206,13 +206,13 @@ static void encode_trails(const tdb_item *items,
     /* huff_encode_grams guarantees that it writes fewer
        than UINT32_MAX bits per buffer, or it fails */
     if (!(buf = calloc(1, UINT32_MAX / 8 + 8)))
-        DIE("Could not allocate 512MB in encode_trails\n");
+        DIE("Could not allocate 512MB in encode_trails");
 
     if (!(prev_items = malloc(num_fields * 4)))
-        DIE("Could not allocate %u fields\n", num_fields);
+        DIE("Could not allocate %u fields", num_fields);
 
     if (!(grams = malloc(num_fields * 8)))
-        DIE("Could not allocate %u grams\n", num_fields);
+        DIE("Could not allocate %u grams", num_fields);
 
     rewind(grouped);
     fread(&ev, sizeof(tdb_event), 1, grouped);
@@ -276,7 +276,7 @@ static void encode_trails(const tdb_item *items,
 
         file_offs += trail_size;
         if (file_offs >= UINT32_MAX)
-            DIE("Trail file %s over 4GB!\n", path);
+            DIE("Trail file %s over 4GB!", path);
 
         memset(buf, 0, trail_size);
     }
@@ -300,7 +300,7 @@ static void store_codebook(const Pvoid_t codemap, const char *path)
     struct huff_codebook *book = huff_create_codebook(codemap, &size);
 
     if (!(out = fopen(path, "w")))
-        DIE("Could not create codebook file: %s\n", path);
+        DIE("Could not create codebook file: %s", path);
 
     SAFE_WRITE(book, size, path, out);
 
@@ -343,7 +343,7 @@ void tdb_encode(const uint64_t *cookie_pointers,
 
     tdb_path(grouped_path, "%s/tmp.grouped.%d", root, getpid());
     if (!(grouped_w = fopen(grouped_path, "w")))
-        DIE("Could not open tmp file at %s\n", path);
+        DIE("Could not open tmp file at %s", path);
 
     group_events(grouped_w,
                  grouped_path,
@@ -355,9 +355,9 @@ void tdb_encode(const uint64_t *cookie_pointers,
 
     SAFE_CLOSE(grouped_w, grouped_path);
     if (!(grouped_r = fopen(grouped_path, "r")))
-        DIE("Could not open tmp file at %s\n", path);
+        DIE("Could not open tmp file at %s", path);
     if (!(read_buf = malloc(READ_BUFFER_SIZE)))
-        DIE("Could not allocate read buffer of %lu bytes\n", READ_BUFFER_SIZE);
+        DIE("Could not allocate read buffer of %lu bytes", READ_BUFFER_SIZE);
     setvbuf(grouped_r, read_buf, _IOFBF, READ_BUFFER_SIZE);
 
     TDB_TIMER_END("trail/group_events");

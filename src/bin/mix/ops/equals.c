@@ -3,7 +3,7 @@
 
 void op_help_equals()
 {
-    printf("help equals\n");
+    INFO("help equals");
 }
 
 void *op_init_equals(struct trail_ctx *ctx,
@@ -15,12 +15,12 @@ void *op_init_equals(struct trail_ctx *ctx,
     uint64_t *data;
 
     if (!(data = malloc(8)))
-        DIE("Malloc failed in op_init_equals\n");
+        DIE("Malloc failed in op_init_equals");
 
     if (arg)
         *data = parse_uint64(arg, "equals");
     else
-        DIE("equals requires an integer argument (e.g. equals=10)\n");
+        DIE("equals requires an integer argument (e.g. equals=10)");
 
     *flags = TRAIL_OP_CHECK_ATTR | TRAIL_OP_PRE_TRAIL | TRAIL_OP_POST_TRAIL;
     return data;

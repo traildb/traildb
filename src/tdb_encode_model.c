@@ -26,7 +26,7 @@ static uint32_t get_sample_size()
         char *endptr;
         double d = strtod(getenv("TDB_SAMPLE_SIZE"), &endptr);
         if (*endptr || d < 0.01 || d > 1.0)
-            DIE("Invalid TDB_SAMPLE_SIZE\n");
+            DIE("Invalid TDB_SAMPLE_SIZE");
         else
             return d * RAND_MAX;
     }
@@ -49,7 +49,7 @@ static void event_fold(event_op op,
     tdb_event ev;
 
     if (!(prev_items = malloc(num_fields * sizeof(tdb_item))))
-        DIE("Couldn't allocate %u items\n", num_fields);
+        DIE("Couldn't allocate %u items", num_fields);
 
     rewind(grouped);
     fread(&ev, sizeof(tdb_event), 1, grouped);
@@ -99,13 +99,13 @@ static void event_fold(event_op op,
 void init_gram_bufs(struct gram_bufs *b, uint32_t num_fields)
 {
     if (!(b->chosen = malloc(num_fields * num_fields * 8)))
-        DIE("Could not allocate bigram gram_buf (%u fields)\n", num_fields);
+        DIE("Could not allocate bigram gram_buf (%u fields)", num_fields);
 
     if (!(b->scores = malloc(num_fields * num_fields * 8)))
-        DIE("Could not allocate scores gram_buf (%u fields)\n", num_fields);
+        DIE("Could not allocate scores gram_buf (%u fields)", num_fields);
 
     if (!(b->covered = malloc(num_fields)))
-        DIE("Could not allocate covered gram_buf (%u fields)\n", num_fields);
+        DIE("Could not allocate covered gram_buf (%u fields)", num_fields);
 
     b->num_fields = num_fields;
 }
@@ -304,7 +304,7 @@ Pvoid_t make_grams(FILE *grouped,
     g.candidates = find_candidates(unigram_freqs);
 
     if (!(g.grams = malloc(num_fields * 8)))
-        DIE("Could not allocate grams buf (%u fields)\n", num_fields);
+        DIE("Could not allocate grams buf (%u fields)", num_fields);
 
     /* collect frequencies of *all* occurring bigrams of candidate unigrams */
     event_fold(all_bigrams, grouped, num_events, items, num_fields, (void *)&g);

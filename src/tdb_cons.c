@@ -33,16 +33,16 @@ static void lexicon_store(const Pvoid_t lexicon, const char *path)
     size += (count + 1) * 4;
 
     if (size > TDB_MAX_LEXICON_SIZE)
-        DIE("Lexicon %s would be huge! %llu items, %llu bytes\n",
+        DIE("Lexicon %s would be huge! %"PRIu64" items, %"PRIu64" bytes",
             path,
-            (long long unsigned int)count,
-            (long long unsigned int)size);
+            count,
+            size);
 
     SAFE_OPEN(out, path, "w");
 
     if (ftruncate(fileno(out), size))
-        DIE("Could not initialize lexicon file (%llu bytes): %s\n",
-            (long long unsigned int)size,
+        DIE("Could not initialize lexicon file (%"PRIu64" bytes): %s",
+            size,
             path);
 
     SAFE_WRITE(&count, 4, path, out);
@@ -99,12 +99,12 @@ static int store_cookies(tdb_cons *cons)
     SAFE_OPEN(out, path, "w");
 
     if (cons->num_cookies > TDB_MAX_NUM_COOKIES) {
-        WARN("Too many cookies (%llu)\n", cons->num_cookies);
+        WARN("Too many cookies (%"PRIu64")", cons->num_cookies);
         return 1;
     }
 
     if (ftruncate(fileno(out), cons->num_cookies * 16LLU)) {
-        WARN("Could not init (%llu cookies): %s\n", cons->num_cookies, path);
+        WARN("Could not init (%"PRIu64" cookies): %s", cons->num_cookies, path);
         return -1;
     }
 
@@ -135,7 +135,7 @@ static int dump_cookie_pointers(tdb_cons *cons)
     /* serialize cookie pointers, freeing cookie_index */
 
     if ((cons->cookie_pointers = malloc(cons->num_cookies * 8)) == NULL) {
-        WARN("Could not allocate cookie array\n");
+        WARN("Could not allocate cookie array");
         return -1;
     }
 
@@ -264,12 +264,12 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
     /* finalize event items */
     arena_flush(&cons->items);
     if (fclose(cons->items.fd)) {
-        WARN("Closing %s failed\n", cons->tempfile);
+        WARN("Closing %s failed", cons->tempfile);
         return -1;
     }
 
     if (tdb_mmap(cons->tempfile, &items_mmapped, NULL)) {
-        WARN("Mmapping %s failed\n", cons->tempfile);
+        WARN("Mmapping %s failed", cons->tempfile);
         return -1;
     }
 

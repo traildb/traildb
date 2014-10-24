@@ -3,7 +3,7 @@
 
 void op_help_not()
 {
-    printf("help not\n");
+    INFO("help not");
 }
 
 void *op_init_not(struct trail_ctx *ctx,
@@ -15,12 +15,12 @@ void *op_init_not(struct trail_ctx *ctx,
     uint64_t *data;
 
     if (!(data = malloc(8)))
-        DIE("Malloc failed in op_init_not\n");
+        DIE("Malloc failed in op_init_not");
 
     if (arg)
         *data = parse_uint64(arg, "not");
     else
-        DIE("not requires an integer argument (e.g. not=10)\n");
+        DIE("not requires an integer argument (e.g. not=10)");
 
     *flags = TRAIL_OP_CHECK_ATTR | TRAIL_OP_PRE_TRAIL | TRAIL_OP_POST_TRAIL;
     return data;

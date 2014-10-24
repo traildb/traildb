@@ -106,7 +106,7 @@ void output_trails(struct trail_ctx *ctx);
 void write_counter(const char *name, long long int val);
 
 #define MSG(ctx, msg, ...)\
-     { if ((ctx)->opt_verbose) fprintf(stderr, msg, ##__VA_ARGS__); }
+     { if ((ctx)->opt_verbose) fprintf(stderr, msg"\n", ##__VA_ARGS__); }
 
 #endif /* __TRAIL_MIX_H__ */
 

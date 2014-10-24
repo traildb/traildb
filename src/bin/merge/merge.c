@@ -85,11 +85,11 @@ static void output_fields(const struct extractd_ctx *ctx)
             tdb_path(path, "trail-field.%u.%s.csv", k, safe);
 
         if (!(out = fopen(path, "w")))
-            DIE("Could not open output file at %s\n", path);
+            DIE("Could not open output file at %s", path);
 
         for (j = 0; j < extractd_num_tokens(ctx->extd, i); j++){
             const char *token = extractd_get_token(ctx->extd, i, j);
-            SAFE_FPRINTF(out, path, "%s\n", token);
+            SAFE_FPRINTF(out, path, "%s", token);
         }
 
         ++k;

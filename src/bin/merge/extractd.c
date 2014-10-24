@@ -89,7 +89,7 @@ static void recvall(int sock, char *buf, uint32_t size)
     while (read < size){
         ssize_t ret = recv(sock, &buf[read], size - read, 0);
         if (ret == -1)
-            DIE("Mapper closed connection prematurely in recv\n");
+            DIE("Mapper closed connection prematurely in recv");
         read += ret;
     }
 }
@@ -114,10 +114,10 @@ static int new_server_socket(int port)
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
 
     if (bind(sock, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1)
-        DIE("Binding socket failed\n");
+        DIE("Binding socket failed");
 
     if (listen(sock, 10) == -1)
-        DIE("Listen failed\n");
+        DIE("Listen failed");
 
     return sock;
 }
@@ -136,7 +136,7 @@ static uint32_t *create_mapping(struct ext_field *field,
     uint32_t *local_map;
 
     if (buf_max < 4)
-        DIE("Truncated lexicon\n");
+        DIE("Truncated lexicon");
 
     *num_tokens = *(uint32_t*)buf;
     if (!(local_map = malloc(*num_tokens * 4)))
@@ -155,7 +155,7 @@ static uint32_t *create_mapping(struct ext_field *field,
                 field->tokens_size += len + 1 + TOKEN_BUF_INC;
                 if (!(field->tokens = realloc(field->tokens,
                                               field->tokens_size)))
-                    DIE("Could not allocate tokens array of %llu bytes\n",
+                    DIE("Could not allocate tokens array of %llu bytes",
                         (unsigned long long)field->tokens_size);
             }
             memcpy(&field->tokens[field->tokens_len], &buf[offs], len + 1);
@@ -164,7 +164,7 @@ static uint32_t *create_mapping(struct ext_field *field,
                 field->offsets_size += BUFFER_INC;
                 if (!(field->token_offsets = realloc(field->token_offsets,
                                                      field->offsets_size * 4)))
-                    DIE("Could not allocate offsets of %u bytes\n",
+                    DIE("Could not allocate offsets of %u bytes",
                         field->offsets_size * 4);
             }
 
@@ -177,7 +177,7 @@ static uint32_t *create_mapping(struct ext_field *field,
     }
 
     if (i != *num_tokens)
-        DIE("Corrupted lexicon chunk: Too few tokens\n");
+        DIE("Corrupted lexicon chunk: Too few tokens");
 
     *size = offs;
     return local_map;
@@ -198,21 +198,21 @@ static void parse_lexicon(struct extractd *ext, struct ext_mapper *mapper)
     offs += 4;
 
     if (!ext->fields)
-        DIE("Error: Mapper sent lexicon before fields\n");
+        DIE("Error: Mapper sent lexicon before fields");
 
     if (num_lexicons != ext->num_fields)
-        DIE("Incompatible mappers: Got %u lexicons, expected %u\n",
+        DIE("Incompatible mappers: Got %u lexicons, expected %u",
             num_lexicons,
             ext->num_fields);
 
     if (mapper->field_mappings)
-        DIE("Error: Mapper sent lexicon twice\n");
+        DIE("Error: Mapper sent lexicon twice");
 
     if (!(mapper->field_mappings = calloc(num_lexicons, sizeof(uint32_t*))))
-        DIE("Could not malloc mapping for %u lexicons\n", num_lexicons);
+        DIE("Could not malloc mapping for %u lexicons", num_lexicons);
 
     if (!(mapper->num_tokens = calloc(num_lexicons, 4)))
-        DIE("Could not malloc lengths for %u lexicons\n", num_lexicons);
+        DIE("Could not malloc lengths for %u lexicons", num_lexicons);
 
     for (i = 0; i < num_lexicons && offs < mapper->chunk_buf_len; i++){
         uint32_t size;
@@ -225,7 +225,7 @@ static void parse_lexicon(struct extractd *ext, struct ext_mapper *mapper)
     }
 
     if (offs < mapper->chunk_buf_len)
-        DIE("Corrupted lexicon chunk: Extra bytes\n");
+        DIE("Corrupted lexicon chunk: Extra bytes");
 }
 
 /*
@@ -249,7 +249,7 @@ static void parse_fields(struct extractd *ext, struct ext_mapper *mapper)
     if (ext->fields){
         /* check against existing */
         if (ext->num_fields != num_fields)
-            DIE("Incompatible mappers: Got %u fields, expected %u fields\n",
+            DIE("Incompatible mappers: Got %u fields, expected %u fields",
                 num_fields, ext->num_fields);
 
         for (i = 0; i < ext->num_fields && offs < mapper->chunk_buf_len; i++){
@@ -258,7 +258,7 @@ static void parse_fields(struct extractd *ext, struct ext_mapper *mapper)
             if (strncmp(ext->fields[i].name, &p[offs], max)){
                 uint32_t len = strnlen(&p[offs], max);
                 DIE("Incompatible mappers: "
-                    "%uth field should be '%s', got '%*s'\n",
+                    "%uth field should be '%s', got '%*s'",
                     i,
                     ext->fields[i].name,
                     len,
@@ -273,22 +273,22 @@ static void parse_fields(struct extractd *ext, struct ext_mapper *mapper)
         /* +1 guarantees that ext->fields != NULL */
         if (!(ext->fields = calloc(ext->num_fields + 1,
                                    sizeof(struct ext_field))))
-            DIE("Could not malloc %u field structures\n", ext->num_fields);
+            DIE("Could not malloc %u field structures", ext->num_fields);
 
         for (i = 0; i < ext->num_fields && offs < mapper->chunk_buf_len; i++){
             ext->fields[i].name = strndup(&p[offs],
                                           mapper->chunk_buf_len - offs);
             if (!ext->fields[i].name)
-                DIE("Could not malloc field name\n");
+                DIE("Could not malloc field name");
             offs += strlen(ext->fields[i].name) + 1;
         }
     }
 
     if (i != ext->num_fields)
-        DIE("Corrupted fields chunk: Too few fields\n");
+        DIE("Corrupted fields chunk: Too few fields");
 
     if (offs < mapper->chunk_buf_len)
-        DIE("Corrupted fields chunk: Extra bytes\n");
+        DIE("Corrupted fields chunk: Extra bytes");
 }
 
 /*
@@ -304,13 +304,13 @@ static int receive_chunk(struct extractd *ext, struct ext_mapper *mapper)
     recvall(mapper->sock, (char*)&header, sizeof(struct head));
 
     if (header.len < 4)
-        DIE("Truncated chunk (type '%c'): %u bytes\n", header.type, header.len);
+        DIE("Truncated chunk (type '%c'): %u bytes", header.type, header.len);
 
     if (header.len > mapper->chunk_buf_size){
         free(mapper->chunk_buf);
         mapper->chunk_buf_size = header.len + BUFFER_INC;
         if (!(mapper->chunk_buf = malloc(mapper->chunk_buf_size)))
-            DIE("Could not allocate memory for chunk of %u bytes\n",
+            DIE("Could not allocate memory for chunk of %u bytes",
                 mapper->chunk_buf_size);
     }
     mapper->chunk_buf_len = header.len;
@@ -333,7 +333,7 @@ static int receive_chunk(struct extractd *ext, struct ext_mapper *mapper)
             return 1;
 
         default:
-            DIE("Unknown chunk type: '%c' (%d)\n", header.type, header.type);
+            DIE("Unknown chunk type: '%c' (%d)", header.type, header.type);
     }
 
     /* Only trail buffers are of interest to entities outside this function.
@@ -358,17 +358,17 @@ static void new_mapper(struct extractd *ext)
             break;
 
     if (i == ext->num_mappers)
-        DIE("Too many mappers! Expected only %u connections\n",
+        DIE("Too many mappers! Expected only %u connections",
             ext->num_mappers);
 
     if ((ext->mappers[i].sock = accept(ext->server_sock,
                                        (struct sockaddr*)&peer_addr,
                                        &peer_addr_size)) == -1)
-        DIE("Accept() failed\n");
+        DIE("Accept() failed");
 
     recvall(ext->mappers[i].sock, head, sizeof(VERSION) - 1);
     if (memcmp(VERSION, head, sizeof(VERSION) - 1))
-        DIE("Version mismatch: Expected '%s', got '%*s'\n",
+        DIE("Version mismatch: Expected '%s', got '%*s'",
             VERSION,
             (int)sizeof(VERSION) - 1,
             head);
@@ -406,7 +406,7 @@ static int poll_mappers(struct extractd *ext, uint32_t timeout)
 
         /* poll failed */
         case -1:
-            DIE("Poll failed\n");
+            DIE("Poll failed");
 
         /* timeout */
         case 0:
@@ -416,13 +416,13 @@ static int poll_mappers(struct extractd *ext, uint32_t timeout)
         default:
 
             if (ext->fds[0].revents & (POLLERR | POLLHUP | POLLNVAL))
-                DIE("Server socket failed unexpectedly\n");
+                DIE("Server socket failed unexpectedly");
             else if (ext->fds[0].revents & POLLIN)
                 new_mapper(ext);
 
             for (i = 1; i < num_fds; i++){
                 if (ext->fds[i].revents & (POLLERR | POLLHUP | POLLNVAL))
-                    DIE("Mapper closed connection unexpectedly\n");
+                    DIE("Mapper closed connection unexpectedly");
                 else if (ext->fds[i].revents & POLLIN)
                     num_chunks += receive_chunk(ext, ext->fd_mappers[i]);
             }
@@ -486,7 +486,7 @@ static void parse_next_trail(struct extractd *ext,
 
     ext->active_chunk_offs += 20;
     if (ext->active_chunk_offs > ext->active_chunk_len)
-        DIE("Truncated trail: Missing header\n");
+        DIE("Truncated trail: Missing header");
     else{
         *cookie = (uint8_t*)p;
         num_values = *(uint32_t*)&p[16];
@@ -494,14 +494,14 @@ static void parse_next_trail(struct extractd *ext,
 
     /* each event has num_fields fields and a timestamp */
     if (num_values % (ext->num_fields + 1))
-        DIE("Invalid trail: %u values is not divisible with %u fields\n",
+        DIE("Invalid trail: %u values is not divisible with %u fields",
             num_values, ext->num_fields + 1);
     else
         *num_events = num_values / (ext->num_fields + 1);
 
     ext->active_chunk_offs += num_values * 4;
     if (ext->active_chunk_offs > ext->active_chunk_len)
-        DIE("Truncated trail (expected %u bytes, got only %u)\n",
+        DIE("Truncated trail (expected %u bytes, got only %u)",
             ext->active_chunk_offs,
             ext->active_chunk_len);
     else
@@ -562,18 +562,18 @@ struct extractd *extractd_init(uint32_t num_mappers, int port)
     struct extractd *ext;
 
     if (!(ext = calloc(1, sizeof(struct extractd))))
-        DIE("Malloc failed in extractd_init\n");
+        DIE("Malloc failed in extractd_init");
 
     ext->num_mappers = num_mappers;
 
     if (!(ext->mappers = calloc(num_mappers, sizeof(struct ext_mapper))))
-        DIE("Malloc failed in extractd_init (%u mappers)\n", num_mappers);
+        DIE("Malloc failed in extractd_init (%u mappers)", num_mappers);
 
     if (!(ext->fds = calloc(num_mappers + 1, sizeof(struct pollfd))))
-        DIE("Malloc failed in extractd_init (%u mappers)\n", num_mappers);
+        DIE("Malloc failed in extractd_init (%u mappers)", num_mappers);
 
     if (!(ext->fd_mappers = calloc(num_mappers + 1, sizeof(void*))))
-        DIE("Malloc failed in extractd_init (%u mappers)\n", num_mappers);
+        DIE("Malloc failed in extractd_init (%u mappers)", num_mappers);
 
     ext->server_sock = new_server_socket(port);
 

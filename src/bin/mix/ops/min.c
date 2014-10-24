@@ -3,7 +3,7 @@
 
 void op_help_min()
 {
-    printf("help min\n");
+    INFO("help min");
 }
 
 void *op_init_min(struct trail_ctx *ctx,
@@ -15,12 +15,12 @@ void *op_init_min(struct trail_ctx *ctx,
     uint64_t *data;
 
     if (!(data = malloc(8)))
-        DIE("Malloc failed in op_init_min\n");
+        DIE("Malloc failed in op_init_min");
 
     if (arg)
         *data = parse_uint64(arg, "min");
     else
-        DIE("min requires an integer argument (e.g. min=10)\n");
+        DIE("min requires an integer argument (e.g. min=10)");
 
     *flags = TRAIL_OP_CHECK_ATTR | TRAIL_OP_PRE_TRAIL | TRAIL_OP_POST_TRAIL;
     return data;

@@ -94,7 +94,7 @@ static uint32_t find_groupby_field(const struct extractd *ext,
         if (!strcmp(field_name, groupby_str))
             return i;
     }
-    DIE("Mappers are not sending the groupby field '%s'\n", groupby_str);
+    DIE("Mappers are not sending the groupby field '%s'", groupby_str);
 }
 
 /*
@@ -150,7 +150,7 @@ static inline void add_chunk(uint32_t groupby_key,
         uint64_t offs = num_groups;
         num_groups = groupby_key + GROUPS_INC;
         if (!(groups = realloc(groups, sizeof(struct group) * num_groups)))
-            DIE("Could not allocate %u groups\n", num_groups);
+            DIE("Could not allocate %u groups", num_groups);
         memset(&groups[offs], 0, (num_groups - offs) * sizeof(struct group));
     }
     group = &groups[groupby_key];
@@ -187,7 +187,7 @@ static inline void add_chunk(uint32_t groupby_key,
             group->events_buffer_size *= 2;
         if (!(group->events_buffer = realloc(group->events_buffer,
                                              group->events_buffer_size * 4)))
-            DIE("Could not grow events_buffer to %llu bytes\n",
+            DIE("Could not grow events_buffer to %llu bytes",
                 (unsigned long long)group->events_buffer_size * 4);
     }
 
@@ -240,7 +240,7 @@ void grouper_process(struct extractd_ctx *ctx)
 
                 /*
                 if (event[0] < 1400000000)
-                    DIE("Strange timestamp osid %u\n", event[0]);
+                    DIE("Strange timestamp osid %u", event[0]);
                 */
 
                 /* Optimization 1 (see above):
@@ -322,7 +322,7 @@ static void sort_events(uint32_t *merge_buf, uint32_t len, uint32_t num_fields)
         prev_tstamp = merge_buf[i];
         /*
         if (prev_tstamp < 1400000000)
-            DIE("Strange timestamp %u\n", prev_tstamp);
+            DIE("Strange timestamp %u", prev_tstamp);
         */
     }
     if (i != len)
@@ -350,7 +350,7 @@ static const uint32_t *merge_chunks(const struct group *group,
         if (*len + chunk->num_values >= merge_buf_size){
             merge_buf_size = *len + chunk->num_values + MERGE_BUF_INC;
             if (!(merge_buf = realloc(merge_buf, merge_buf_size * 4)))
-                DIE("Could not allocate merge buffer of %llu bytes\n",
+                DIE("Could not allocate merge buffer of %llu bytes",
                     (long long unsigned int)merge_buf_size);
         }
 
@@ -387,7 +387,7 @@ static void output_group(struct extractd_ctx *ctx,
         --num_fields;
 
     if (!(out = fopen(path, "w")))
-        DIE("Could not open output file at %s\n", path);
+        DIE("Could not open output file at %s", path);
 
     tmp = num_fields + 1;
     SAFE_WRITE(&tmp, 4, path, out);
@@ -408,7 +408,7 @@ static void output_group(struct extractd_ctx *ctx,
         JLN(ptr, group->cookies, cookie_id);
     }
     fclose(out);
-    printf("%s created\n", path);
+    INFO("%s created", path);
 }
 
 void grouper_output(struct extractd_ctx *ctx)

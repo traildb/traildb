@@ -3,7 +3,7 @@
 
 void op_help_open()
 {
-    printf("help open\n");
+    INFO("help open");
 }
 
 void *op_init_open(struct trail_ctx *ctx,
@@ -13,17 +13,17 @@ void *op_init_open(struct trail_ctx *ctx,
                    uint64_t *flags)
 {
     if (op_index > 0)
-        DIE("Open must be the first operation\n");
+        DIE("Open must be the first operation");
     if (ctx->db)
-        DIE("Can't open more than one traildb\n");
+        DIE("Can't open more than one traildb");
     if (!(ctx->db = tdb_open(arg)))
-        DIE("Malloc failed in op_init_open\n");
+        DIE("Malloc failed in op_init_open");
     if (ctx->db->error_code)
-        DIE("%s\n", tdb_error(ctx->db));
+        DIE("%s", tdb_error(ctx->db));
 
     ctx->db_path = arg;
     *flags = 0;
-    MSG(ctx, "DB %s opened\n", arg);
+    MSG(ctx, "DB %s opened", arg);
 
     return NULL;
 }

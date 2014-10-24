@@ -31,7 +31,7 @@ void tdb_path(char path[TDB_MAX_PATH_SIZE], char *fmt, ...)
 
     va_start(aptr, fmt);
     if (vsnprintf(path, TDB_MAX_PATH_SIZE, fmt, aptr) >= TDB_MAX_PATH_SIZE)
-        DIE("Path too long (fmt %s)\n", fmt);
+        DIE("Path too long (fmt %s)", fmt);
     va_end(aptr);
 }
 
@@ -171,9 +171,9 @@ static int read_info(tdb *db, const char *path)
     }
 
     if (fscanf(f,
-               "%llu %llu %u %u %u",
-               (uint64_t*)&db->num_cookies,
-               (uint64_t*)&db->num_events,
+               "%"PRIu64" %"PRIu64" %u %u %u",
+               &db->num_cookies,
+               &db->num_events,
                &db->min_timestamp,
                &db->max_timestamp,
                &db->max_timestamp_delta) != 5){

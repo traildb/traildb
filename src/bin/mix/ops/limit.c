@@ -3,7 +3,7 @@
 
 void op_help_limit()
 {
-    printf("help limit\n");
+    INFO("help limit");
 }
 
 void *op_init_limit(struct trail_ctx *ctx,
@@ -15,7 +15,7 @@ void *op_init_limit(struct trail_ctx *ctx,
     uint64_t *data;
 
     if (!(data = malloc(8)))
-        DIE("Malloc failed in op_init_limit\n");
+        DIE("Malloc failed in op_init_limit");
 
     if ((op_index == 0 ||
         (ctx->read_stdin && ctx->db && op_index == 1)))
@@ -23,13 +23,13 @@ void *op_init_limit(struct trail_ctx *ctx,
     else if (op_index == num_ops - 1)
         *flags = TRAIL_OP_CHECK_ATTR | TRAIL_OP_FINALIZE;
     else
-        DIE("limit must be either the first or last operation\n");
+        DIE("limit must be either the first or last operation");
 
     if (arg)
         *data = parse_uint64(arg, "limit");
     else
         DIE("limit requires an integer argument "
-            "(maximum sum of attribute values)\n");
+            "(maximum sum of attribute values)");
 
     return data;
 }
@@ -94,7 +94,7 @@ int op_exec_limit(struct trail_ctx *ctx,
         free(rows);
     }else
         /* TODO make limit work with TRAIL_ATTR_SET */
-        DIE("limit requires scalar attributes\n");
+        DIE("limit requires scalar attributes");
 
     return 1;
 }
