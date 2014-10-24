@@ -6,8 +6,6 @@
 
 #include <Judy.h>
 
-#include "ddb_bits.h"
-
 #define HUFF_CODEBOOK_SIZE 65536
 #define HUFF_CODE(x) ((x) & 65535)
 #define HUFF_BITS(x) (((x) & (65535 << 16)) >> 16)
@@ -21,6 +19,18 @@ struct field_stats{
     uint32_t field_id_bits;
     uint32_t field_bits[0];
 };
+
+static inline uint32_t read_bits(const char *src, uint64_t offs, uint32_t bits)
+{
+    uint64_t *src_w = (uint64_t*)&src[offs >> 3];
+    return (*src_w >> (offs & 7)) & ((((uint64_t)1) << bits) - 1);
+}
+
+static inline void write_bits(char *dst, uint64_t offs, uint32_t val)
+{
+    uint64_t *dst_w = (uint64_t*)&dst[offs >> 3];
+    *dst_w |= ((uint64_t)val) << (offs & 7);
+}
 
 /* ENCODE */
 

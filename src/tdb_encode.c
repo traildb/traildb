@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 
-#include "ddb_bits.h"
 #include "tdb_internal.h"
 #include "tdb_encode_model.h"
 #include "huffman.h"
