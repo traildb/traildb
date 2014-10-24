@@ -2,12 +2,12 @@ import shutil
 import subprocess
 import unittest
 
-from traildb import TrailDB
+from traildb import TrailDB, TrailDBConstructor
 
 class TestAPI(unittest.TestCase):
     def setUp(self):
         subprocess.Popen(('test/test.sh', 'test.tdb')).wait()
-        self.traildb = TrailDB('test.tdb') # XXX: need encode api!
+        self.traildb = TrailDB('test.tdb')
 
     def tearDown(self):
         shutil.rmtree('test.tdb')
@@ -51,6 +51,17 @@ class TestAPI(unittest.TestCase):
         db = self.traildb
         print db.time_range()
         print db.time_range(ptime=True)
+
+class TestCons(unittest.TestCase):
+    def test_cons(self):
+        cons = TrailDBConstructor('test.tdb', ['field1', 'field2'])
+        cons.add('12345678123456781234567812345678', 123, ['a'])
+        cons.add('12345678123456781234567812345678', 124, ['b', 'c'])
+        tdb = cons.finalize()
+        for cookie, trail in tdb.crumbs():
+            print cookie, list(trail)
+        print tdb.cookie_id('12345678123456781234567812345678')
+        print tdb.cookie(0)
 
 if __name__ == '__main__':
     unittest.main()
