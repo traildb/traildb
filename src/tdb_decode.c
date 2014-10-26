@@ -34,7 +34,7 @@ uint32_t tdb_decode_trail(tdb *db,
                Timestamp may be the first member of a bigram */
             item = huff_decode_value(codebook, data, &offs, fstats);
             delta = (item & UINT32_MAX) >> 8;
-            if (delta == TDB_FAR_TIMESTAMP){
+            if (delta == TDB_FAR_TIMEDELTA){
                 dst[i++] = 0;
             }else{
                 tstamp += delta;
@@ -73,7 +73,7 @@ uint32_t tdb_decode_trail(tdb *db,
         while (offs < size && i < dst_size){
             item = huff_decode_value(codebook, data, &offs, fstats);
             delta = (item & UINT32_MAX) >> 8;
-            if (delta == TDB_FAR_TIMESTAMP){
+            if (delta == TDB_FAR_TIMEDELTA){
                 dst[i++] = 0;
             }else{
                 tstamp += delta;

@@ -69,7 +69,7 @@ static void group_events(FILE *grouped_w,
         for (prev_timestamp = cons->min_timestamp, j = 0; j < num_events; j++){
             uint32_t prev = buf[j].timestamp;
             buf[j].timestamp -= prev_timestamp;
-            if (buf[j].timestamp < TDB_MAX_TIMESTAMP){
+            if (buf[j].timestamp < TDB_MAX_TIMEDELTA){
                 if (prev > cons->max_timestamp)
                     cons->max_timestamp = prev;
                 if (buf[j].timestamp > cons->max_timedelta)
@@ -80,7 +80,7 @@ static void group_events(FILE *grouped_w,
                 prev_timestamp = prev;
             }else{
                 /* Use the out of range delta, perhaps a corrupted timestamp */
-                buf[j].timestamp = TDB_FAR_TIMESTAMP << 8;
+                buf[j].timestamp = TDB_FAR_TIMEDELTA << 8;
                 ++num_invalid;
             }
         }
