@@ -12,6 +12,8 @@
 #define TDB_MAX_NUM_VALUES  (1LLU << 24)
 #define TDB_MAX_VALUE_SIZE  (1LLU << 10)
 #define TDB_MAX_LEXICON_SIZE UINT32_MAX
+#define TDB_MAX_TIMESTAMP  ((1LLU << 24) - 2) // ~194 days
+#define TDB_FAR_TIMESTAMP  ((1LLU << 24) - 1)
 
 /*
    Internally we deal with ids:

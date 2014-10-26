@@ -16,6 +16,7 @@ uint32_t tdb_decode_trail(tdb *db,
         (const struct huff_codebook*)db->codebook.data;
     uint32_t j, i = 0;
     uint32_t tstamp = db->min_timestamp;
+    uint64_t delta, prev_offs;
     const struct field_stats *fstats = db->field_stats;
     tdb_field field;
 
@@ -32,15 +33,20 @@ uint32_t tdb_decode_trail(tdb *db,
             /* Every event starts with a timestamp.
                Timestamp may be the first member of a bigram */
             item = huff_decode_value(codebook, data, &offs, fstats);
-            tstamp += (item & UINT32_MAX) >> 8;
-            dst[i++] = tstamp;
+            delta = (item & UINT32_MAX) >> 8;
+            if (delta == TDB_FAR_TIMESTAMP){
+                dst[i++] = 0;
+            }else{
+                tstamp += delta;
+                dst[i++] = tstamp;
+            }
             item >>= 32;
             if (item && i < dst_size)
                 dst[i++] = item;
 
             /* timestamp is followed by at most num_fields field values */
             while (offs < size && i < dst_size){
-                uint64_t prev_offs = offs;
+                prev_offs = offs;
                 item = huff_decode_value(codebook, data, &offs, fstats);
                 field = tdb_item_field(item);
                 if (field){
@@ -66,18 +72,23 @@ uint32_t tdb_decode_trail(tdb *db,
 
         while (offs < size && i < dst_size){
             item = huff_decode_value(codebook, data, &offs, fstats);
-            tstamp += (item & UINT32_MAX) >> 8;
-            dst[i++] = tstamp;
+            delta = (item & UINT32_MAX) >> 8;
+            if (delta == TDB_FAR_TIMESTAMP){
+                dst[i++] = 0;
+            }else{
+                tstamp += delta;
+                dst[i++] = tstamp;
+            }
             item >>= 32;
             field = tdb_item_field(item);
 
-            if (item)
+            if (field)
                 db->previous_items[field - 1] = item;
 
             /* edge encoding: some fields may be inherited from previous
                events - keep track what we have seen in the past */
             while (offs < size){
-                uint64_t prev_offs = offs;
+                prev_offs = offs;
                 item = huff_decode_value(codebook, data, &offs, fstats);
                 field = tdb_item_field(item);
                 if (field){

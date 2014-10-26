@@ -74,19 +74,16 @@ static void group_events(FILE *grouped_w,
         for (prev_timestamp = base_timestamp, j = 0; j < num_events; j++){
             uint32_t prev = buf[j].timestamp;
             buf[j].timestamp -= prev_timestamp;
-            /* timestamps can be at most 2**24 seconds apart (194 days).
-               It is not a problem since data should be partitioned by time */
-            if (buf[j].timestamp < (1 << 24)){
-
+            if (buf[j].timestamp < TDB_MAX_TIMESTAMP){
                 if (buf[j].timestamp > *max_timestamp_delta)
                     *max_timestamp_delta = buf[j].timestamp;
 
+                /* Convert to the delta value index */
                 buf[j].timestamp <<= 8;
                 prev_timestamp = prev;
             }else{
-                /* mark event as invalid if it is too far in the future,
-                   most likely because of a corrupted timestamp */
-                buf[j].timestamp = 1;
+                /* Use the out of range delta, perhaps a corrupted timestamp */
+                buf[j].timestamp = TDB_FAR_TIMESTAMP << 8;
                 ++num_invalid;
             }
         }
@@ -107,8 +104,9 @@ uint32_t edge_encode_items(const tdb_item *items,
                            const tdb_event *ev)
 {
     uint32_t n = 0;
-
-    /* consider only valid timestamps (field == 0) */
+    /* consider only valid timestamps (field == 0)
+       XXX: use invalid timestamps again when we add
+            the flag in finalize to skip OOD data */
     if (tdb_item_field(ev->timestamp) == 0){
         uint64_t j = ev->item_zero;
         /* edge encode items: keep only fields that are different from

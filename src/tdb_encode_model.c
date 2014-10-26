@@ -67,12 +67,14 @@ static void event_fold(event_op op,
         */
         uint64_t cookie_id = ev.cookie_id;
 
-        if (rand_r(&rand_state) < sample_size){
-
+        /* Always include the first cookie so we don't end up empty */
+        if (i == 0 || rand_r(&rand_state) < sample_size){
             memset(prev_items, 0, num_fields * sizeof(tdb_item));
 
             for (;i < num_events && ev.cookie_id == cookie_id; i++){
-                /* consider only valid timestamps (first byte = 0) */
+                /* consider only valid timestamps (first byte == 0)
+                   XXX: use invalid timestamps again when we add
+                        the flag in finalize to skip OOD data */
                 if ((ev.timestamp & 255) == 0){
                     uint32_t n = edge_encode_items(items,
                                                    &encoded,

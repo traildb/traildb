@@ -145,7 +145,7 @@ class TrailDB(object):
                     i += 1
                 i += 1
                 yield cls(tstamp, *values)
-        return gen()
+        return list(gen())
 
     def time_range(self, ptime=False):
         tmin = lib.tdb_min_timestamp(self._db)
