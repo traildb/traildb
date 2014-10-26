@@ -27,21 +27,16 @@ static int compare(const void *p1, const void *p2)
 static void group_events(FILE *grouped_w,
                          const char *path,
                          const tdb_cons_event *events,
-                         const uint64_t *cookie_pointers,
-                         uint64_t num_cookies,
-                         uint32_t base_timestamp,
-                         uint32_t *max_timestamp_delta)
+                         tdb_cons *cons)
 {
     uint64_t i;
     uint64_t num_invalid = 0;
     tdb_event *buf = NULL;
     uint32_t buf_size = 0;
 
-    *max_timestamp_delta = 0;
-
-    for (i = 0; i < num_cookies; i++){
+    for (i = 0; i < cons->num_cookies; i++){
         /* find the last event belonging to this cookie */
-        const tdb_cons_event *ev = &events[cookie_pointers[i]];
+        const tdb_cons_event *ev = &events[cons->cookie_pointers[i]];
         uint32_t j = 0;
         uint32_t num_events = 0;
         uint32_t prev_timestamp;
@@ -71,12 +66,14 @@ static void group_events(FILE *grouped_w,
         qsort(buf, num_events, sizeof(tdb_event), compare);
 
         /* delta-encode timestamps */
-        for (prev_timestamp = base_timestamp, j = 0; j < num_events; j++){
+        for (prev_timestamp = cons->min_timestamp, j = 0; j < num_events; j++){
             uint32_t prev = buf[j].timestamp;
             buf[j].timestamp -= prev_timestamp;
             if (buf[j].timestamp < TDB_MAX_TIMESTAMP){
-                if (buf[j].timestamp > *max_timestamp_delta)
-                    *max_timestamp_delta = buf[j].timestamp;
+                if (prev > cons->max_timestamp)
+                    cons->max_timestamp = prev;
+                if (buf[j].timestamp > cons->max_timedelta)
+                    cons->max_timedelta = buf[j].timestamp;
 
                 /* Convert to the delta value index */
                 buf[j].timestamp <<= 8;
@@ -88,10 +85,7 @@ static void group_events(FILE *grouped_w,
             }
         }
 
-        SAFE_WRITE(buf,
-                   num_events * sizeof(tdb_event),
-                   path,
-                   grouped_w);
+        SAFE_WRITE(buf, num_events * sizeof(tdb_event), path, grouped_w);
     }
 
     free(buf);
@@ -127,29 +121,7 @@ uint32_t edge_encode_items(const tdb_item *items,
     return n;
 }
 
-static void timestamp_range(const tdb_cons_event *events,
-                            uint64_t num_events,
-                            uint32_t *min_timestamp,
-                            uint32_t *max_timestamp)
-{
-    uint64_t i;
-    *min_timestamp = UINT32_MAX;
-    *max_timestamp = 0;
-
-    for (i = 0; i < num_events; i++){
-        if (events[i].timestamp < *min_timestamp)
-            *min_timestamp = events[i].timestamp;
-        if (events[i].timestamp > *max_timestamp)
-            *max_timestamp = events[i].timestamp;
-    }
-}
-
-static void store_info(uint64_t num_events,
-                       uint64_t num_cookies,
-                       uint32_t min_timestamp,
-                       uint32_t max_timestamp,
-                       uint32_t max_timestamp_delta,
-                       const char *path)
+static void store_info(tdb_cons *cons, const char *path)
 {
     FILE *out;
 
@@ -158,12 +130,12 @@ static void store_info(uint64_t num_events,
 
     SAFE_FPRINTF(out,
                  path,
-                 "%llu %llu %u %u %u\n",
-                 (long long unsigned int)num_cookies,
-                 (long long unsigned int)num_events,
-                 min_timestamp,
-                 max_timestamp,
-                 max_timestamp_delta);
+                 "%"PRIu64" %"PRIu64" %"PRIu32" %"PRIu32" %"PRIu32"\n",
+                 cons->num_cookies,
+                 cons->num_events,
+                 cons->min_timestamp,
+                 cons->max_timestamp,
+                 cons->max_timedelta);
 
     SAFE_CLOSE(out, path);
 }
@@ -305,36 +277,27 @@ static void store_codebook(const Pvoid_t codemap, const char *path)
     SAFE_CLOSE(out, path);
 }
 
-void tdb_encode(const uint64_t *cookie_pointers,
-                uint64_t num_cookies,
-                tdb_cons_event *events,
-                uint64_t num_events,
-                const tdb_item *items,
-                uint64_t num_items,
-                uint32_t num_fields,
-                const uint64_t *field_cardinalities,
-                const char *root)
+void tdb_encode(tdb_cons *cons, tdb_item *items)
 {
+    char *root = cons->root, *read_buf;
     char path[TDB_MAX_PATH_SIZE];
     char grouped_path[TDB_MAX_PATH_SIZE];
     struct field_stats *fstats;
-    uint32_t min_timestamp, max_timestamp, max_timestamp_delta;
+    uint32_t num_fields = cons->num_fields + 1;
+    uint64_t num_cookies = cons->num_cookies;
+    uint64_t num_events = cons->num_events;
+    uint64_t *field_cardinalities = (uint64_t*)cons->lexicon_counters;
+    tdb_cons_event *events = (tdb_cons_event*)cons->events.data;
     Pvoid_t unigram_freqs;
     Pvoid_t gram_freqs;
     Pvoid_t codemap;
     Word_t tmp;
     FILE *grouped_w;
     FILE *grouped_r;
-    char *read_buf;
 
     TDB_TIMER_DEF
 
-    /* 1. find minimum timestamp (for delta-encoding) */
-    TDB_TIMER_START
-    timestamp_range(events, num_events, &min_timestamp, &max_timestamp);
-    TDB_TIMER_END("trail/timestamp_range");
-
-    /* 2. group events by cookie, sort events of each cookie by time,
+    /* 1. group events by cookie, sort events of each cookie by time,
           and delta-encode timestamps */
     TDB_TIMER_START
 
@@ -342,13 +305,7 @@ void tdb_encode(const uint64_t *cookie_pointers,
     if (!(grouped_w = fopen(grouped_path, "w")))
         DIE("Could not open tmp file at %s", path);
 
-    group_events(grouped_w,
-                 grouped_path,
-                 events,
-                 cookie_pointers,
-                 num_cookies,
-                 min_timestamp,
-                 &max_timestamp_delta);
+    group_events(grouped_w, grouped_path, events, cons);
 
     SAFE_CLOSE(grouped_w, grouped_path);
     if (!(grouped_r = fopen(grouped_path, "r")))
@@ -363,23 +320,18 @@ void tdb_encode(const uint64_t *cookie_pointers,
        so keeping it around unecessarily is expensive */
     free(events);
 
-    /* 3. store metatadata */
+    /* 2. store metatadata */
     TDB_TIMER_START
     tdb_path(path, "%s/info", root);
-    store_info(num_events,
-               num_cookies,
-               min_timestamp,
-               max_timestamp,
-               max_timestamp_delta,
-               path);
+    store_info(cons, path);
     TDB_TIMER_END("trail/info");
 
-    /* 4. collect value (unigram) freqs, including delta-encoded timestamps */
+    /* 3. collect value (unigram) freqs, including delta-encoded timestamps */
     TDB_TIMER_START
     unigram_freqs = collect_unigrams(grouped_r, num_events, items, num_fields);
     TDB_TIMER_END("trail/collect_unigrams");
 
-    /* 5. construct uni/bi-grams */
+    /* 4. construct uni/bi-grams */
     TDB_TIMER_START
     gram_freqs = make_grams(grouped_r,
                             num_events,
@@ -388,15 +340,15 @@ void tdb_encode(const uint64_t *cookie_pointers,
                             unigram_freqs);
     TDB_TIMER_END("trail/gram_freqs");
 
-    /* 6. build a huffman codebook and stats struct for encoding grams */
+    /* 5. build a huffman codebook and stats struct for encoding grams */
     TDB_TIMER_START
     codemap = huff_create_codemap(gram_freqs);
     fstats = huff_field_stats(field_cardinalities,
                               num_fields,
-                              max_timestamp_delta);
+                              cons->max_timedelta);
     TDB_TIMER_END("trail/huff_create_codemap");
 
-    /* 7. encode and write trails to disk */
+    /* 6. encode and write trails to disk */
     TDB_TIMER_START
     tdb_path(path, "%s/trails.data", root);
     encode_trails(items,
@@ -410,7 +362,7 @@ void tdb_encode(const uint64_t *cookie_pointers,
                   path);
     TDB_TIMER_END("trail/encode_trails");
 
-    /* 8. write huffman codebook to disk */
+    /* 7. write huffman codebook to disk */
     TDB_TIMER_START
     tdb_path(path, "%s/trails.codebook", root);
     store_codebook(codemap, path);

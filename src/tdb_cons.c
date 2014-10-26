@@ -170,6 +170,9 @@ tdb_cons *tdb_cons_new(const char *root,
 
     cons->root = strdup(root);
     cons->field_names = dupstrs(field_names, num_fields);
+    cons->min_timestamp = UINT32_MAX;
+    cons->max_timestamp = 0;
+    cons->max_timedelta = 0;
     cons->num_fields = num_fields;
     cons->events.item_size = sizeof(tdb_cons_event);
     cons->items.item_size = sizeof(tdb_item);
@@ -211,6 +214,9 @@ int tdb_cons_add(tdb_cons *cons,
     Word_t *cookie_ptr_hi;
     Word_t *cookie_ptr_lo;
     Pvoid_t cookie_index_lo;
+
+    if (timestamp < cons->min_timestamp)
+        cons->min_timestamp = timestamp;
 
     /* Cookie index, which maps 16-byte cookies to event indices,
        has the following structure:
@@ -261,6 +267,8 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
     Word_t lexsize;
     int i;
 
+    cons->num_events = cons->events.next;
+
     /* finalize event items */
     arena_flush(&cons->items);
     if (fclose(cons->items.fd)) {
@@ -294,15 +302,7 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
         goto error;
 
     TDB_TIMER_START
-    tdb_encode(cons->cookie_pointers,              /* last event by cookie */
-               cons->num_cookies,                  /* number of cookies */
-               (tdb_cons_event*)cons->events.data, /* all events */
-               cons->events.next,                  /* number of events */
-               (tdb_item*)items_mmapped.data,      /* all items */
-               cons->items.next,                   /* number of items */
-               cons->num_fields + 1,               /* number of fields + time */
-               (uint64_t*)cons->lexicon_counters,  /* field cardinalities */
-               cons->root);                        /* output directory */
+    tdb_encode(cons, (tdb_item*)items_mmapped.data);
     TDB_TIMER_END("encoder/encode")
 
     return 0;
