@@ -150,12 +150,11 @@ static void add_trails(tdb *db, struct ddb_cons *cons)
         }
         J1FA(field_value, uniques);
 
-        if (!(i & 65535))
-            fprintf(stderr,
-                    "%u/%u (%2.1f%%) trails indexed",
-                    i,
-                    num_cookies,
-                    100. * i / num_cookies);
+        if ((i & 65535) == 0 || i == num_cookies - 1)
+            INFO("%12u / %-12u (%5.1f%%) trails indexed",
+                 i + 1,
+                 num_cookies,
+                 100. * (i + 1) / num_cookies);
     }
     free(buf);
 }

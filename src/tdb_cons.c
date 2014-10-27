@@ -6,6 +6,15 @@
 #include "arena.h"
 #include "util.h"
 
+static const char *field_name(const tdb_cons *cons, tdb_field field)
+{
+    const char *field_name = cons->field_names;
+    int i;
+    for (i = 0; i < field - 1; i++)
+        field_name += strlen(field_name) + 1;
+    return field_name;
+}
+
 static uint64_t lexicon_size(const Pvoid_t lexicon, uint64_t *size)
 {
     uint8_t value[TDB_MAX_VALUE_SIZE];
@@ -248,8 +257,12 @@ int tdb_cons_add(tdb_cons *cons,
             JSLI(val_p, cons->lexicons[i], (uint8_t*)value);
             if (*val_p == 0){
                 *val_p = ++cons->lexicon_counters[i];
-                if (*val_p >= TDB_MAX_NUM_VALUES)
+                if (*val_p >= TDB_MAX_NUM_VALUES){
+                    WARN("Too many values for field %d (%s)",
+                         field,
+                         field_name(cons, field));
                     return field;
+                }
             }
             item |= (*val_p) << 8;
         }
