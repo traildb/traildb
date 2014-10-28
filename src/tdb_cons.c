@@ -99,7 +99,7 @@ static int store_lexicons(tdb_cons *cons)
 
 static int store_cookies(tdb_cons *cons)
 {
-    Word_t cookie[2];
+    Word_t cookie_words[2]; // NB: word must be 64-bit
     Word_t *ptr;
     FILE *out;
     char path[TDB_MAX_PATH_SIZE];
@@ -117,17 +117,17 @@ static int store_cookies(tdb_cons *cons)
         return -1;
     }
 
-    cookie[0] = 0;
-    JLF(ptr, cons->cookie_index, cookie[0]);
+    cookie_words[0] = 0;
+    JLF(ptr, cons->cookie_index, cookie_words[0]);
     while (ptr){
         const Pvoid_t cookie_index_lo = (Pvoid_t)*ptr;
-        cookie[1] = 0;
-        JLF(ptr, cookie_index_lo, cookie[1]);
+        cookie_words[1] = 0;
+        JLF(ptr, cookie_index_lo, cookie_words[1]);
         while (ptr){
-            SAFE_WRITE(cookie, 16, path, out);
-            JLN(ptr, cookie_index_lo, cookie[1]);
+            SAFE_WRITE(cookie_words, 16, path, out);
+            JLN(ptr, cookie_index_lo, cookie_words[1]);
         }
-        JLN(ptr, cons->cookie_index, cookie[0]);
+        JLN(ptr, cons->cookie_index, cookie_words[0]);
     }
 
     SAFE_CLOSE(out, path);
@@ -136,7 +136,7 @@ static int store_cookies(tdb_cons *cons)
 
 static int dump_cookie_pointers(tdb_cons *cons)
 {
-    Word_t cookie[2];
+    Word_t cookie_words[2]; // NB: word must be 64-bit
     Word_t *ptr;
     Word_t tmp;
     uint64_t idx = 0;
@@ -150,20 +150,20 @@ static int dump_cookie_pointers(tdb_cons *cons)
 
     /* NOTE: The code below must populate cookie_pointers
        in the same order as what gets stored by store_cookies() */
-    cookie[0] = 0;
-    JLF(ptr, cons->cookie_index, cookie[0]);
+    cookie_words[0] = 0;
+    JLF(ptr, cons->cookie_index, cookie_words[0]);
     while (ptr){
         Pvoid_t cookie_index_lo = (Pvoid_t)*ptr;
 
-        cookie[1] = 0;
-        JLF(ptr, cookie_index_lo, cookie[1]);
+        cookie_words[1] = 0;
+        JLF(ptr, cookie_index_lo, cookie_words[1]);
         while (ptr){
             cons->cookie_pointers[idx++] = *ptr - 1;
-            JLN(ptr, cookie_index_lo, cookie[1]);
+            JLN(ptr, cookie_index_lo, cookie_words[1]);
         }
 
         JLFA(tmp, cookie_index_lo);
-        JLN(ptr, cons->cookie_index, cookie[0]);
+        JLN(ptr, cons->cookie_index, cookie_words[0]);
     }
     JLFA(tmp, cons->cookie_index);
     return 0;
@@ -219,7 +219,7 @@ int tdb_cons_add(tdb_cons *cons,
                  const uint32_t timestamp,
                  const char *values)
 {
-    const Word_t *cookie_words = (Word_t*)cookie;
+    Word_t *cookie_words = (Word_t*)cookie; // NB: word must be 64-bit
     Word_t *cookie_ptr_hi;
     Word_t *cookie_ptr_lo;
     Pvoid_t cookie_index_lo;
