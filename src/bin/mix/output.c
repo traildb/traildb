@@ -7,6 +7,7 @@
 #include "tdb_internal.h"
 #include "util.h"
 #include "mix.h"
+#include "memstream.h"
 
 #define TRAIL_BUF_INCREMENT 1000000
 
@@ -161,7 +162,7 @@ static Pvoid_t serialize_trails(FILE *out, struct trail_ctx *ctx)
             fwrite(&trail[0], 4, 1, out); /* write initial timestamp */
             for (i = 1; i < len; i++){
                 if (trail[i]){ /* skip event delimitiers */
-                    if (trail[i] >> 8){
+                    if (tdb_item_val(trail[i])){
                         fwrite(&trail[i], 4, 1, out);
                         J1S(tmp, items, trail[i]);
                     }else{

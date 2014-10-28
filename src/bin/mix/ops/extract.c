@@ -42,6 +42,7 @@
 #include <netdb.h>
 
 #include "mix.h"
+#include "memstream.h"
 
 #define BUF_INC 1000000
 #define SEND_BUF_MAX 256000

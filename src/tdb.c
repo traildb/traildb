@@ -281,7 +281,7 @@ int tdb_get_field(tdb *db, const char *field_name)
     tdb_field i;
     for (i = 0; i < db->num_fields; i++)
         if (!strcmp(field_name, db->field_names[i]))
-            return i + 1;
+            return i;
     tdb_err(db, "Field not found: %s", field_name);
     return -1;
 }

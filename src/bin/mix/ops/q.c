@@ -92,7 +92,7 @@ static struct ddb_query_clause *parse_query(char *query,
             if (field == -1)
                 DIE("Unrecognized field in q: %s", field_name);
 
-            if (asprintf(&term, "%d:%s", field + 1, termptr) == -1)
+            if (asprintf(&term, "%d:%s", field, termptr) == -1)
                 DIE("Malloc failed in q/parse_query");
 
             clause->terms[num_terms].key.data = term;
