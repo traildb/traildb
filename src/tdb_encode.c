@@ -283,9 +283,9 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     char path[TDB_MAX_PATH_SIZE];
     char grouped_path[TDB_MAX_PATH_SIZE];
     struct field_stats *fstats;
-    uint32_t num_fields = cons->num_fields + 1;
     uint64_t num_cookies = cons->num_cookies;
     uint64_t num_events = cons->num_events;
+    uint32_t num_fields = cons->num_ofields + 1;
     uint64_t *field_cardinalities = (uint64_t*)cons->lexicon_counters;
     tdb_cons_event *events = (tdb_cons_event*)cons->events.data;
     Pvoid_t unigram_freqs;

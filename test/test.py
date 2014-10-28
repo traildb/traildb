@@ -45,7 +45,7 @@ class TestAPI(unittest.TestCase):
         print db.lexicon_size(1)
         print db.lexicon(1)
         print db.lexicon('z')
-        print dict((f, db.lexicon(f)) for f in db.fields)
+        print dict((f, db.lexicon(f)) for f in db.fields[1:])
 
     def test_metadata(self):
         db = self.traildb

@@ -194,7 +194,7 @@ static void serialize_fields(FILE *out, struct trail_ctx *ctx)
     fwrite(&len, 4, 1, out);
     fwrite(TIMESTAMP, len, 1, out);
 
-    for (i = 0; i < ctx->db->num_fields; i++){
+    for (i = 1; i < ctx->db->num_fields; i++){
         len = strlen(ctx->db->field_names[i]);
 
         /* see a comment above about fwrite */

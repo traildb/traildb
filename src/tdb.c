@@ -70,6 +70,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
     char *line = NULL;
     size_t n = 0;
     int i = 0;
+    tdb_field num_ofields = 0;
 
     tdb_path(path, "%s/fields", root);
 
@@ -79,17 +80,12 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
     }
 
     while (getline(&line, &n, f) != -1)
-        ++db->num_fields;
+        ++num_ofields;
+    db->num_fields = num_ofields + 1;
 
     if (!feof(f)){
         /* we can get here if malloc fails inside getline() */
         tdb_err(db, "getline failed when opening fields");
-        fclose(f);
-        return -1;
-    }
-
-    if (!(db->previous_items = calloc(db->num_fields, 4))){
-        tdb_err(db, "Could not alloc %u values", db->num_fields);
         fclose(f);
         return -1;
     }
@@ -100,14 +96,23 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
         return -1;
     }
 
-    if (!(db->lexicons = calloc(db->num_fields, sizeof(tdb_file)))){
-        tdb_err(db, "Could not alloc %u files", db->num_fields);
+    if (!(db->lexicons = calloc(num_ofields, sizeof(tdb_file)))){
+        tdb_err(db, "Could not alloc %u files", num_ofields);
+        fclose(f);
+        return -1;
+    }
+
+    if (!(db->previous_items = calloc(num_ofields, 4))){
+        tdb_err(db, "Could not alloc %u values", num_ofields);
         fclose(f);
         return -1;
     }
 
     rewind(f);
-    while (getline(&line, &n, f) != -1){
+
+    db->field_names[0] = "time";
+
+    for (i = 1; getline(&line, &n, f) != -1; i++){
 
         line[strlen(line) - 1] = 0;
 
@@ -118,12 +123,10 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
         }
 
         tdb_path(path, "%s/lexicon.%s", root, line);
-        if (tdb_mmap(path, &db->lexicons[i], db)){
+        if (tdb_mmap(path, &db->lexicons[i - 1], db)){
             fclose(f);
             return -1;
         }
-
-        ++i;
     }
 
     free(line);
@@ -136,10 +139,10 @@ static int init_field_stats(tdb *db)
     tdb_field i;
     uint64_t *field_cardinalities;
 
-    if (!(field_cardinalities = malloc((db->num_fields + 1) * 8)))
+    if (!(field_cardinalities = calloc(db->num_fields - 1, 8)))
         return -1;
 
-    for (i = 0; i < db->num_fields; i++){
+    for (i = 1; i < db->num_fields; i++){
         tdb_lexicon lex;
 
         if (tdb_lexicon_read(db, i, &lex)){
@@ -147,11 +150,11 @@ static int init_field_stats(tdb *db)
             return -1;
         }
 
-        field_cardinalities[i] = lex.size;
+        field_cardinalities[i - 1] = lex.size;
     }
 
     if (!(db->field_stats = huff_field_stats(field_cardinalities,
-                                             db->num_fields + 1,
+                                             db->num_fields,
                                              db->max_timestamp_delta))){
         free(field_cardinalities);
         return -1;
@@ -220,7 +223,6 @@ tdb *tdb_open(const char *root)
         tdb_err(db, "Could not init field stats");
         goto err;
     }
-
     return db;
 err:
     db->error_code = 1;
@@ -230,10 +232,9 @@ err:
 void tdb_close(tdb *db)
 {
     if (db){
-        tdb_field i = db->num_fields;
-
-        while (i--){
-            free((char*)db->field_names[i]);
+        tdb_field i;
+        for (i = 0; i < db->num_fields - 1; i++){
+            free((char*)db->field_names[i + 1]);
             munmap((void*)db->lexicons[i].data, db->lexicons[i].size);
         }
 
@@ -251,25 +252,28 @@ void tdb_close(tdb *db)
 
 int tdb_lexicon_read(tdb *db, tdb_field field, tdb_lexicon *lex)
 {
-    if (field < db->num_fields){
-        lex->size = *(uint32_t*)db->lexicons[field].data;
-        lex->toc = (const uint32_t*)&db->lexicons[field].data[4];
-        lex->data = (const char*)db->lexicons[field].data;
-        return 0;
+    if (field == 0){
+        tdb_err(db, "No lexicon for timestamp");
+        return -1;
     }
-    tdb_err(db, "Invalid field: %d", field);
-    return -1;
+    if (field >= db->num_fields){
+        tdb_err(db, "Invalid field: %"PRIu8, field);
+        return -1;
+    }
+    tdb_field i = field - 1;
+    lex->size = *(uint32_t*)db->lexicons[i].data;
+    lex->toc = (const uint32_t*)&db->lexicons[i].data[4];
+    lex->data = (const char*)db->lexicons[i].data;
+    return 0;
 }
 
 int tdb_lexicon_size(tdb *db, tdb_field field, uint32_t *size)
 {
     tdb_lexicon lex;
-
-    if (!tdb_lexicon_read(db, field, &lex)){
-        *size = lex.size;
-        return 0;
-    }
-    return -1;
+    if (tdb_lexicon_read(db, field, &lex))
+        return -1;
+    *size = lex.size;
+    return 0;
 }
 
 int tdb_get_field(tdb *db, const char *field_name)
@@ -277,7 +281,7 @@ int tdb_get_field(tdb *db, const char *field_name)
     tdb_field i;
     for (i = 0; i < db->num_fields; i++)
         if (!strcmp(field_name, db->field_names[i]))
-            return i;
+            return i + 1;
     tdb_err(db, "Field not found: %s", field_name);
     return -1;
 }
@@ -297,10 +301,9 @@ tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
         if (*value){
             for (i = 0; i < lex.size; i++)
                 if (!strcmp(&lex.data[lex.toc[i]], value))
-                    return (field + 1) | ((i + 1) << 8);
+                    return field | ((i + 1) << 8);
         }else{
-            /* valid empty value */
-            return field + 1;
+            return field; /* valid empty value */
         }
     }
     return 0;
@@ -309,14 +312,20 @@ tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
 const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val)
 {
     tdb_lexicon lex;
-    if (val && !tdb_lexicon_read(db, field, &lex) && (val - 1) < lex.size)
-        return &lex.data[lex.toc[val - 1]];
+    if (!val && field && field < db->num_fields)
+        return "";
+    if (!tdb_lexicon_read(db, field, &lex)) {
+        if ((val - 1) < lex.size)
+            return &lex.data[lex.toc[val - 1]];
+        else
+            tdb_err(db, "Field %"PRIu8" has no val %"PRIu32, field, val);
+    }
     return NULL;
 }
 
 const char *tdb_get_item_value(tdb *db, tdb_item item)
 {
-    return tdb_get_value(db, tdb_item_field(item) - 1, tdb_item_val(item));
+    return tdb_get_value(db, tdb_item_field(item), tdb_item_val(item));
 }
 
 const uint8_t *tdb_get_cookie(tdb *db, uint64_t cookie_id)

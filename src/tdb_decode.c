@@ -18,7 +18,7 @@ uint32_t tdb_decode_trail(tdb *db,
     uint32_t tstamp = db->min_timestamp;
     uint64_t delta, prev_offs;
     const struct field_stats *fstats = db->field_stats;
-    tdb_field field;
+    tdb_field field, num_ofields = db->num_fields - 1;
 
     if (cookie_id >= db->num_cookies)
         return 0;
@@ -44,7 +44,7 @@ uint32_t tdb_decode_trail(tdb *db,
             if (item && i < dst_size)
                 dst[i++] = item;
 
-            /* timestamp is followed by at most num_fields field values */
+            /* timestamp is followed by at most num_ofields field values */
             while (offs < size && i < dst_size){
                 prev_offs = offs;
                 item = huff_decode_value(codebook, data, &offs, fstats);
@@ -68,7 +68,7 @@ uint32_t tdb_decode_trail(tdb *db,
         }
     }else{
         /* same thing as above but here we decode edge encoding */
-        memset(db->previous_items, 0, db->num_fields * 4);
+        memset(db->previous_items, 0, num_ofields * 4);
 
         while (offs < size && i < dst_size){
             item = huff_decode_value(codebook, data, &offs, fstats);
@@ -102,7 +102,7 @@ uint32_t tdb_decode_trail(tdb *db,
                 }
             }
 
-            for (j = 0; j < db->num_fields && i < dst_size; j++)
+            for (j = 0; j < num_ofields && i < dst_size; j++)
                 dst[i++] = db->previous_items[j];
 
             if (i < dst_size)

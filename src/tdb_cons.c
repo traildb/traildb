@@ -8,7 +8,7 @@
 
 static const char *field_name(const tdb_cons *cons, tdb_field field)
 {
-    const char *field_name = cons->field_names;
+    const char *field_name = cons->ofield_names;
     int i;
     for (i = 0; i < field - 1; i++)
         field_name += strlen(field_name) + 1;
@@ -79,13 +79,13 @@ static int store_lexicons(tdb_cons *cons)
 {
     int i;
     FILE *out;
-    const char *field_name = cons->field_names;
+    const char *field_name = cons->ofield_names;
     char path[TDB_MAX_PATH_SIZE];
 
     tdb_path(path, "%s/fields", cons->root);
     SAFE_OPEN(out, path, "w");
 
-    for (i = 0; i < cons->num_fields; i++){
+    for (i = 0; i < cons->num_ofields; i++){
         size_t j = strlen(field_name);
         tdb_path(path, "%s/lexicon.%s", cons->root, field_name);
         lexicon_store(cons->lexicons[i], path);
@@ -170,19 +170,19 @@ static int dump_cookie_pointers(tdb_cons *cons)
 }
 
 tdb_cons *tdb_cons_new(const char *root,
-                       const char *field_names,
-                       uint32_t num_fields)
+                       const char *ofield_names,
+                       uint32_t num_ofields)
 {
     tdb_cons *cons;
     if ((cons = calloc(1, sizeof(tdb_cons))) == NULL)
         return NULL;
 
     cons->root = strdup(root);
-    cons->field_names = dupstrs(field_names, num_fields);
+    cons->ofield_names = dupstrs(ofield_names, num_ofields);
     cons->min_timestamp = UINT32_MAX;
     cons->max_timestamp = 0;
     cons->max_timedelta = 0;
-    cons->num_fields = num_fields;
+    cons->num_ofields = num_ofields;
     cons->events.item_size = sizeof(tdb_cons_event);
     cons->items.item_size = sizeof(tdb_item);
 
@@ -192,9 +192,9 @@ tdb_cons *tdb_cons_new(const char *root,
     tdb_path(cons->tempfile, "%s/tmp.items.%d", root, getpid());
     if (!(cons->items.fd = fopen(cons->tempfile, "wx")))
         goto error;
-    if (!(cons->lexicons = calloc(cons->num_fields, sizeof(Pvoid_t))))
+    if (!(cons->lexicons = calloc(cons->num_ofields, sizeof(Pvoid_t))))
         goto error;
-    if (!(cons->lexicon_counters = calloc(cons->num_fields, sizeof(Word_t))))
+    if (!(cons->lexicon_counters = calloc(cons->num_ofields, sizeof(Word_t))))
         goto error;
     return cons;
 
@@ -208,7 +208,7 @@ void tdb_cons_free(tdb_cons *cons)
     if (cons->tempfile)
         unlink(cons->tempfile);
     free(cons->root);
-    free(cons->field_names);
+    free(cons->ofield_names);
     free(cons->cookie_pointers);
     free(cons->lexicon_counters);
     free(cons);
@@ -249,7 +249,7 @@ int tdb_cons_add(tdb_cons *cons,
     int i;
     Word_t *val_p;
     const char *value = values;
-    for (i = 0; i < cons->num_fields; i++){
+    for (i = 0; i < cons->num_ofields; i++){
         size_t j = strlen(value);
         tdb_field field = i + 1;
         tdb_item item = field;
@@ -308,7 +308,7 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
     TDB_TIMER_END("encoder/store_cookies")
 
     /* free lexicons */
-    for (i = 0; i < cons->num_fields; i++)
+    for (i = 0; i < cons->num_ofields; i++)
         JSLFA(lexsize, cons->lexicons[i]);
 
     if (dump_cookie_pointers(cons))

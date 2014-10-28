@@ -29,7 +29,7 @@ static int parse_line(tdb_cons *cons, char *line)
         return 1;
 
     values = line;
-    for (i = 0; i < cons->num_fields; i++)
+    for (i = 0; i < cons->num_ofields; i++)
         if (line)
             strsep(&line, " ");
         else

@@ -92,7 +92,7 @@ class TrailDB(object):
         self.num_events = lib.tdb_num_events(db)
         self.num_fields = lib.tdb_num_fields(db)
         self.fields = [lib.tdb_get_field_name(db, i) for i in xrange(self.num_fields)]
-        self._evcls = namedtuple('event', ['time'] + self.fields, rename=True)
+        self._evcls = namedtuple('event', self.fields, rename=True)
         self._trail_buf_size = 0
         self._grow_buffer()
 
@@ -131,7 +131,7 @@ class TrailDB(object):
                 break
 
         if expand:
-            value = lambda f, v: lib.tdb_get_value(db, f - 1, v)
+            value = lambda f, v: lib.tdb_get_value(db, f, v)
         else:
             value = lambda f, v: v
 
@@ -147,49 +147,52 @@ class TrailDB(object):
                 yield cls(tstamp, *values)
         return list(gen())
 
-    def time_range(self, ptime=False):
-        tmin = lib.tdb_min_timestamp(self._db)
-        tmax = lib.tdb_max_timestamp(self._db)
-        if ptime:
-            return datetime.fromtimestamp(tmin), datetime.fromtimestamp(tmax)
-        return tmin, tmax
+    def field(self, fieldish):
+        if isinstance(fieldish, basestring):
+            return self.fields.index(fieldish)
+        return fieldish
 
-    def has_cookie_index(self):
-        return True if lib.tdb_has_cookie_index(self._db) else False
+    def lexicon(self, fieldish):
+        field = self.field(fieldish)
+        return [self.value(field, i + 1) for i in xrange(self.lexicon_size(field))]
+
+    def lexicon_size(self, fieldish):
+        field = self.field(fieldish)
+        size = (c_uint)()
+        if lib.tdb_lexicon_size(self._db, field, size):
+            raise TrailDBError(lib.tdb_error(self._db))
+        return size.value
+
+    def value(self, fieldish, val):
+        field = self.field(fieldish)
+        value = lib.tdb_get_value(self._db, field, val)
+        if value is None:
+            raise TrailDBError(lib.tdb_error(self._db))
+        return value
 
     def cookie(self, id):
-        c = lib.tdb_get_cookie(self._db, id)
-        if c:
-            return hexcookie(c)
+        cookie = lib.tdb_get_cookie(self._db, id)
+        if cookie:
+            return hexcookie(cookie)
         raise IndexError("Cookie index out of range")
 
     def cookie_id(self, cookie):
-        i = lib.tdb_get_cookie_id(self._db, rawcookie(cookie))
-        if i >= 0:
-            return i
-        elif i == -2: # NB: no cookie index
+        cookie_id = lib.tdb_get_cookie_id(self._db, rawcookie(cookie))
+        if cookie_id >= 0:
+            return cookie_id
+        elif cookie_id == -2: # NB: no cookie index
             # XXX: how do we tell if was too small vs not created?
             for i in xrange(len(self)):
                 if self.cookie(i) == cookie:
                     return i
         raise IndexError("Cookie '%s' not found" % cookie)
 
-    def value(self, field, val):
-        # XXX: timestamps? 1-based indexing is really strange here
-        v = lib.tdb_get_value(self._db, field - 1, val)
-        if v:
-            return v
-        raise TrailDBError("Field %d, val %d does not exist" % (field, val))
+    def has_cookie_index(self):
+        return True if lib.tdb_has_cookie_index(self._db) else False
 
-    def lexicon(self, field):
-        # XXX: 1-based indexing is really strange here
-        if isinstance(field, basestring):
-            return self.lexicon(self.fields.index(field) + 1)
-        return [self.value(field, i) for i in xrange(1, self.lexicon_size(field) + 1)]
-
-    def lexicon_size(self, field):
-        # XXX: 1-based indexing is really strange here
-        size = (c_uint)()
-        if lib.tdb_lexicon_size(self._db, field - 1, size):
-            raise TrailDBError(lib.tdb_error(self._db))
-        return size.value
+    def time_range(self, ptime=False):
+        tmin = lib.tdb_min_timestamp(self._db)
+        tmax = lib.tdb_max_timestamp(self._db)
+        if ptime:
+            return datetime.fromtimestamp(tmin), datetime.fromtimestamp(tmax)
+        return tmin, tmax
