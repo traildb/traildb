@@ -14,7 +14,7 @@ uint32_t tdb_decode_trail(tdb *db,
     uint64_t item, size, offs = 0;
     const struct huff_codebook *codebook =
         (const struct huff_codebook*)db->codebook.data;
-    uint32_t j, i = 0;
+    uint32_t k, j, i = 0;
     uint32_t tstamp = db->min_timestamp;
     uint64_t delta, prev_offs;
     const struct field_stats *fstats = db->field_stats;
@@ -69,6 +69,8 @@ uint32_t tdb_decode_trail(tdb *db,
     }else{
         /* same thing as above but here we decode edge encoding */
         memset(db->previous_items, 0, num_ofields * 4);
+        for (k = 0; k < num_ofields; k++)
+            db->previous_items[k] = k + 1;
 
         while (offs < size && i < dst_size){
             item = huff_decode_value(codebook, data, &offs, fstats);
