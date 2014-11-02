@@ -54,8 +54,7 @@ struct _tdb_file {
 
 struct _tdb_lexicon {
     uint32_t size;
-    const uint32_t *toc;
-    const char *data;
+    uint32_t toc;
 };
 
 struct _tdb {

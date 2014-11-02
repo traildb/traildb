@@ -257,7 +257,7 @@ int tdb_cons_add(tdb_cons *cons,
             JSLI(val_p, cons->lexicons[i], (uint8_t*)value);
             if (*val_p == 0){
                 *val_p = ++cons->lexicon_counters[i];
-                if (*val_p >= TDB_MAX_NUM_VALUES){
+                if (*val_p > TDB_MAX_NUM_VALUES){
                     WARN("Too many values for field %d (%s)",
                          field,
                          field_name(cons, field));

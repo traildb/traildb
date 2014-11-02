@@ -18,7 +18,7 @@ uint32_t tdb_decode_trail(tdb *db,
     uint32_t tstamp = db->min_timestamp;
     uint64_t delta, prev_offs;
     const struct field_stats *fstats = db->field_stats;
-    tdb_field field, num_ofields = db->num_fields - 1;
+    tdb_field field;
 
     if (cookie_id >= db->num_cookies)
         return 0;
@@ -68,9 +68,8 @@ uint32_t tdb_decode_trail(tdb *db,
         }
     }else{
         /* same thing as above but here we decode edge encoding */
-        memset(db->previous_items, 0, num_ofields * 4);
-        for (k = 0; k < num_ofields; k++)
-            db->previous_items[k] = k + 1;
+        for (k = 1; k < db->num_fields; k++)
+            db->previous_items[k] = k;
 
         while (offs < size && i < dst_size){
             item = huff_decode_value(codebook, data, &offs, fstats);
@@ -85,7 +84,7 @@ uint32_t tdb_decode_trail(tdb *db,
             field = tdb_item_field(item);
 
             if (field)
-                db->previous_items[field - 1] = item;
+                db->previous_items[field] = item;
 
             /* edge encoding: some fields may be inherited from previous
                events - keep track what we have seen in the past */
@@ -95,7 +94,7 @@ uint32_t tdb_decode_trail(tdb *db,
                 field = tdb_item_field(item);
                 if (field){
                     do{
-                        db->previous_items[field - 1] = item & UINT32_MAX;
+                        db->previous_items[field] = item & UINT32_MAX;
                         item >>= 32;
                     }while ((field = tdb_item_field(item)));
                 }else{
@@ -104,7 +103,7 @@ uint32_t tdb_decode_trail(tdb *db,
                 }
             }
 
-            for (j = 0; j < num_ofields && i < dst_size; j++)
+            for (j = 1; j < db->num_fields && i < dst_size; j++)
                 dst[i++] = db->previous_items[j];
 
             if (i < dst_size)
@@ -113,4 +112,59 @@ uint32_t tdb_decode_trail(tdb *db,
     }
 
     return i;
+}
+
+void *tdb_fold(tdb *db, tdb_fold_fn fun, void *acc) {
+    const uint32_t *toc;
+    const char *data;
+    const struct huff_codebook *codebook =
+        (const struct huff_codebook*)db->codebook.data;
+    const struct field_stats *fstats = db->field_stats;
+    tdb_field field;
+    uint32_t k, tstamp = db->min_timestamp;
+    uint64_t cookie_id, delta, prev_offs, item, size, offs = 0;
+
+    for (cookie_id = 0; cookie_id < db->num_cookies; cookie_id++){
+        toc = (const uint32_t*)db->trails.data;
+        data = &db->trails.data[toc[cookie_id]];
+        size = 8 * (toc[cookie_id + 1] - toc[cookie_id]);
+        size -= read_bits(data, 0, 3);
+        offs = 3;
+
+        for (k = 1; k < db->num_fields; k++)
+            db->previous_items[k] = k;
+
+        while (offs < size){
+            item = huff_decode_value(codebook, data, &offs, fstats);
+            delta = (item & UINT32_MAX) >> 8;
+            if (delta == TDB_FAR_TIMEDELTA){
+                db->previous_items[0] = 0;
+            }else{
+                tstamp += delta;
+                db->previous_items[0] = tstamp;
+            }
+            item >>= 32;
+            field = tdb_item_field(item);
+
+            if (field)
+                db->previous_items[field] = item;
+
+            while (offs < size){
+                prev_offs = offs;
+                item = huff_decode_value(codebook, data, &offs, fstats);
+                field = tdb_item_field(item);
+                if (field){
+                    do{
+                        db->previous_items[field] = item & UINT32_MAX;
+                        item >>= 32;
+                    }while ((field = tdb_item_field(item)));
+                }else{
+                    offs = prev_offs;
+                    break;
+                }
+            }
+        }
+        acc = fun(db, cookie_id, db->previous_items, acc);
+    }
+    return acc;
 }

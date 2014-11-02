@@ -102,8 +102,8 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
         return -1;
     }
 
-    if (!(db->previous_items = calloc(num_ofields, 4))){
-        tdb_err(db, "Could not alloc %u values", num_ofields);
+    if (!(db->previous_items = calloc(db->num_fields, 4))){
+        tdb_err(db, "Could not alloc %u values", db->num_fields);
         fclose(f);
         return -1;
     }
@@ -143,14 +143,14 @@ static int init_field_stats(tdb *db)
         return -1;
 
     for (i = 1; i < db->num_fields; i++){
-        tdb_lexicon lex;
+        const tdb_lexicon *lex;
 
-        if (tdb_lexicon_read(db, i, &lex)){
+        if ((lex = tdb_lexicon_read(db, i)) == NULL){
             free(field_cardinalities);
             return -1;
         }
 
-        field_cardinalities[i - 1] = lex.size;
+        field_cardinalities[i - 1] = lex->size;
     }
 
     if (!(db->field_stats = huff_field_stats(field_cardinalities,
@@ -250,30 +250,25 @@ void tdb_close(tdb *db)
     }
 }
 
-int tdb_lexicon_read(tdb *db, tdb_field field, tdb_lexicon *lex)
+const tdb_lexicon *tdb_lexicon_read(tdb *db, tdb_field field)
 {
     if (field == 0){
         tdb_err(db, "No lexicon for timestamp");
-        return -1;
+        return NULL;
     }
     if (field >= db->num_fields){
         tdb_err(db, "Invalid field: %"PRIu8, field);
-        return -1;
+        return NULL;
     }
-    tdb_field i = field - 1;
-    lex->size = *(uint32_t*)db->lexicons[i].data;
-    lex->toc = (const uint32_t*)&db->lexicons[i].data[4];
-    lex->data = (const char*)db->lexicons[i].data;
-    return 0;
+    return (tdb_lexicon*)db->lexicons[field - 1].data;
 }
 
-int tdb_lexicon_size(tdb *db, tdb_field field, uint32_t *size)
+uint32_t tdb_lexicon_size(tdb *db, tdb_field field)
 {
-    tdb_lexicon lex;
-    if (tdb_lexicon_read(db, field, &lex))
-        return -1;
-    *size = lex.size;
-    return 0;
+    const tdb_lexicon *lex;
+    if ((lex = tdb_lexicon_read(db, field)) == NULL)
+        return 0;
+    return lex->size + 1;
 }
 
 int tdb_get_field(tdb *db, const char *field_name)
@@ -295,12 +290,12 @@ const char *tdb_get_field_name(tdb *db, tdb_field field)
 
 tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
 {
-    tdb_lexicon lex;
-    if (!tdb_lexicon_read(db, field, &lex)){
-        tdb_val i;
+    const tdb_lexicon *lex;
+    if ((lex = tdb_lexicon_read(db, field))){
         if (*value){
-            for (i = 0; i < lex.size; i++)
-                if (!strcmp(&lex.data[lex.toc[i]], value))
+            tdb_val i;
+            for (i = 0; i < lex->size; i++)
+                if (!strcmp((char*)lex + (&lex->toc)[i], value))
                     return field | ((i + 1) << 8);
         }else{
             return field; /* valid empty value */
@@ -311,14 +306,13 @@ tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
 
 const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val)
 {
-    tdb_lexicon lex;
+    const tdb_lexicon *lex;
     if (!val && field && field < db->num_fields)
         return "";
-    if (!tdb_lexicon_read(db, field, &lex)) {
-        if ((val - 1) < lex.size)
-            return &lex.data[lex.toc[val - 1]];
-        else
-            tdb_err(db, "Field %"PRIu8" has no val %"PRIu32, field, val);
+    if ((lex = tdb_lexicon_read(db, field))){
+        if ((val - 1) < lex->size)
+            return (char*)lex + (&lex->toc)[val - 1];
+        tdb_err(db, "Field %"PRIu8" has no val %"PRIu32, field, val);
     }
     return NULL;
 }
@@ -335,34 +329,35 @@ const uint8_t *tdb_get_cookie(tdb *db, uint64_t cookie_id)
     return NULL;
 }
 
-/* Returns -1 if cookie not found, or -2 if cookie_index is disabled */
-int64_t tdb_get_cookie_id(tdb *db, const uint8_t *cookie)
+uint64_t tdb_get_cookie_id(tdb *db, const uint8_t *cookie)
 {
+    uint64_t i;
 #ifdef ENABLE_COOKIE_INDEX
     /* (void*) cast is horrible below. I don't know why cmph_search_packed
        can't have a const modifier. This will segfault loudly if cmph tries to
        modify the read-only mmap'ed cookie_index. */
     if (db->cookie_index.data){
-        uint64_t id = cmph_search_packed((void*)db->cookie_index.data,
-                                         (const char*)cookie,
-                                         16);
+        i = cmph_search_packed((void*)db->cookie_index.data,
+                               (const char*)cookie,
+                               16);
 
-        if (id < db->num_cookies){
-            if (!memcmp(tdb_get_cookie(db, id), cookie, 16))
-                return id;
+        if (i < db->num_cookies){
+            if (!memcmp(tdb_get_cookie(db, i), cookie, 16))
+                return i;
         }
         return -1;
-    }else
-        return -2;
-#else
-    return -2;
+    }
 #endif
+    for (i = 0; i < db->num_cookies; i++)
+        if (!memcmp(tdb_get_cookie(db, i), cookie, 16))
+            return i;
+    return -1;
 }
 
 int tdb_has_cookie_index(tdb *db)
 {
 #ifdef ENABLE_COOKIE_INDEX
-    return db->cookie_index.data ? 1: 0;
+    return db->cookie_index.data ? 1 : 0;
 #else
     return 0;
 #endif

@@ -186,11 +186,7 @@ static void write_lexicon(tdb_field field,
                           tdb *db,
                           const struct extract_ctx *ectx)
 {
-    uint32_t i, lexsize;
-
-    if (tdb_lexicon_size(db, field, &lexsize))
-        DIE("Could not get lexicon size for field %u", field);
-    ++lexsize;
+    uint32_t i, lexsize = tdb_lexicon_size(db, field);
 
     SAFE_WRITE(&lexsize, 4, "memory", memio);
 

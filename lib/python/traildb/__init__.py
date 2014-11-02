@@ -25,7 +25,7 @@ api(lib.tdb_cons_finalize, [c_void_p, c_uint64], c_int)
 api(lib.tdb_open, [c_char_p], c_void_p)
 api(lib.tdb_close, [c_void_p])
 
-api(lib.tdb_lexicon_size, [c_void_p, tdb_field, POINTER(c_uint32)], c_int)
+api(lib.tdb_lexicon_size, [c_void_p, tdb_field], c_int)
 
 api(lib.tdb_get_field, [c_void_p, c_char_p], c_uint)
 api(lib.tdb_get_field_name, [c_void_p, tdb_field], c_char_p)
@@ -35,7 +35,7 @@ api(lib.tdb_get_value, [c_void_p, tdb_field, tdb_val], c_char_p)
 api(lib.tdb_get_item_value, [c_void_p, tdb_item], c_char_p)
 
 api(lib.tdb_get_cookie, [c_void_p, c_uint64], POINTER(c_ubyte))
-api(lib.tdb_get_cookie_id, [c_void_p, POINTER(c_ubyte)], c_int)
+api(lib.tdb_get_cookie_id, [c_void_p, POINTER(c_ubyte)], c_uint64)
 api(lib.tdb_has_cookie_index, [c_void_p], c_int)
 
 api(lib.tdb_error, [c_void_p], c_char_p)
@@ -104,14 +104,20 @@ class TrailDB(object):
         self._trail_buf = (c_uint32 * self._trail_buf_size)()
         return self._trail_buf, self._trail_buf_size
 
-    def __contains__(self, cookie):
-        pass # XXX: like on get_cookie_id but don't use an exception
+    def __contains__(self, cookieish):
+        try:
+            self[cookieish]
+            return True
+        except IndexError:
+            return False
+
+    def __getitem__(self, cookieish):
+        if isinstance(cookieish, basestring):
+            return self.trail(self.cookie_id(cookieish))
+        return self.trail(cookieish)
 
     def __len__(self):
         return self.num_cookies
-
-    def __getitem__(self, id):
-        return self.trail(id)
 
     def crumbs(self, **kwds):
         for i in xrange(len(self)):
@@ -154,14 +160,14 @@ class TrailDB(object):
 
     def lexicon(self, fieldish):
         field = self.field(fieldish)
-        return [self.value(field, i + 1) for i in xrange(self.lexicon_size(field))]
+        return [self.value(field, i) for i in xrange(self.lexicon_size(field))]
 
     def lexicon_size(self, fieldish):
         field = self.field(fieldish)
-        size = (c_uint)()
-        if lib.tdb_lexicon_size(self._db, field, size):
+        value = lib.tdb_lexicon_size(self._db, field)
+        if not value:
             raise TrailDBError(lib.tdb_error(self._db))
-        return size.value
+        return value
 
     def value(self, fieldish, val):
         field = self.field(fieldish)
@@ -178,13 +184,8 @@ class TrailDB(object):
 
     def cookie_id(self, cookie):
         cookie_id = lib.tdb_get_cookie_id(self._db, rawcookie(cookie))
-        if cookie_id >= 0:
+        if cookie_id < self.num_cookies:
             return cookie_id
-        elif cookie_id == -2: # NB: no cookie index
-            # XXX: how do we tell if was too small vs not created?
-            for i in xrange(len(self)):
-                if self.cookie(i) == cookie:
-                    return i
         raise IndexError("Cookie '%s' not found" % cookie)
 
     def has_cookie_index(self):
