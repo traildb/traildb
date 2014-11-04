@@ -52,6 +52,12 @@ class TestAPI(unittest.TestCase):
         print db.time_range()
         print db.time_range(ptime=True)
 
+    def test_fold(self):
+        db = self.traildb
+        def fold_fn(db, id, ev, acc):
+            acc.append((id, ev))
+        print db.fold(fold_fn, [])
+
 class TestCons(unittest.TestCase):
     def test_cons(self):
         cons = TrailDBConstructor('test.tdb', ['field1', 'field2'])

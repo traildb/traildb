@@ -1,9 +1,9 @@
 import os
 
 from collections import namedtuple
-from ctypes import c_char, c_char_p, c_ubyte, c_void_p, c_int
+from ctypes import c_char, c_char_p, c_ubyte, c_int, c_void_p
 from ctypes import c_uint, c_uint8, c_uint32, c_uint64
-from ctypes import CDLL, Structure, POINTER
+from ctypes import CDLL, CFUNCTYPE, POINTER
 from datetime import datetime
 
 cd = os.path.dirname(os.path.abspath(__file__))
@@ -13,40 +13,44 @@ def api(fun, args, res=None):
     fun.argtypes = args
     fun.restype = res
 
-tdb_field = c_uint8
-tdb_val   = c_uint32
-tdb_item  = c_uint32
+tdb         = c_void_p
+tdb_cons    = c_void_p
+tdb_field   = c_uint8
+tdb_val     = c_uint32
+tdb_item    = c_uint32
+tdb_fold_fn = CFUNCTYPE(c_void_p, tdb, c_uint64, POINTER(tdb_item), c_void_p)
 
-api(lib.tdb_cons_new, [c_char_p, POINTER(c_char), c_uint32], c_void_p)
-api(lib.tdb_cons_free, [c_void_p])
-api(lib.tdb_cons_add, [c_void_p, POINTER(c_ubyte), c_uint32, POINTER(c_char)], c_int)
-api(lib.tdb_cons_finalize, [c_void_p, c_uint64], c_int)
+api(lib.tdb_cons_new, [c_char_p, POINTER(c_char), c_uint32], tdb_cons)
+api(lib.tdb_cons_free, [tdb_cons])
+api(lib.tdb_cons_add, [tdb_cons, POINTER(c_ubyte), c_uint32, POINTER(c_char)], c_int)
+api(lib.tdb_cons_finalize, [tdb_cons, c_uint64], c_int)
 
-api(lib.tdb_open, [c_char_p], c_void_p)
-api(lib.tdb_close, [c_void_p])
+api(lib.tdb_open, [c_char_p], tdb)
+api(lib.tdb_close, [tdb])
 
-api(lib.tdb_lexicon_size, [c_void_p, tdb_field], c_int)
+api(lib.tdb_lexicon_size, [tdb, tdb_field], c_int)
 
-api(lib.tdb_get_field, [c_void_p, c_char_p], c_uint)
-api(lib.tdb_get_field_name, [c_void_p, tdb_field], c_char_p)
+api(lib.tdb_get_field, [tdb, c_char_p], c_uint)
+api(lib.tdb_get_field_name, [tdb, tdb_field], c_char_p)
 
-api(lib.tdb_get_item, [c_void_p, tdb_field, c_char_p], c_uint)
-api(lib.tdb_get_value, [c_void_p, tdb_field, tdb_val], c_char_p)
-api(lib.tdb_get_item_value, [c_void_p, tdb_item], c_char_p)
+api(lib.tdb_get_item, [tdb, tdb_field, c_char_p], c_uint)
+api(lib.tdb_get_value, [tdb, tdb_field, tdb_val], c_char_p)
+api(lib.tdb_get_item_value, [tdb, tdb_item], c_char_p)
 
-api(lib.tdb_get_cookie, [c_void_p, c_uint64], POINTER(c_ubyte))
-api(lib.tdb_get_cookie_id, [c_void_p, POINTER(c_ubyte)], c_uint64)
-api(lib.tdb_has_cookie_index, [c_void_p], c_int)
+api(lib.tdb_get_cookie, [tdb, c_uint64], POINTER(c_ubyte))
+api(lib.tdb_get_cookie_id, [tdb, POINTER(c_ubyte)], c_uint64)
+api(lib.tdb_has_cookie_index, [tdb], c_int)
 
-api(lib.tdb_error, [c_void_p], c_char_p)
+api(lib.tdb_error, [tdb], c_char_p)
 
-api(lib.tdb_num_cookies, [c_void_p], c_uint64)
-api(lib.tdb_num_events, [c_void_p], c_uint64)
-api(lib.tdb_num_fields, [c_void_p], c_uint32)
-api(lib.tdb_min_timestamp, [c_void_p], c_uint32)
-api(lib.tdb_max_timestamp, [c_void_p], c_uint32)
+api(lib.tdb_num_cookies, [tdb], c_uint64)
+api(lib.tdb_num_events, [tdb], c_uint64)
+api(lib.tdb_num_fields, [tdb], c_uint32)
+api(lib.tdb_min_timestamp, [tdb], c_uint32)
+api(lib.tdb_max_timestamp, [tdb], c_uint32)
 
-api(lib.tdb_decode_trail, [c_void_p, c_uint64, POINTER(c_uint32), c_uint32, c_int], c_uint32)
+api(lib.tdb_decode_trail, [tdb, c_uint64, POINTER(c_uint32), c_uint32, c_int], c_uint32)
+api(lib.tdb_fold, [tdb, tdb_fold_fn, c_void_p], c_void_p)
 
 def hexcookie(cookie):
     if isinstance(cookie, basestring):
@@ -152,6 +156,13 @@ class TrailDB(object):
                 i += 1
                 yield cls(tstamp, *values)
         return list(gen())
+
+    def fold(self, fun, acc=None):
+        db, cls, N = self._db, self._evcls, self.num_fields
+        def fn(tdb, id, items, _):
+            fun(self, id, cls(items[0], *(i >> 8 for i in items[1:N])), acc)
+        lib.tdb_fold(db, tdb_fold_fn(fn), None)
+        return acc
 
     def field(self, fieldish):
         if isinstance(fieldish, basestring):

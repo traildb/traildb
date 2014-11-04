@@ -163,8 +163,8 @@ void *tdb_fold(tdb *db, tdb_fold_fn fun, void *acc) {
                     break;
                 }
             }
+            acc = fun(db, cookie_id, db->previous_items, acc);
         }
-        acc = fun(db, cookie_id, db->previous_items, acc);
     }
     return acc;
 }
