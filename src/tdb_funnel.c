@@ -194,7 +194,7 @@ fdb_eid fdb_combine(const fdb_set *sets, int num_sets, fdb_venn *venn) {
   int i, N = num_sets, Q = N - 1;
   unsigned long long k, run = 0, overlap = 0, diff = 0, isect = 0;
   char empty[num_sets];
-  fdb_eid next[num_sets], argmin, lastarg, min, last;
+  fdb_eid next[num_sets], argmin = 0, lastarg, min, last;
   fdb_elem heads[num_sets];
   for (i = 0; i < num_sets; i++) {
     empty[i] = next[i] = 0;
