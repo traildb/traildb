@@ -1,0 +1,82 @@
+#!/usr/bin/env python
+"""
+CREATE:
+
+fbd make /path/to/funnel.db -k / -k /network -k /advertisable_eid -k /advertisable_eid/network -m type
+
+COMBINE:
+
+fdb combine /path/to/funnel.db -k /network:g -m ct2+vt2 -k /network:f -m ct2+vt2
+union   intersection    difference
+A       B               C
+
+COUNT:
+
+fdb count /path/to/funnel.db -k /advertisable_eid:XXX -m pxl -m pxl,bid -m pxl,bid,imp -m cli
+funnel          query1          query2
+/network:x	X               Y
+
+OPTIONS:
+ -t --traildb=/path/to [default]
+"""
+
+import os
+import sys
+import argparse
+import itertools
+
+from traildb import FunnelDB, TrailDB
+
+def help():
+    print(__doc__.strip())
+
+def size(tdb, path, opts):
+    print len(FunnelDB.load(tdb, path))
+
+def make(tdb, path, opts):
+    mask = opts.mask or []
+    keys = opts.key or ('')
+    fdb = FunnelDB.easy(tdb,
+                        keys=[filter(None, k.split('/')) for k in keys or ()],
+                        mask_field=tdb.fields.index(mask[0]) if mask else 1)
+    fdb.dump(path)
+
+def combine(tdb, path, opts):
+    fdb = FunnelDB.load(tdb, path)
+    queries = opts.mask or []
+    keys = [fdb.key(**dict(i.split(':') for i in k.split('/') if i))
+            for k in opts.key or ('')]
+    venn = fdb.combine(list(itertools.izip_longest(keys, queries)))
+    print '# union:        %9d' % venn.union_size
+    print '# intersection: %9d' % venn.intersection_size
+    print '# difference:   %9d' % venn.difference_size
+
+def count(tdb, path, opts):
+    fdb = FunnelDB.load(tdb, path)
+    queries = opts.mask or [None]
+    keys = [fdb.key(**dict(i.split(':') for i in k.split('/') if i))
+            for k in opts.key or ('')]
+    print '%-50s\t%s' % ('funnel', '\t'.join('%9s' % (q or '*') for q in queries))
+    for n, (id, qc) in enumerate(fdb.count(keys, queries)):
+        print '%-50s\t%s' % (opts.key[n], '\t'.join('%9d' % c for q, c in qc))
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-k', '--key',
+                        action='append',
+                        help="funnel key or key fields")
+    parser.add_argument('-m', '--mask',
+                        action='append',
+                        help="query mask or mask field")
+    parser.add_argument('-t', '--traildb',
+                        help="the path of the traildb")
+    opts, args = parser.parse_known_args(sys.argv[1:])
+    cmd, args = args[0] if args else 'help', args[1:]
+    if cmd is 'help':
+        return help()
+    path = args[0] if args else 'a.tdb/funnel.db'
+    tdb = TrailDB(opts.traildb or os.path.dirname(path))
+    return eval(cmd)(tdb, path, opts)
+
+if __name__ == '__main__':
+    main()
