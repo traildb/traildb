@@ -72,7 +72,7 @@ def main():
                         help="the path of the traildb")
     opts, args = parser.parse_known_args(sys.argv[1:])
     cmd, args = args[0] if args else 'help', args[1:]
-    if cmd is 'help':
+    if cmd == 'help':
         return help()
     path = args[0] if args else 'a.tdb/funnel.db'
     tdb = TrailDB(opts.traildb or os.path.dirname(path))

@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+"""
+tdb info TRAILDB
+tdb lex TRAILDB [-f FIELD ...]
+tdb cat TRAILDB [-f FIELD ...]
+"""
+
+import os
+import sys
+import argparse
+import itertools
+
+from traildb import TrailDB
+
+def tabify(iter, fmt='%s'):
+    return '\t'.join(fmt % x for x in iter)
+
+def help():
+    print(__doc__.strip())
+
+def info(tdb, opts):
+    print '# cookies:                   %9d' % tdb.num_cookies
+    print '# events:                    %9d' % tdb.num_events
+    print '# fields:                    %9d' % tdb.num_fields
+    for f in tdb.fields[1:]:
+        print '# -%-25s %9d' % (f + ':', tdb.lexicon_size(f))
+    tmin, tmax = tdb.time_range(ptime=True)
+    print u'\u2265 time:            %s' % tmin
+    print u'\u2264 time:            %s' % tmax
+
+def lex(tdb, opts):
+    for field in opts.field or tdb.fields[1:]:
+        for value in tdb.lexicon(field):
+            print '%s\t%s' % (field, value)
+
+def cat(tdb, opts):
+    if opts.field:
+        for cookie, trail in tdb.crumbs():
+            for event in trail:
+                print '%s\t%s' % (cookie, tabify(getattr(event, f) for f in opts.field))
+    else:
+        for cookie, trail in tdb.crumbs():
+            print cookie, trail
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--field',
+                        action='append',
+                        help="name of field to operate on")
+    opts, args = parser.parse_known_args(sys.argv[1:])
+    cmd, args = args[0] if args else 'help', args[1:]
+    if cmd == 'help':
+        return help()
+    tdb = TrailDB(args[0] if args else 'a.tdb')
+    return eval(cmd)(tdb, opts)
+
+if __name__ == '__main__':
+    main()

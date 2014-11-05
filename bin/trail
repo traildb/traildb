@@ -1,7 +1,0 @@
-#!/usr/bin/env python
-
-# ideas:
-#  run a python-wrapped shell
-#  import config
-#  import libs
-#  python prompt
