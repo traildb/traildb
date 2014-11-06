@@ -210,6 +210,7 @@ void tdb_cons_free(tdb_cons *cons)
     free(cons->root);
     free(cons->ofield_names);
     free(cons->cookie_pointers);
+    free(cons->lexicons);
     free(cons->lexicon_counters);
     free(cons);
 }
