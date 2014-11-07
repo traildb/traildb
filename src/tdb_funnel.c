@@ -127,9 +127,15 @@ fdb *fdb_easy(tdb *tdb, fdb_ez *params) {
 }
 
 fdb *fdb_dump(fdb *db, int fd) {
-  if (write(fd, db, fdb_size(db->num_funnels, db->data_size)) < 0) {
-    perror("write");
-    return NULL;
+  size_t size = fdb_size(db->num_funnels, db->data_size), total = 0;
+  ssize_t wrote = 0;
+  while ((wrote = write(fd, (char *)db + total, size))) {
+    if (wrote < 0) {
+      perror("write");
+      return NULL;
+    }
+    size -= wrote;
+    total += wrote;
   }
   return db;
 }
