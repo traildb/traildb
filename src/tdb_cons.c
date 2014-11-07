@@ -196,6 +196,8 @@ tdb_cons *tdb_cons_new(const char *root,
         goto error;
     if (!(cons->lexicon_counters = calloc(cons->num_ofields, sizeof(Word_t))))
         goto error;
+    if (!(cons->lexicon_maps = calloc(cons->num_ofields, sizeof(uint32_t *))))
+        goto error;
     return cons;
 
  error:
@@ -212,6 +214,7 @@ void tdb_cons_free(tdb_cons *cons)
     free(cons->cookie_pointers);
     free(cons->lexicons);
     free(cons->lexicon_counters);
+    free(cons->lexicon_maps);
     free(cons);
 }
 
@@ -221,8 +224,7 @@ int tdb_cons_add(tdb_cons *cons,
                  const char *values)
 {
     Word_t *cookie_words = (Word_t*)cookie; // NB: word must be 64-bit
-    Word_t *cookie_ptr_hi;
-    Word_t *cookie_ptr_lo;
+    Word_t *cookie_ptr_hi, *cookie_ptr_lo;
     Pvoid_t cookie_index_lo;
 
     if (timestamp < cons->min_timestamp)
@@ -273,6 +275,87 @@ int tdb_cons_add(tdb_cons *cons,
     }
 
     return 0;
+}
+
+static void *append_fn(const tdb *db,
+                       uint64_t cookie_id,
+                       const tdb_item *items,
+                       void *acc)
+{
+    Word_t *cookie_words = (Word_t*)&db->cookies.data[cookie_id * 16];
+    Word_t *cookie_ptr_hi, *cookie_ptr_lo;
+    Pvoid_t cookie_index_lo;
+
+    tdb_cons *cons = (tdb_cons*)acc;
+    tdb_val timestamp = items[0];
+    if (timestamp < cons->min_timestamp)
+        cons->min_timestamp = timestamp;
+
+    JLI(cookie_ptr_hi, cons->cookie_index, cookie_words[0]);
+    cookie_index_lo = (Pvoid_t)*cookie_ptr_hi;
+    JLI(cookie_ptr_lo, cookie_index_lo, cookie_words[1]);
+    *cookie_ptr_hi = (Word_t)cookie_index_lo;
+
+    if (!*cookie_ptr_lo)
+        ++cons->num_cookies;
+
+    tdb_cons_event *event = (tdb_cons_event*)arena_add_item(&cons->events);
+    event->item_zero = cons->items.next;
+    event->num_items = 0;
+    event->timestamp = timestamp;
+    event->prev_event_idx = *cookie_ptr_lo;
+    *cookie_ptr_lo = cons->events.next;
+
+    tdb_field i;
+    for (i = 0; i < cons->num_ofields; i++){
+        tdb_field field = i + 1;
+        tdb_item item = field;
+        tdb_val val = tdb_item_val(items[field]);
+        if (val)
+            item |= cons->lexicon_maps[i][val - 1] << 8;
+        *((tdb_item*)arena_add_item(&cons->items)) = item;
+        ++event->num_items;
+    }
+
+    return acc;
+}
+
+int tdb_cons_append(tdb_cons *cons, const tdb *db)
+{
+    uint32_t num_ofields = db->num_fields - 1;
+    if (cons->num_ofields != num_ofields)
+        return -1;
+    int ret = 0;
+    tdb_field i;
+    for (i = 0; i < num_ofields; i++){
+        tdb_field field = i + 1;
+        tdb_lexicon *lex = (tdb_lexicon*)db->lexicons[i].data;
+        uint32_t v, N = lex->size;
+        uint32_t *map = cons->lexicon_maps[i] = malloc(N * sizeof(uint32_t));
+        for (v = 0; v < N; v++){
+            char *value = (char*)lex + (&lex->toc)[v];
+            Word_t *val_p;
+            JSLI(val_p, cons->lexicons[i], (uint8_t*)value);
+            if (*val_p == 0){
+                *val_p = ++cons->lexicon_counters[i];
+                if (*val_p > TDB_MAX_NUM_VALUES){
+                    WARN("Too many values for field %d (%s)",
+                         field,
+                         field_name(cons, field));
+                    ret = i;
+                    goto done;
+                }
+            }
+            map[v] = *val_p;
+        }
+    }
+
+    tdb_fold(db, append_fn, cons);
+
+ done:
+    for (i = 0; i < num_ofields; i++)
+        free(cons->lexicon_maps[i]);
+    return ret;
 }
 
 int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)

@@ -23,6 +23,7 @@ tdb_fold_fn = CFUNCTYPE(c_void_p, tdb, c_uint64, POINTER(tdb_item), c_void_p)
 api(lib.tdb_cons_new, [c_char_p, POINTER(c_char), c_uint32], tdb_cons)
 api(lib.tdb_cons_free, [tdb_cons])
 api(lib.tdb_cons_add, [tdb_cons, POINTER(c_ubyte), c_uint32, POINTER(c_char)], c_int)
+api(lib.tdb_cons_append, [tdb_cons, tdb], c_int)
 api(lib.tdb_cons_finalize, [tdb_cons, c_uint64], c_int)
 
 api(lib.tdb_open, [c_char_p], tdb)
@@ -66,19 +67,29 @@ class TrailDBError(Exception):
     pass
 
 class TrailDBConstructor(object):
-    def __init__(self, path, fields=()):
-        self._cons = cons = lib.tdb_cons_new(path, '\x00'.join(fields), len(fields))
+    def __init__(self, path, ofields=()):
+        if not path:
+            raise TrailDBError("Path is required")
+        self._cons = cons = lib.tdb_cons_new(path, '\x00'.join(ofields), len(ofields))
         self.path = path
-        self.fields = fields
+        self.ofields = ofields
 
     def __del__(self):
-        lib.tdb_cons_free(self._cons)
+        if hasattr(self, '_cons'):
+            lib.tdb_cons_free(self._cons)
 
     def add(self, cookie, time, values=()):
         if isinstance(time, datetime):
             time = int(time.strftime('%s'))
         f = lib.tdb_cons_add(self._cons, rawcookie(cookie), time, '\x00'.join(values))
         if f:
+            raise TrailDBError("Too many values: %s" % values[f])
+
+    def append(self, db):
+        f = lib.tdb_cons_append(self._cons, db._db)
+        if f < 0:
+            raise TrailDBError("Wrong number of fields: %d" % db.num_fields)
+        if f > 0:
             raise TrailDBError("Too many values: %s" % values[f])
 
     def finalize(self, flags=0):

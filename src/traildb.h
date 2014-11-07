@@ -54,6 +54,7 @@ int tdb_cons_add(tdb_cons *cons,
                  const uint8_t cookie[16],
                  const uint32_t timestamp,
                  const char *values);
+int tdb_cons_append(tdb_cons *cons, const tdb *db);
 int tdb_cons_finalize(tdb_cons *cons, uint64_t flags);
 
 int tdb_cookie_raw(const uint8_t hexcookie[32], uint8_t cookie[16]);
@@ -84,12 +85,12 @@ uint32_t tdb_num_fields(const tdb *db);
 uint32_t tdb_min_timestamp(const tdb *db);
 uint32_t tdb_max_timestamp(const tdb *db);
 
-uint32_t tdb_decode_trail(tdb *db,
+uint32_t tdb_decode_trail(const tdb *db,
                           uint64_t cookie_id,
                           uint32_t *dst,
                           uint32_t dst_size,
                           int edge_encoded);
 
-void *tdb_fold(tdb *db, tdb_fold_fn fun, void *acc);
+void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc);
 
 #endif /* __TRAILDB_H__ */

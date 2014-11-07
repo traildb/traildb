@@ -69,5 +69,23 @@ class TestCons(unittest.TestCase):
         print tdb.cookie_id('12345678123456781234567812345678')
         print tdb.cookie(0)
 
+    def test_append(self):
+        cons = TrailDBConstructor('test.tdb', ['field1', 'field2'])
+        cons.add('12345678123456781234567812345678', 123, ['a'])
+        cons.add('12345678123456781234567812345678', 124, ['b', 'c'])
+        tdb = cons.finalize()
+        cons = TrailDBConstructor('test2.tdb', ['field1', 'field2'])
+        cons.add('12345678123456781234567812345678', 125, ['a'])
+        cons.append(tdb)
+        tdb = cons.finalize()
+        for cookie, trail in tdb.crumbs():
+            print cookie, list(trail)
+        print tdb.cookie_id('12345678123456781234567812345678')
+        print tdb.cookie(0)
+
+    def tearDown(self):
+        shutil.rmtree('test.tdb', True)
+        shutil.rmtree('test2.tdb', True)
+
 if __name__ == '__main__':
     unittest.main()

@@ -3,7 +3,7 @@
 #include "huffman.h"
 #include "util.h"
 
-uint32_t tdb_decode_trail(tdb *db,
+uint32_t tdb_decode_trail(const tdb *db,
                           uint64_t cookie_id,
                           uint32_t *dst,
                           uint32_t dst_size,
@@ -114,7 +114,7 @@ uint32_t tdb_decode_trail(tdb *db,
     return i;
 }
 
-void *tdb_fold(tdb *db, tdb_fold_fn fun, void *acc) {
+void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc) {
     const uint32_t *toc;
     const char *data;
     const struct huff_codebook *codebook =

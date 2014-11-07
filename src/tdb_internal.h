@@ -44,6 +44,7 @@ struct _tdb_cons {
     Pvoid_t cookie_index;
     Pvoid_t *lexicons;
     Word_t *lexicon_counters;
+    uint32_t **lexicon_maps;
     char tempfile[TDB_MAX_PATH_SIZE];
 };
 

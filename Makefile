@@ -1,7 +1,7 @@
 
 CFLAGS = -fPIC -O3 -Wall
-CINCL  = -I src -I deps/discodb/src -L lib
-CLIBS  = $(foreach L,discodb Judy cmph m,-l$(L))
+CINCL  = -Isrc -Ideps/discodb/src
+CLIBS  =  -Llib $(foreach L,discodb Judy cmph m,-l$(L))
 CHDRS  = $(wildcard src/*.h)
 CSRCS  = $(wildcard src/*.c src/dsfmt/dSFMT.c)
 COBJS  = $(patsubst %.c,%.o,$(CSRCS))
@@ -12,7 +12,7 @@ PYTHON = python
 
 all: libs bins
 
-bins: bin/encode bin/index bin/merge bin/mix
+bins: bin/encode bin/index bin/extractd bin/mix
 
 libs: lib/libdiscodb.a lib/libtraildb.a lib/libtraildb.so
 
@@ -21,7 +21,7 @@ clean:
 	rm -f bin/encode bin/index bin/mix
 	rm -f lib/libtraildb.*
 
-bin/merge: src/bin/merge/*.c $(COBJS)
+bin/extractd: src/bin/extractd/*.c $(COBJS)
 	$(CC) $(CFLAGS) $(CINCL) -I $(<D) -o $@ $^ $(CLIBS)
 
 bin/mix: src/bin/mix/*.c src/bin/mix/ops/*.c $(COBJS)
