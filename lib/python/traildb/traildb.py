@@ -158,7 +158,7 @@ class TrailDB(object):
 
         def gen(i=0):
             while i < num:
-                tstamp = datetime.fromtimestamp(buf[i]) if ptime else buf[i]
+                tstamp = datetime.utcfromtimestamp(buf[i]) if ptime else buf[i]
                 values = []
                 i += 1
                 while i < num and buf[i]:
@@ -224,5 +224,5 @@ class TrailDB(object):
         tmin = lib.tdb_min_timestamp(self._db)
         tmax = lib.tdb_max_timestamp(self._db)
         if ptime:
-            return datetime.fromtimestamp(tmin), datetime.fromtimestamp(tmax)
+            return datetime.utcfromtimestamp(tmin), datetime.utcfromtimestamp(tmax)
         return tmin, tmax

@@ -121,10 +121,11 @@ void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc) {
         (const struct huff_codebook*)db->codebook.data;
     const struct field_stats *fstats = db->field_stats;
     tdb_field field;
-    uint32_t k, tstamp = db->min_timestamp;
+    uint32_t k, tstamp;
     uint64_t cookie_id, delta, prev_offs, item, size, offs = 0;
 
     for (cookie_id = 0; cookie_id < db->num_cookies; cookie_id++){
+        tstamp = db->min_timestamp;
         toc = (const uint32_t*)db->trails.data;
         data = &db->trails.data[toc[cookie_id]];
         size = 8 * (toc[cookie_id + 1] - toc[cookie_id]);

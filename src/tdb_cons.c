@@ -287,9 +287,6 @@ static void *append_fn(const tdb *db,
     Pvoid_t cookie_index_lo;
 
     tdb_cons *cons = (tdb_cons*)acc;
-    tdb_val timestamp = items[0];
-    if (timestamp < cons->min_timestamp)
-        cons->min_timestamp = timestamp;
 
     JLI(cookie_ptr_hi, cons->cookie_index, cookie_words[0]);
     cookie_index_lo = (Pvoid_t)*cookie_ptr_hi;
@@ -302,7 +299,7 @@ static void *append_fn(const tdb *db,
     tdb_cons_event *event = (tdb_cons_event*)arena_add_item(&cons->events);
     event->item_zero = cons->items.next;
     event->num_items = 0;
-    event->timestamp = timestamp;
+    event->timestamp = items[0];
     event->prev_event_idx = *cookie_ptr_lo;
     *cookie_ptr_lo = cons->events.next;
 
@@ -325,6 +322,8 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
     uint32_t num_ofields = db->num_fields - 1;
     if (cons->num_ofields != num_ofields)
         return -1;
+    if (db->min_timestamp < cons->min_timestamp)
+        cons->min_timestamp = db->min_timestamp;
     int ret = 0;
     tdb_field i;
     for (i = 0; i < num_ofields; i++){
