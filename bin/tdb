@@ -23,14 +23,14 @@ def info(args, opts):
     for arg in args:
         tdb = TrailDB(arg)
         print '%s' % arg
-        print ' # cookies:                   %9d' % tdb.num_cookies
-        print ' # events:                    %9d' % tdb.num_events
-        print ' # fields:                    %9d' % tdb.num_fields
+        print ' # cookies:                   %12d' % tdb.num_cookies
+        print ' # events:                    %12d' % tdb.num_events
+        print ' # fields:                    %12d' % tdb.num_fields
         for f in tdb.fields[1:]:
-            print ' # -%-25s %9d' % (f + ':', tdb.lexicon_size(f))
+            print ' # -%-25s %12d' % (f + ':', tdb.lexicon_size(f))
         tmin, tmax = tdb.time_range(ptime=True)
-        print u' \u2265 time:            %s' % tmin
-        print u' \u2264 time:            %s' % tmax
+        print u' \u2265 time:               %s' % tmin
+        print u' \u2264 time:               %s' % tmax
 
 def lex(args, opts):
     for arg in args:

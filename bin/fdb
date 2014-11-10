@@ -47,18 +47,18 @@ def combine(tdb, path, opts):
     keys = [fdb.key(**dict(i.split(':') for i in k.split('/') if i))
             for k in opts.key or ('')]
     venn = fdb.combine(list(itertools.izip_longest(keys, queries)))
-    print '# union:        %9d' % venn.union_size
-    print '# intersection: %9d' % venn.intersection_size
-    print '# difference:   %9d' % venn.difference_size
+    print '# union:        %12d' % venn.union_size
+    print '# intersection: %12d' % venn.intersection_size
+    print '# difference:   %12d' % venn.difference_size
 
 def count(tdb, path, opts):
     fdb = FunnelDB.load(tdb, path)
     queries = opts.mask or [None]
     keys = [fdb.key(**dict(i.split(':') for i in k.split('/') if i))
             for k in opts.key or ('')]
-    print '%-50s\t%s' % ('funnel', '\t'.join('%9s' % (q or '*') for q in queries))
+    print '%-50s\t%s' % ('funnel', '\t'.join('%12s' % (q or '*') for q in queries))
     for n, (id, qc) in enumerate(fdb.count(keys, queries)):
-        print '%-50s\t%s' % (opts.key[n], '\t'.join('%9d' % c for q, c in qc))
+        print '%-50s\t%s' % (opts.key[n], '\t'.join('%12d' % c for q, c in qc))
 
 def main():
     parser = argparse.ArgumentParser()
