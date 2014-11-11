@@ -1,6 +1,6 @@
 import os
 
-from collections import namedtuple, Sequence
+from collections import namedtuple
 from ctypes import c_char, c_char_p, c_ubyte, c_void_p, c_int
 from ctypes import c_uint, c_uint8, c_uint32, c_uint64
 from ctypes import CDLL, POINTER, Structure, byref, cast, pointer
@@ -88,9 +88,13 @@ def keys(num_keys, key_fields):
             key = []
 
 def seqify(x):
-    if isinstance(x, Sequence) and not isinstance(x, basestring):
+    try:
+        x[0]
         return x
-    return x,
+    except IndexError:
+        return x
+    except TypeError:
+        return x,
 
 class FunnelDBError(Exception):
     pass
@@ -160,10 +164,10 @@ class FunnelDB(object):
         N = len(id_queries)
         venn = FDB_VENN()
         sets = (FDB_SET * N)()
-        for n, (id, query) in enumerate(id_queries):
+        for n, (id, q) in enumerate(id_queries):
             sets[n].db = self.db
             sets[n].funnel_id = id
-            sets[n].cnf = self.cnfs([query])
+            sets[n].cnf = q if isinstance(q, FDB_CNF) else self.cnfs([q])
         lib.fdb_combine(sets, N, venn)
         return Venn(venn.union_size, venn.intersection_size, venn.difference_size)
 
@@ -172,7 +176,7 @@ class FunnelDB(object):
         N = len(queries)
         counts = (fdb_eid * N)()
         family = FDB_FAMILY(db=self.db)
-        cnfs = self.cnfs(queries)
+        cnfs = queries if isinstance(queries[0], FDB_CNF) else self.cnfs(queries)
         for id in seqify(ids):
             family.funnel_id = id
             family.cnf = cnfs

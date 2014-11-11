@@ -1,7 +1,7 @@
 
 CFLAGS = -fPIC -O3 -Wall
 CINCL  = -Isrc -Ideps/discodb/src
-CLIBS  =  -Llib $(foreach L,discodb Judy cmph m,-l$(L))
+CLIBS  = -Llib $(foreach L,discodb Judy cmph m,-l$(L))
 CHDRS  = $(wildcard src/*.h)
 CSRCS  = $(wildcard src/*.c src/dsfmt/dSFMT.c)
 COBJS  = $(patsubst %.c,%.o,$(CSRCS))

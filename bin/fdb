@@ -56,7 +56,7 @@ def count(tdb, path, opts):
     queries = opts.mask or [None]
     keys = [fdb.key(**dict(i.split(':') for i in k.split('/') if i))
             for k in opts.key or ('')]
-    print '%-50s\t%s' % ('funnel', '\t'.join('%12s' % (q or '*') for q in queries))
+    print '%-50s\t%s' % ('funnel', '\t'.join('%12s' % (q or '-') for q in queries))
     for n, (id, qc) in enumerate(fdb.count(keys, queries)):
         print '%-50s\t%s' % (opts.key[n], '\t'.join('%12d' % c for q, c in qc))
 
