@@ -167,7 +167,7 @@ class FunnelDB(object):
         for n, (id, q) in enumerate(id_queries):
             sets[n].db = self.db
             sets[n].funnel_id = id
-            sets[n].cnf = q if isinstance(q, FDB_CNF) else self.cnfs([q])
+            sets[n].cnf = pointer(q) if isinstance(q, FDB_CNF) else self.cnfs([q])
         lib.fdb_combine(sets, N, venn)
         return Venn(venn.union_size, venn.intersection_size, venn.difference_size)
 
