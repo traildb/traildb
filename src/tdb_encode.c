@@ -254,6 +254,10 @@ static void encode_trails(const tdb_item *items,
     SAFE_SEEK(out, num_cookies * 4, path);
     SAFE_WRITE(&file_offs, 4, path, out);
 
+    /* write an extra 8 null bytes: huffman may require up to 7 when reading */
+    file_offs = 0;
+    SAFE_WRITE(&file_offs, 8, path, out);
+
     SAFE_CLOSE(out, path);
 
     free_gram_bufs(&gbufs);

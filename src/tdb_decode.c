@@ -9,24 +9,20 @@ uint32_t tdb_decode_trail(const tdb *db,
                           uint32_t dst_size,
                           int edge_encoded)
 {
-    const uint32_t *toc;
     const char *data;
-    uint64_t item, size, offs = 0;
-    const struct huff_codebook *codebook =
-        (const struct huff_codebook*)db->codebook.data;
+    const uint32_t *toc = (uint32_t*)db->trails.data;
+    const struct huff_codebook *codebook = (struct huff_codebook*)db->codebook.data;
+    const struct field_stats *fstats = db->field_stats;
     uint32_t k, j, i = 0;
     uint32_t tstamp = db->min_timestamp;
-    uint64_t delta, prev_offs;
-    const struct field_stats *fstats = db->field_stats;
+    uint64_t delta, prev_offs, offs, size, item;
     tdb_field field;
 
     if (cookie_id >= db->num_cookies)
         return 0;
 
-    toc = (const uint32_t*)db->trails.data;
     data = &db->trails.data[toc[cookie_id]];
-    size = 8 * (toc[cookie_id + 1] - toc[cookie_id]);
-    size -= read_bits(data, 0, 3);
+    size = 8 * (toc[cookie_id + 1] - toc[cookie_id]) - read_bits(data, 0, 3);
     offs = 3;
     if (edge_encoded){
         while (offs < size && i < dst_size){
@@ -115,21 +111,18 @@ uint32_t tdb_decode_trail(const tdb *db,
 }
 
 void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc) {
-    const uint32_t *toc;
     const char *data;
-    const struct huff_codebook *codebook =
-        (const struct huff_codebook*)db->codebook.data;
+    const uint32_t *toc = (uint32_t*)db->trails.data;
+    const struct huff_codebook *codebook = (struct huff_codebook*)db->codebook.data;
     const struct field_stats *fstats = db->field_stats;
     tdb_field field;
     uint32_t k, tstamp;
-    uint64_t cookie_id, delta, prev_offs, item, size, offs = 0;
+    uint64_t cookie_id, delta, prev_offs, item, size, offs;
 
     for (cookie_id = 0; cookie_id < db->num_cookies; cookie_id++){
         tstamp = db->min_timestamp;
-        toc = (const uint32_t*)db->trails.data;
         data = &db->trails.data[toc[cookie_id]];
-        size = 8 * (toc[cookie_id + 1] - toc[cookie_id]);
-        size -= read_bits(data, 0, 3);
+        size = 8 * (toc[cookie_id + 1] - toc[cookie_id]) - read_bits(data, 0, 3);
         offs = 3;
 
         for (k = 1; k < db->num_fields; k++)
