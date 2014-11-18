@@ -250,8 +250,8 @@ static void encode_trails(const tdb_item *items,
         memset(buf, 0, trail_size);
     }
     /* write an extra 8 null bytes: huffman may require up to 7 when reading */
-    file_offs = 0;
-    SAFE_WRITE(&file_offs, 8, path, out);
+    uint64_t zero = 0;
+    SAFE_WRITE(&zero, 8, path, out);
 
     /* write the redundant last offset in the TOC, so we can determine
        trail length with toc[i + 1] - toc[i]. */
