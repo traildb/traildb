@@ -1,5 +1,5 @@
 
-CFLAGS = -fPIC -O3 -Wall
+CFLAGS = -fPIC -O3 -Wall -g
 CINCL  = -Isrc -Ideps/discodb/src
 CLIBS  = -Llib $(foreach L,discodb Judy cmph m,-l$(L))
 CHDRS  = $(wildcard src/*.h)

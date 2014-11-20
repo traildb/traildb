@@ -31,7 +31,7 @@ uint32_t tdb_decode_trail(const tdb *db,
             item = huff_decode_value(codebook, data, &offs, fstats);
             delta = (item & UINT32_MAX) >> 8;
             if (delta == TDB_FAR_TIMEDELTA){
-                dst[i++] = 0;
+                dst[i++] = TDB_FAR_TIMESTAMP;
             }else{
                 tstamp += delta;
                 dst[i++] = tstamp;
@@ -71,7 +71,7 @@ uint32_t tdb_decode_trail(const tdb *db,
             item = huff_decode_value(codebook, data, &offs, fstats);
             delta = (item & UINT32_MAX) >> 8;
             if (delta == TDB_FAR_TIMEDELTA){
-                dst[i++] = 0;
+                dst[i++] = TDB_FAR_TIMESTAMP;
             }else{
                 tstamp += delta;
                 dst[i++] = tstamp;
@@ -132,7 +132,7 @@ void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc) {
             item = huff_decode_value(codebook, data, &offs, fstats);
             delta = (item & UINT32_MAX) >> 8;
             if (delta == TDB_FAR_TIMEDELTA){
-                db->previous_items[0] = 0;
+                db->previous_items[0] = TDB_FAR_TIMESTAMP;
             }else{
                 tstamp += delta;
                 db->previous_items[0] = tstamp;
@@ -157,6 +157,7 @@ void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc) {
                     break;
                 }
             }
+
             acc = fun(db, cookie_id, db->previous_items, acc);
         }
     }

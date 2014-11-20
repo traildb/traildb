@@ -28,7 +28,6 @@ typedef struct {
     uint64_t cookie_id;
 } tdb_event;
 
-
 struct _tdb_cons {
     char *root;
     char *ofield_names;
@@ -78,6 +77,13 @@ struct _tdb {
 
     int error_code;
     char error[TDB_MAX_ERROR_SIZE];
+};
+
+struct _tdb_split {
+    tdb_cons **cons;
+    tdb_fold_fn split_fn;
+    unsigned int num_parts;
+    char *values;
 };
 
 void tdb_err(tdb *db, char *fmt, ...);

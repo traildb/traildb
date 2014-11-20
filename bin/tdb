@@ -58,6 +58,13 @@ def merge(args, opts):
         cons.append(tdb)
     cons.finalize()
 
+def split(args, opts):
+    out = opts.outdb
+    fmt = out if '%' in out else '.%02d.'.join(out.split('.'))
+    for arg in args:
+        tdb = TrailDB(arg)
+        tdb.split(opts.num_parts, fmt=fmt)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--field',
@@ -66,6 +73,10 @@ def main():
     parser.add_argument('-o', '--outdb',
                         default='a.tdb',
                         help="name of field to operate on")
+    parser.add_argument('-n', '--num-parts',
+                        default=1,
+                        type=int,
+                        help="number of parts")
     opts, args = parser.parse_known_args(sys.argv[1:])
     cmd, args = args[0] if args else 'help', args[1:]
     if cmd == 'help':

@@ -322,14 +322,14 @@ const char *tdb_get_item_value(tdb *db, tdb_item item)
     return tdb_get_value(db, tdb_item_field(item), tdb_item_val(item));
 }
 
-const uint8_t *tdb_get_cookie(tdb *db, uint64_t cookie_id)
+const uint8_t *tdb_get_cookie(const tdb *db, uint64_t cookie_id)
 {
     if (cookie_id < db->num_cookies)
         return (const uint8_t *)&db->cookies.data[cookie_id * 16];
     return NULL;
 }
 
-uint64_t tdb_get_cookie_id(tdb *db, const uint8_t *cookie)
+uint64_t tdb_get_cookie_id(const tdb *db, const uint8_t *cookie)
 {
     uint64_t i;
 #ifdef ENABLE_COOKIE_INDEX
@@ -354,7 +354,7 @@ uint64_t tdb_get_cookie_id(tdb *db, const uint8_t *cookie)
     return -1;
 }
 
-int tdb_has_cookie_index(tdb *db)
+int tdb_has_cookie_index(const tdb *db)
 {
 #ifdef ENABLE_COOKIE_INDEX
     return db->cookie_index.data ? 1 : 0;
@@ -391,4 +391,101 @@ uint32_t tdb_min_timestamp(const tdb *db)
 uint32_t tdb_max_timestamp(const tdb *db)
 {
     return db->max_timestamp;
+}
+
+static void *split_fn(const tdb *db,
+                      uint64_t cookie_id,
+                      const tdb_item *items,
+                      void *acc)
+{
+    struct _tdb_split *s = (struct _tdb_split*)acc;
+    const uint8_t *cookie = tdb_get_cookie(db, cookie_id);
+    int p = tdb_djb2(cookie) % s->num_parts;
+
+    char *values = s->values, *value;
+    tdb_lexicon *lex;
+    tdb_field i;
+    tdb_val val;
+    for (i = 0; i < db->num_fields - 1; i++){
+        lex = (tdb_lexicon*)db->lexicons[i].data;
+        val = tdb_item_val(items[i + 1]);
+        value = val ? (char*)lex + (&lex->toc)[val - 1] : "";
+        values = stpcpy(values, value) + 1;
+    }
+
+    if (tdb_cons_add(s->cons[p], cookie, items[0], s->values))
+        return NULL;
+    return acc;
+}
+
+int tdb_split(const tdb *db,
+              unsigned int num_parts,
+              const char *fmt,
+              uint64_t flags)
+{
+    return tdb_split_with(db, num_parts, fmt, flags, split_fn);
+}
+
+
+int tdb_split_with(const tdb *db,
+                   unsigned int num_parts,
+                   const char *fmt,
+                   uint64_t flags,
+                   tdb_fold_fn split_fn)
+{
+    if (num_parts < 1)
+        return 0;
+
+    tdb_field i, num_ofields = db->num_fields - 1;
+    size_t size = 0;
+    for (i = 1; i < db->num_fields; i++)
+        size += strlen(db->field_names[i]) + 1;
+    char *ofield_names = calloc(size, sizeof(char)), *field_name = ofield_names;
+    if (ofield_names == NULL)
+        return -1;
+    for (i = 1; i < db->num_fields; i++)
+        field_name = stpcpy(field_name, db->field_names[i]) + 1;
+
+    int ret = 0;
+    struct _tdb_split s = {
+        .cons = calloc(num_parts, sizeof(tdb_cons*)),
+        .split_fn = split_fn,
+        .num_parts = num_parts,
+        .values = calloc(num_ofields * (TDB_MAX_VALUE_SIZE + 1), sizeof(char))
+    };
+    if (s.cons == NULL || s.values == NULL){
+        ret = -1;
+        goto done;
+    }
+
+    unsigned int p;
+    char path[TDB_MAX_PATH_SIZE];
+    for (p = 0; p < num_parts; p++) {
+        if (snprintf(path, TDB_MAX_PATH_SIZE, fmt, p) < 0){
+            ret = -1;
+            goto done;
+        }
+
+        if ((s.cons[p] = tdb_cons_new(path, ofield_names, num_ofields)) == NULL){
+            ret = -1;
+            goto done;
+        }
+    }
+
+    if ((tdb_fold(db, split_fn, &s) == NULL)){
+        ret = -1;
+        goto done;
+    }
+
+    for (i = 0; i < num_parts; i++)
+        if ((ret = tdb_cons_finalize(s.cons[i], flags)))
+            goto done;
+
+ done:
+    for (i = 0; i < num_parts; i++)
+        if (s.cons[i])
+            tdb_cons_free(s.cons[i]);
+    free(s.values);
+    free(ofield_names);
+    return ret;
 }

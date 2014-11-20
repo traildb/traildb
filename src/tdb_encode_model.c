@@ -75,7 +75,7 @@ static void event_fold(event_op op,
                 /* consider only valid timestamps (first byte == 0)
                    XXX: use invalid timestamps again when we add
                         the flag in finalize to skip OOD data */
-                if ((ev.timestamp & 255) == 0){
+                if (tdb_item_field(ev.timestamp) == 0){
                     uint32_t n = edge_encode_items(items,
                                                    &encoded,
                                                    &encoded_size,
@@ -282,6 +282,7 @@ void choose_bigrams(const uint32_t *encoded,
                             &g->gbufs,
                             g->grams,
                             ev);
+
   while (n--){
     JLI(ptr, g->final_freqs, g->grams[n]);
     ++*ptr;

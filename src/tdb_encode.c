@@ -39,7 +39,6 @@ static void group_events(FILE *grouped_w,
         const tdb_cons_event *ev = &events[cons->cookie_pointers[i]];
         uint32_t j = 0;
         uint32_t num_events = 0;
-        uint32_t prev_timestamp;
 
         /* loop through all events belonging to this cookie,
            following back-links */
@@ -66,25 +65,26 @@ static void group_events(FILE *grouped_w,
         qsort(buf, num_events, sizeof(tdb_event), compare);
 
         /* delta-encode timestamps */
-        for (prev_timestamp = cons->min_timestamp, j = 0; j < num_events; j++){
-            uint32_t prev = buf[j].timestamp;
-            buf[j].timestamp -= prev_timestamp;
-            if (buf[j].timestamp < TDB_MAX_TIMEDELTA){
-                if (prev > cons->max_timestamp)
-                    cons->max_timestamp = prev;
-                if (buf[j].timestamp > cons->max_timedelta)
-                    cons->max_timedelta = buf[j].timestamp;
+        uint64_t prev_timestamp = cons->min_timestamp;
+        for (j = 0; j < num_events; j++){
+            uint64_t timestamp = buf[j].timestamp;
+            uint64_t delta = timestamp - prev_timestamp;
+            if (delta < TDB_MAX_TIMEDELTA){
+                if (timestamp > cons->max_timestamp)
+                    cons->max_timestamp = timestamp;
+                if (delta > cons->max_timedelta)
+                    cons->max_timedelta = delta;
 
                 /* Convert to the delta value index */
-                buf[j].timestamp <<= 8;
-                prev_timestamp = prev;
+                prev_timestamp = timestamp;
+                buf[j].timestamp = delta << 8;
             }else{
                 /* Use the out of range delta, perhaps a corrupted timestamp */
+                cons->max_timedelta = TDB_FAR_TIMEDELTA;
                 buf[j].timestamp = TDB_FAR_TIMEDELTA << 8;
                 ++num_invalid;
             }
         }
-
         SAFE_WRITE(buf, num_events * sizeof(tdb_event), path, grouped_w);
     }
 

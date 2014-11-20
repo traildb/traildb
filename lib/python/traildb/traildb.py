@@ -50,6 +50,8 @@ api(lib.tdb_num_fields, [tdb], c_uint32)
 api(lib.tdb_min_timestamp, [tdb], c_uint32)
 api(lib.tdb_max_timestamp, [tdb], c_uint32)
 
+api(lib.tdb_split, [tdb, c_uint, c_char_p, c_uint64], c_int)
+
 api(lib.tdb_decode_trail, [tdb, c_uint64, POINTER(c_uint32), c_uint32, c_int], c_uint32)
 api(lib.tdb_fold, [tdb, tdb_fold_fn, c_void_p], c_void_p)
 
@@ -63,6 +65,9 @@ def rawcookie(cookie):
         return (c_ubyte * 16).from_buffer_copy(cookie.decode('hex'))
     return cookie
 
+def nullterm(strs, size):
+    return '\x00'.join(strs) + (size - len(strs) + 1) * '\x00'
+
 class TrailDBError(Exception):
     pass
 
@@ -70,7 +75,8 @@ class TrailDBConstructor(object):
     def __init__(self, path, ofields=()):
         if not path:
             raise TrailDBError("Path is required")
-        self._cons = cons = lib.tdb_cons_new(path, '\x00'.join(ofields), len(ofields))
+        n = len(ofields)
+        self._cons = cons = lib.tdb_cons_new(path, nullterm(ofields, n), n)
         self.path = path
         self.ofields = ofields
 
@@ -81,7 +87,8 @@ class TrailDBConstructor(object):
     def add(self, cookie, time, values=()):
         if isinstance(time, datetime):
             time = int(time.strftime('%s'))
-        f = lib.tdb_cons_add(self._cons, rawcookie(cookie), time, '\x00'.join(values))
+        n = len(self.ofields)
+        f = lib.tdb_cons_add(self._cons, rawcookie(cookie), time, nullterm(values, n))
         if f:
             raise TrailDBError("Too many values: %s" % values[f])
 
@@ -226,3 +233,9 @@ class TrailDB(object):
         if ptime:
             return datetime.utcfromtimestamp(tmin), datetime.utcfromtimestamp(tmax)
         return tmin, tmax
+
+    def split(self, num_parts, fmt='a.%02d.tdb', flags=0):
+        ret = lib.tdb_split(self._db, num_parts, fmt, flags)
+        if ret:
+            raise TrailDBError("Could not split into %d parts" % num_parts)
+        return [TrailDB(fmt % n) for n in xrange(num_parts)]

@@ -14,6 +14,7 @@
 #define TDB_MAX_LEXICON_SIZE UINT32_MAX
 #define TDB_MAX_TIMEDELTA  ((1LLU << 24) - 2) // ~194 days
 #define TDB_FAR_TIMEDELTA  ((1LLU << 24) - 1)
+#define TDB_FAR_TIMESTAMP    UINT32_MAX
 
 /*
    Internally we deal with ids:
@@ -46,8 +47,8 @@ typedef struct _tdb tdb;
 typedef void *(*tdb_fold_fn)(const tdb *, uint64_t, const tdb_item *, void *);
 
 tdb_cons *tdb_cons_new(const char *root,
-                       const char *field_names,
-                       uint32_t num_fields);
+                       const char *ofield_names,
+                       uint32_t num_ofields);
 void tdb_cons_free(tdb_cons *cons);
 
 int tdb_cons_add(tdb_cons *cons,
@@ -73,9 +74,9 @@ tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value);
 const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val);
 const char *tdb_get_item_value(tdb *db, tdb_item item);
 
-const uint8_t *tdb_get_cookie(tdb *db, uint64_t cookie_id);
-uint64_t tdb_get_cookie_id(tdb *db, const uint8_t cookie[16]);
-int tdb_has_cookie_index(tdb *db);
+const uint8_t *tdb_get_cookie(const tdb *db, uint64_t cookie_id);
+uint64_t tdb_get_cookie_id(const tdb *db, const uint8_t cookie[16]);
+int tdb_has_cookie_index(const tdb *db);
 
 const char *tdb_error(const tdb *db);
 
@@ -84,6 +85,25 @@ uint64_t tdb_num_events(const tdb *db);
 uint32_t tdb_num_fields(const tdb *db);
 uint32_t tdb_min_timestamp(const tdb *db);
 uint32_t tdb_max_timestamp(const tdb *db);
+
+/* part of public api, to find cookies in partitions */
+static inline unsigned int tdb_djb2(const uint8_t *str) {
+  unsigned int hash = 5381, c;
+  while ((c = *str++))
+    hash = ((hash << 5) + hash) + c;
+  return hash;
+}
+
+int tdb_split(const tdb *db,
+              unsigned int num_parts,
+              const char *fmt,
+              uint64_t flags);
+
+int tdb_split_with(const tdb *db,
+                   unsigned int num_parts,
+                   const char *fmt,
+                   uint64_t flags,
+                   tdb_fold_fn split_fn);
 
 uint32_t tdb_decode_trail(const tdb *db,
                           uint64_t cookie_id,

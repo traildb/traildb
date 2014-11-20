@@ -349,7 +349,10 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
         }
     }
 
-    tdb_fold(db, append_fn, cons);
+    if ((tdb_fold(db, append_fn, cons) == NULL)){
+        ret = -1;
+        goto done;
+    }
 
  done:
     for (i = 0; i < num_ofields; i++)
