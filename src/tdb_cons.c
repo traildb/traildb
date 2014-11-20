@@ -1,4 +1,5 @@
 
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -207,14 +208,22 @@ tdb_cons *tdb_cons_new(const char *root,
 
 void tdb_cons_free(tdb_cons *cons)
 {
-    if (cons->tempfile)
-        unlink(cons->tempfile);
-    free(cons->root);
-    free(cons->ofield_names);
-    free(cons->cookie_pointers);
+    int i;
+    Word_t tmp;
+    for (i = 0; i < cons->num_ofields; i++)
+        JSLFA(tmp, cons->lexicons[i]);
     free(cons->lexicons);
     free(cons->lexicon_counters);
     free(cons->lexicon_maps);
+    if (cons->tempfile)
+        unlink(cons->tempfile);
+    if (cons->events.data)
+        free(cons->events.data);
+    if (cons->items.data)
+        free(cons->items.data);
+    free(cons->cookie_pointers);
+    free(cons->ofield_names);
+    free(cons->root);
     free(cons);
 }
 
@@ -232,8 +241,7 @@ int tdb_cons_add(tdb_cons *cons,
 
     /* Cookie index, which maps 16-byte cookies to event indices,
        has the following structure:
-          JudyL -> JudyL -> Word_t
-    */
+          JudyL -> JudyL -> Word_t */
     JLI(cookie_ptr_hi, cons->cookie_index, cookie_words[0]);
     cookie_index_lo = (Pvoid_t)*cookie_ptr_hi;
     JLI(cookie_ptr_lo, cookie_index_lo, cookie_words[1]);
@@ -363,8 +371,6 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
 int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
 {
     tdb_file items_mmapped;
-    Word_t lexsize;
-    int i;
 
     cons->num_events = cons->events.next;
 
@@ -393,10 +399,6 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
         goto error;
     TDB_TIMER_END("encoder/store_cookies")
 
-    /* free lexicons */
-    for (i = 0; i < cons->num_ofields; i++)
-        JSLFA(lexsize, cons->lexicons[i]);
-
     if (dump_cookie_pointers(cons))
         goto error;
 
@@ -404,9 +406,11 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
     tdb_encode(cons, (tdb_item*)items_mmapped.data);
     TDB_TIMER_END("encoder/encode")
 
+    munmap((void*)items_mmapped.data, items_mmapped.size);
     return 0;
 
  error:
+    munmap((void*)items_mmapped.data, items_mmapped.size);
     tdb_cons_free(cons);
     return -1;
 }

@@ -22,8 +22,9 @@ void *arena_add_item(struct arena *a)
             a->size = ARENA_DISK_BUFFER;
             if (!(a->data = malloc(a->item_size * (uint64_t)a->size)))
                 DIE("Arena malloc failed");
-        }else if ((a->next & (ARENA_DISK_BUFFER - 1)) == 0)
+        }else if ((a->next & (ARENA_DISK_BUFFER - 1)) == 0){
             arena_flush(a);
+        }
         return a->data + a->item_size * (a->next++ & (ARENA_DISK_BUFFER - 1));
     }else{
         if (a->next >= a->size){

@@ -73,7 +73,6 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
     tdb_field num_ofields = 0;
 
     tdb_path(path, "%s/fields", root);
-
     if (!(f = fopen(path, "r"))){
         tdb_err(db, "Could not open path: %s", path);
         return -1;
@@ -145,7 +144,7 @@ static int init_field_stats(tdb *db)
     for (i = 1; i < db->num_fields; i++){
         const tdb_lexicon *lex;
 
-        if ((lex = tdb_lexicon_read(db, i)) == NULL){
+        if (tdb_lexicon_read(db, i, &lex)){
             free(field_cardinalities);
             return -1;
         }
@@ -250,23 +249,24 @@ void tdb_close(tdb *db)
     }
 }
 
-const tdb_lexicon *tdb_lexicon_read(tdb *db, tdb_field field)
+int tdb_lexicon_read(tdb *db, tdb_field field, const tdb_lexicon **lex)
 {
     if (field == 0){
         tdb_err(db, "No lexicon for timestamp");
-        return NULL;
+        return -1;
     }
     if (field >= db->num_fields){
         tdb_err(db, "Invalid field: %"PRIu8, field);
-        return NULL;
+        return -1;
     }
-    return (tdb_lexicon*)db->lexicons[field - 1].data;
+    *lex = (tdb_lexicon*)db->lexicons[field - 1].data;
+    return 0;
 }
 
 uint32_t tdb_lexicon_size(tdb *db, tdb_field field)
 {
     const tdb_lexicon *lex;
-    if ((lex = tdb_lexicon_read(db, field)) == NULL)
+    if (tdb_lexicon_read(db, field, &lex))
         return 0;
     return lex->size + 1;
 }
@@ -291,7 +291,7 @@ const char *tdb_get_field_name(tdb *db, tdb_field field)
 tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
 {
     const tdb_lexicon *lex;
-    if ((lex = tdb_lexicon_read(db, field))){
+    if (tdb_lexicon_read(db, field, &lex)){
         if (*value){
             tdb_val i;
             for (i = 0; i < lex->size; i++)
@@ -309,11 +309,11 @@ const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val)
     const tdb_lexicon *lex;
     if (!val && field && field < db->num_fields)
         return "";
-    if ((lex = tdb_lexicon_read(db, field))){
-        if ((val - 1) < lex->size)
-            return (char*)lex + (&lex->toc)[val - 1];
-        tdb_err(db, "Field %"PRIu8" has no val %"PRIu32, field, val);
-    }
+    if (tdb_lexicon_read(db, field, &lex))
+        return NULL;
+    if ((val - 1) < lex->size)
+        return (char*)lex + (&lex->toc)[val - 1];
+    tdb_err(db, "Field %"PRIu8" has no val %"PRIu32, field, val);
     return NULL;
 }
 

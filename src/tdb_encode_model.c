@@ -318,6 +318,7 @@ Pvoid_t make_grams(FILE *grouped,
     J1FA(tmp, g.candidates);
     JLFA(tmp, g.ngram_freqs);
     free_gram_bufs(&g.gbufs);
+    free(g.grams);
 
     /* final_freqs is a combination of bigrams and unigrams with their actual,
        non-overlapping frequencies */

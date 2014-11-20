@@ -264,6 +264,7 @@ static void encode_trails(const tdb_item *items,
     free(grams);
     free(encoded);
     free(prev_items);
+    free(buf);
 }
 
 static void store_codebook(const Pvoid_t codemap, const char *path)
@@ -291,7 +292,6 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     uint64_t num_events = cons->num_events;
     uint32_t num_fields = cons->num_ofields + 1;
     uint64_t *field_cardinalities = (uint64_t*)cons->lexicon_counters;
-    tdb_cons_event *events = (tdb_cons_event*)cons->events.data;
     Pvoid_t unigram_freqs;
     Pvoid_t gram_freqs;
     Pvoid_t codemap;
@@ -309,7 +309,7 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     if (!(grouped_w = fopen(grouped_path, "w")))
         DIE("Could not open tmp file at %s", path);
 
-    group_events(grouped_w, grouped_path, events, cons);
+    group_events(grouped_w, grouped_path, (tdb_cons_event*)cons->events.data, cons);
 
     SAFE_CLOSE(grouped_w, grouped_path);
     if (!(grouped_r = fopen(grouped_path, "r")))
@@ -322,7 +322,8 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
 
     /* not the most clean separation of ownership here, but events is huge
        so keeping it around unecessarily is expensive */
-    free(events);
+    free(cons->events.data);
+    cons->events.data = NULL;
 
     /* 2. store metatadata */
     TDB_TIMER_START
