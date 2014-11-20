@@ -291,17 +291,15 @@ const char *tdb_get_field_name(tdb *db, tdb_field field)
 tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
 {
     const tdb_lexicon *lex;
-    if (tdb_lexicon_read(db, field, &lex)){
-        if (*value){
-            tdb_val i;
-            for (i = 0; i < lex->size; i++)
-                if (!strcmp((char*)lex + (&lex->toc)[i], value))
-                    return field | ((i + 1) << 8);
-        }else{
-            return field; /* valid empty value */
-        }
+    if (tdb_lexicon_read(db, field, &lex))
+        return 0;
+    if (*value){
+        tdb_val i;
+        for (i = 0; i < lex->size; i++)
+            if (!strcmp((char*)lex + (&lex->toc)[i], value))
+                return field | ((i + 1) << 8);
     }
-    return 0;
+    return field; /* valid empty value */
 }
 
 const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val)
