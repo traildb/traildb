@@ -202,7 +202,7 @@ class TrailDB(object):
         field = self.field(fieldish)
         item = lib.tdb_get_item(self._db, field, value)
         if not item:
-            raise TrailDBError("No such value")
+            raise TrailDBError("No such value: '%s'" % value)
         return item >> 8
 
     def value(self, fieldish, val):

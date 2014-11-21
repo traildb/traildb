@@ -298,8 +298,10 @@ tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
         for (i = 0; i < lex->size; i++)
             if (!strcmp((char*)lex + (&lex->toc)[i], value))
                 return field | ((i + 1) << 8);
+    }else{
+        return field; /* valid empty value */
     }
-    return field; /* valid empty value */
+    return 0;
 }
 
 const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val)
