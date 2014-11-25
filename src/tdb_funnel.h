@@ -5,8 +5,11 @@
 
 #include "traildb.h"
 
-#define FDB_DENSE  1
-#define FDB_SPARSE 2
+#define FDB_DENSE   1
+#define FDB_SPARSE  2
+
+#define FDB_SIMPLE  1
+#define FDB_COMPLEX 2
 
 #define FDB_PARAMS 1024
 
@@ -58,8 +61,8 @@ typedef struct {
 } fdb;
 
 typedef struct {
-  fdb_mask terms;
-  fdb_mask nterms;
+  uint64_t terms;   /* supports up to 64 vars */
+  uint64_t nterms;
 } fdb_clause;
 
 typedef struct {
@@ -67,19 +70,45 @@ typedef struct {
   fdb_clause *clauses;
 } fdb_cnf;
 
-typedef struct {
+typedef struct _fdb_set fdb_set;
+typedef struct _fdb_iter fdb_iter;
+
+typedef struct _fdb_set_simple {
   fdb *db;
   fdb_fid funnel_id;
   fdb_cnf *cnf;
-} fdb_set;
+} fdb_set_simple;
 
-typedef fdb_set fdb_family;
+typedef struct _fdb_set_complex {
+  fdb *db;
+  unsigned int num_sets;
+  fdb_set *sets;
+  fdb_cnf *cnf;
+} fdb_set_complex;
 
-typedef struct {
-  fdb_eid union_size;
-  fdb_eid intersection_size;
-  fdb_eid difference_size;
-} fdb_venn;
+typedef struct _fdb_family {
+  fdb *db;
+  unsigned int num_sets;
+  fdb_fid funnel_id;
+  fdb_cnf *cnfs;
+} fdb_family;
+
+struct _fdb_set {
+  uint8_t flags;
+  union {
+    fdb_set_simple simple;
+    fdb_set_complex complex;
+  };
+};
+
+struct _fdb_iter {
+  const fdb_set *set;
+  unsigned int num_left;
+  uint64_t empty;
+  fdb_eid index;
+  fdb_elem next;
+  fdb_iter **iters;
+};
 
 fdb *fdb_create(tdb *tdb, tdb_fold_fn probe, fdb_fid num_funnels, void *params);
 void fdb_detect(fdb_fid funnel_id, fdb_eid id, fdb_mask bits, fdb_cons *state);
@@ -89,8 +118,11 @@ fdb *fdb_dump(fdb *db, int fd);
 fdb *fdb_load(int fd);
 fdb *fdb_free(fdb *db);
 
-int fdb_next(const fdb_set *set, fdb_eid *index, fdb_elem *next);
-fdb_eid fdb_combine(const fdb_set *sets, int num_sets, fdb_venn *venn);
-fdb_eid fdb_count(const fdb_family *family, int num_sets, fdb_eid *counts);
+fdb_iter *fdb_iter_new(const fdb_set *set);
+fdb_elem *fdb_iter_next(fdb_iter *iter);
+fdb_iter *fdb_iter_free(fdb_iter *iter);
+
+int fdb_count_set(const fdb_set *set, fdb_eid *count);
+int fdb_count_family(const fdb_family *family, fdb_eid *counts);
 
 #endif /* __FUNNELDB_H__ */

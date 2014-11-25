@@ -4,17 +4,16 @@ CREATE:
 
 fbd make /path/to/funnel.db -k / -k /network -k /advertisable_eid -k /advertisable_eid/network -m type
 
-COMBINE:
-
-fdb combine /path/to/funnel.db -k /network:g -m ct2+vt2 -k /network:f -m ct2+vt2
-union   intersection    difference
-A       B               C
-
 COUNT:
 
-fdb count /path/to/funnel.db -k /advertisable_eid:XXX -m pxl -m pxl,bid -m pxl,bid,imp -m cli
-funnel          query1          query2
+fdb count /path/to/funnel.db -k /network:x -m pxl -m pxl,bid -m pxl,bid,imp -m cli
+funnel          filter1         filter2
 /network:x	X               Y
+...
+
+fdb count /path/to/funnel.db -q '/network:g=ct2+vt2 | /network:f=ct2+vt2'
+query		count
+/net
 
 OPTIONS:
  -t --traildb=/path/to [default]
@@ -23,7 +22,6 @@ OPTIONS:
 import os
 import sys
 import argparse
-import itertools
 
 from traildb import FunnelDB, TrailDB
 
@@ -41,33 +39,42 @@ def make(tdb, path, opts):
                         mask_field=tdb.fields.index(mask[0]) if mask else 1)
     fdb.dump(path)
 
-def combine(tdb, path, opts):
+def keys(tdb, path, opts):
     fdb = FunnelDB.load(tdb, path)
-    queries = opts.mask or []
-    keys = [fdb.key(**dict(i.split(':') for i in k.split('/') if i))
-            for k in opts.key or ('')]
-    venn = fdb.combine(list(itertools.izip_longest(keys, queries)))
-    print '# union:        %12d' % venn.union_size
-    print '# intersection: %12d' % venn.intersection_size
-    print '# difference:   %12d' % venn.difference_size
+    for key in fdb.keys():
+        print key
+
+def count_families(tdb, path, opts):
+    fdb = FunnelDB.load(tdb, path)
+    masks = [m or '*' for m in opts.mask or [None]]
+    keys = [fdb.path_key(p) for p in opts.key or ('')]
+    print '%-50s\t%s' % ('funnel', '\t'.join('%12s' % m for m in masks))
+    for n, (key, mc) in enumerate(fdb.count_families(keys, masks)):
+        print '%-50s\t%s' % (opts.key[n], '\t'.join('%12d' % c for m, c in mc))
+
+def count_sets(tdb, path, opts):
+    fdb = FunnelDB.load(tdb, path)
+    print '%-50s\t%12s' % ('query', '#')
+    for query in opts.query or [None]:
+        print '%-50s\t%12d' % (query, fdb.count_set(query))
 
 def count(tdb, path, opts):
-    fdb = FunnelDB.load(tdb, path)
-    queries = opts.mask or [None]
-    keys = [fdb.key(**dict(i.split(':') for i in k.split('/') if i))
-            for k in opts.key or ('')]
-    print '%-50s\t%s' % ('funnel', '\t'.join('%12s' % (q or '-') for q in queries))
-    for n, (id, qc) in enumerate(fdb.count(keys, queries)):
-        print '%-50s\t%s' % (opts.key[n], '\t'.join('%12d' % c for q, c in qc))
+    if opts.query:
+        count_sets(tdb, path, opts)
+    else:
+        count_families(tdb, path, opts)
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-k', '--key',
                         action='append',
-                        help="funnel key or key fields")
+                        help="funnel key to include")
     parser.add_argument('-m', '--mask',
                         action='append',
-                        help="query mask or mask field")
+                        help="mask filter to apply")
+    parser.add_argument('-q', '--query',
+                        action='append',
+                        help="query to produce a set")
     parser.add_argument('-t', '--traildb',
                         help="the path of the traildb")
     opts, args = parser.parse_known_args(sys.argv[1:])

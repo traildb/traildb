@@ -95,7 +95,7 @@ static
 void *fdb_ezprobe(const tdb *db, uint64_t id, const tdb_item *items, void *acc) {
   fdb_cons *cons = (fdb_cons *)acc;
   fdb_ez *params = (fdb_ez *)cons->params;
-  fdb_mask mask = 1 << tdb_item_val(items[params->mask_field]);
+  fdb_mask mask = 1LLU << tdb_item_val(items[params->mask_field]);
   fdb_fid key, *O = params->key_offs;
   tdb_field k, *K = params->key_fields;
   unsigned int i, j = 0, N = params->num_keys;
@@ -161,100 +161,143 @@ fdb *fdb_free(fdb *db) {
 }
 
 static inline
-int fdb_filter(fdb_mask mask, const fdb_cnf *cnf) {
+int fdb_filter(uint64_t mask, const fdb_cnf *cnf) {
   unsigned int i;
   if (cnf)
     for (i = 0; i < cnf->num_clauses; i++)
       if (!((mask & cnf->clauses[i].terms) || (~mask & cnf->clauses[i].nterms)))
         return 0;
-  return 1;
+  return mask != 0;
 }
 
-int fdb_next(const fdb_set *set, fdb_eid *index, fdb_elem *next) {
-  fdb_funnel *funnel = &set->db->funnels[set->funnel_id];
-  fdb_eid i;
-  uint8_t *data = (uint8_t *)set->db + set->db->data_offs;
+static inline
+fdb_elem *fdb_iter_next_simple(fdb_iter *iter) {
+  const fdb_set_simple *s = &iter->set->simple;
+  const fdb_funnel *funnel = &s->db->funnels[s->funnel_id];
+  fdb_eid i, *index = &iter->index;
+  fdb_elem *next = &iter->next;
+  uint8_t *data = (uint8_t *)s->db + s->db->data_offs;
   if (funnel->flags & FDB_DENSE) {
     for (i = *index; i < funnel->length; i++) {
       fdb_mask *mask = (fdb_mask *)&data[funnel->offs];
-      if (fdb_filter(mask[i], set->cnf)) {
+      if (fdb_filter(mask[i], s->cnf)) {
         next->id = i;
         next->mask = mask[i];
-        return *index = i + 1;
+        *index = i + 1;
+        return next;
       }
     }
   } else {
     for (i = *index; i < funnel->length; i++) {
       fdb_elem *elem = (fdb_elem *)&data[funnel->offs];
-      if (fdb_filter(elem[i].mask, set->cnf)) {
+      if (fdb_filter(elem[i].mask, s->cnf)) {
         next->id = elem[i].id;
         next->mask = elem[i].mask;
-        return *index = i + 1;
+        *index = i + 1;
+        return next;
       }
     }
+  }
+  return NULL;
+}
+
+static inline
+fdb_elem *fdb_iter_next_complex(fdb_iter *iter) {
+  const fdb_set_complex *c = &iter->set->complex;
+  fdb_elem *next = &iter->next;
+  fdb_eid min;
+  unsigned int i, N = c->num_sets, argmin = 0;
+  uint64_t membership;
+  while (iter->num_left) {
+    membership = 0;
+    min = -1; // unsigned
+    for (i = 0; i < N; i++)
+      if (!(iter->empty & (1LLU << i)) && iter->iters[i]->next.id < min)
+        min = iter->iters[argmin = i]->next.id;
+    next->id = min;
+    next->mask = 0;
+    for (i = 0; i < N; i++) {
+      if (!(iter->empty & (1LLU << i)) && iter->iters[i]->next.id == min) {
+        if (!fdb_iter_next(iter->iters[i])) {
+          iter->empty |= 1LLU << i;
+          iter->num_left--;
+        }
+        next->mask |= iter->iters[i]->next.mask;
+        membership |= 1LLU << i;
+      }
+    }
+    if (fdb_filter(membership, c->cnf))
+      return next;
   }
   return 0;
 }
 
-fdb_eid fdb_combine(const fdb_set *sets, int num_sets, fdb_venn *venn) {
-  int i, N = num_sets, Q = N - 1;
-  unsigned long long k, run = 0, overlap = 0, diff = 0, isect = 0;
-  char empty[num_sets];
-  fdb_eid next[num_sets], argmin = 0, lastarg, min, last;
-  fdb_elem heads[num_sets];
-  for (i = 0; i < num_sets; i++) {
-    empty[i] = next[i] = 0;
-    if (!fdb_next(&sets[i], &next[i], &heads[i])) {
-      empty[i] = 1;
-      N--;
-    }
-  }
-  for (k = 0; N; k++) {
-    min = -1; // unsigned
-    for (i = 0; i < num_sets; i++)
-      if (!empty[i] && heads[i].id < min)
-        min = heads[argmin = i].id;
-    if (argmin == 0)
-      diff++;
-    if (k) {
-      if (min == last) {
-        run++;
-        overlap++;
-        if (argmin && lastarg == 0)
-          diff--;
-      } else {
-        run = 0;
+fdb_iter *fdb_iter_new(const fdb_set *set) {
+  fdb_iter *iter = calloc(1, sizeof(fdb_iter));
+  if (iter == NULL)
+    return NULL;
+
+  iter->set = set;
+
+  if (set->flags & FDB_COMPLEX) {
+    const fdb_set_complex *c = &iter->set->complex;
+    iter->num_left = c->num_sets;
+    iter->iters = calloc(c->num_sets, sizeof(fdb_iter));
+    if (iter->iters == NULL || c->num_sets > 64)
+      return fdb_iter_free(iter);
+
+    unsigned int i;
+    for (i = 0; i < c->num_sets; i++) {
+      iter->iters[i] = fdb_iter_new(&c->sets[i]);
+      if (!fdb_iter_next(iter->iters[i])) {
+        iter->empty |= 1LLU << i;
+        iter->num_left--;
       }
     }
-    if (run == Q) {
-      run = 0;
-      isect++;
-    }
-    if (!fdb_next(&sets[argmin], &next[argmin], &heads[argmin])) {
-      empty[argmin] = 1;
-      N--;
-    }
-    lastarg = argmin;
-    last = min;
   }
-  if (venn) {
-    venn->union_size = k - overlap;
-    venn->intersection_size = isect;
-    venn->difference_size = diff;
-  }
-  return k;
+  return iter;
 }
 
-fdb_eid fdb_count(const fdb_family *family, int num_sets, fdb_eid *counts) {
+fdb_elem *fdb_iter_next(fdb_iter *iter) {
+  if (iter->set->flags & FDB_SIMPLE)
+    return fdb_iter_next_simple(iter);
+  return fdb_iter_next_complex(iter);
+}
+
+fdb_iter *fdb_iter_free(fdb_iter *iter) {
+  if (iter->set->flags & FDB_COMPLEX) {
+    unsigned int i;
+    for (i = 0; i < iter->set->complex.num_sets; i++)
+      fdb_iter_free(iter->iters[i]);
+  }
+  free(iter->iters);
+  free(iter);
+  return NULL;
+}
+
+int fdb_count_set(const fdb_set *set, fdb_eid *count) {
+  int k;
+  fdb_iter *iter = fdb_iter_new(set);
+  *count = 0;
+  for (k = 0; fdb_iter_next(iter); k++)
+    (*count)++;
+  fdb_iter_free(iter);
+  return 0;
+}
+
+int fdb_count_family(const fdb_family *family, fdb_eid *counts) {
   int i, k;
-  fdb_elem head;
-  fdb_eid next = 0;
-  fdb_set all = *family;
-  all.cnf = NULL;
-  memset(counts, 0, num_sets * sizeof(fdb_eid));
-  for (k = 0; fdb_next(&all, &next, &head); k++)
-    for (i = 0; i < num_sets; i++)
-      if (fdb_filter(head.mask, &family->cnf[i]))
+  fdb_set all = {
+    .flags = FDB_SIMPLE,
+    .simple = {.db = family->db, .funnel_id = family->funnel_id}
+  };
+  fdb_iter *iter = fdb_iter_new(&all);
+  fdb_elem *next;
+  memset(counts, 0, family->num_sets * sizeof(fdb_eid));
+  for (k = 0; (next = fdb_iter_next(iter)); k++)
+    for (i = 0; i < family->num_sets; i++)
+      if (fdb_filter(next->mask, &family->cnfs[i]))
         counts[i]++;
-  return k;
+  fdb_iter_free(iter);
+  return 0;
 }

@@ -1,9 +1,9 @@
 import os
 
-from collections import namedtuple
 from ctypes import c_char, c_char_p, c_ubyte, c_void_p, c_int
 from ctypes import c_uint, c_uint8, c_uint32, c_uint64
-from ctypes import CDLL, POINTER, Structure, byref, cast, pointer
+from ctypes import CDLL, POINTER, Structure, Union, byref, cast, pointer
+from itertools import product
 from operator import __and__, __or__
 
 from .traildb import tdb, tdb_field, tdb_item, tdb_fold_fn
@@ -19,6 +19,17 @@ def struct(fields):
     class struct(Structure):
         _fields_ = fields
     return struct
+
+def union(fields):
+    class union(Union):
+        _fields_ = fields
+    return union
+
+FDB_DENSE   = 1
+FDB_SPARSE  = 2
+
+FDB_SIMPLE  = 1
+FDB_COMPLEX = 2
 
 fdb_cons = c_void_p
 fdb_eid  = c_uint32
@@ -41,27 +52,41 @@ FDB_ELEM = struct([('id', fdb_eid),
                    ('mask', fdb_mask)])
 fdb_elem = POINTER(FDB_ELEM)
 
-FDB_CLAUSE = struct([('terms', fdb_mask),
-                     ('nterms', fdb_mask)])
+FDB_CLAUSE = struct([('terms', c_uint64),
+                     ('nterms', c_uint64)])
 fdb_clause = POINTER(FDB_CLAUSE)
 
 FDB_CNF = struct([('num_clauses', c_uint),
                   ('clauses', fdb_clause)])
 fdb_cnf = POINTER(FDB_CNF)
 
-FDB_SET = struct([('db', fdb),
-                  ('funnel_id', fdb_fid),
-                  ('cnf', fdb_cnf)])
+class FDB_SET(Structure):
+    pass
 fdb_set = POINTER(FDB_SET)
 
-FDB_FAMILY = FDB_SET
-fdb_family = fdb_set
+FDB_SET_SIMPLE = struct([('db', fdb),
+                         ('funnel_id', fdb_fid),
+                         ('cnf', fdb_cnf)])
+fdb_set_simple = POINTER(FDB_SET_SIMPLE)
 
-FDB_VENN = struct([('union_size', fdb_eid),
-                   ('intersection_size', fdb_eid),
-                   ('difference_size', fdb_eid)])
-fdb_venn = POINTER(FDB_VENN)
-Venn = namedtuple('Venn', ['union_size', 'intersection_size', 'difference_size'])
+FDB_SET_COMPLEX = struct([('db', fdb),
+                          ('num_sets', c_uint),
+                          ('sets', fdb_set),
+                          ('cnf', fdb_cnf)])
+fdb_set_complex = POINTER(FDB_SET_SIMPLE)
+
+FDB_SET._anonymous_ = ['_impl']
+FDB_SET._fields_ = [('flags', c_uint8),
+                    ('_impl', union([('simple', FDB_SET_SIMPLE),
+                                     ('complex', FDB_SET_COMPLEX)]))]
+
+FDB_FAMILY = struct([('db', fdb),
+                     ('num_sets', c_uint),
+                     ('funnel_id', fdb_fid),
+                     ('cnfs', fdb_cnf)])
+fdb_family = POINTER(FDB_FAMILY)
+
+fdb_iter = c_void_p
 
 api(lib.fdb_create, [tdb, tdb_fold_fn, fdb_fid, c_void_p], fdb)
 api(lib.fdb_detect, [fdb_fid, fdb_eid, fdb_mask, fdb_cons])
@@ -71,9 +96,12 @@ api(lib.fdb_dump, [fdb, c_int], fdb)
 api(lib.fdb_load, [c_int], fdb)
 api(lib.fdb_free, [fdb], fdb)
 
-api(lib.fdb_next, [fdb_set, POINTER(fdb_eid), fdb_elem], c_int);
-api(lib.fdb_combine, [fdb_set, c_int, fdb_venn], fdb_eid)
-api(lib.fdb_count, [fdb_family, c_int, POINTER(fdb_eid)], fdb_eid)
+api(lib.fdb_iter_new, [fdb_set], fdb_iter);
+api(lib.fdb_iter_next, [fdb_iter], fdb_elem);
+api(lib.fdb_iter_free, [fdb_iter], fdb_iter);
+
+api(lib.fdb_count_set, [fdb_set, POINTER(fdb_eid)], c_int)
+api(lib.fdb_count_family, [fdb_family, POINTER(fdb_eid)], c_int)
 
 def keys(num_keys, key_fields):
     key = []
@@ -105,7 +133,7 @@ class FunnelDB(object):
         self.traildb = traildb
         self.num_funnels = db.contents.num_funnels
         self.params = cast(db.contents.params, fdb_ez).contents
-        self.keys = dict(keys(self.params.num_keys, self.params.key_fields))
+        self.keydict = dict(keys(self.params.num_keys, self.params.key_fields))
         self.mask = traildb.fields[self.params.mask_field]
 
     def __del__(self):
@@ -120,7 +148,7 @@ class FunnelDB(object):
     def funnel(self, id, cnf=None):
         if id < 0 or id >= len(self):
             raise IndexError("Invalid funnel id: %s" % id)
-        items = FDB_SET(db=self.db, funnel_id=id, cnf=cnf)
+        items = FDB_SET_SIMPLE(db=self.db, funnel_id=id, cnf=cnf)
         index = fdb_eid()
         next_ = FDB_ELEM()
         while True:
@@ -132,7 +160,7 @@ class FunnelDB(object):
         tdb = self.traildb
         O, F = self.params.key_offs, self.params.key_fields
         which = dict((tdb.fields.index(k), v) for k, v in which.items())
-        index = self.keys[tuple(sorted(which))]
+        index = self.keydict[tuple(sorted(which))]
         key = O[index - 1] if index else 0
         for i, f in enumerate(F[index:]):
             if not f:
@@ -140,48 +168,83 @@ class FunnelDB(object):
             key += tdb.val(f, which[f]) * O[index + i]
         return key
 
-    def cnfs(self, queries):
+    def keys(self):
         tdb = self.traildb
-        mask = self.params.mask_field
-        cnfs = (FDB_CNF * len(queries))()
-        for i, query in enumerate(queries):
-            if query:
-                q = Q.parse(query)
-                N = len(q.clauses)
-                cnfs[i].num_clauses = N
-                cnfs[i].clauses = (FDB_CLAUSE * N)()
+        for _, key in sorted((v, k) for k, v in self.keydict.items()):
+            names = [tdb.fields[f] for f in key]
+            for which in product(*(tdb.lexicon(f) for f in key)):
+                yield dict(zip(names, which))
+
+    def path_key(self, path):
+        return self.key(**dict(i.split(':') for i in path.split('/') if i))
+
+    def simple_cnfs(self, mask_filters):
+        if isinstance(mask_filters[0], FDB_CNF):
+            return mask_filters
+        f = self.params.mask_field
+        tdb = self.traildb
+        cnfs = (FDB_CNF * len(mask_filters))()
+        for i, mask_filter in enumerate(mask_filters):
+            if mask_filter and mask_filter != '*':
+                q = Q.parse(mask_filter, ext=True)
+                cnfs[i].num_clauses = len(q.clauses)
+                cnfs[i].clauses = (FDB_CLAUSE * len(q.clauses))()
                 for n, c in enumerate(q.clauses):
                     for l in c.literals:
                         if l.negated:
-                            cnfs[i].clauses[n].nterms |= 1 << tdb.val(mask, l.term)
+                            cnfs[i].clauses[n].nterms |= 1 << tdb.val(f, l.term)
                         else:
-                            cnfs[i].clauses[n].terms |= 1 << tdb.val(mask, l.term)
+                            cnfs[i].clauses[n].terms |= 1 << tdb.val(f, l.term)
             else:
                 cnfs[i].num_clauses = 0
         return cnfs
 
-    def combine(self, id_queries):
-        N = len(id_queries)
-        venn = FDB_VENN()
-        sets = (FDB_SET * N)()
-        for n, (id, q) in enumerate(id_queries):
-            sets[n].db = self.db
-            sets[n].funnel_id = id
-            sets[n].cnf = pointer(q) if isinstance(q, FDB_CNF) else self.cnfs([q])
-        lib.fdb_combine(sets, N, venn)
-        return Venn(venn.union_size, venn.intersection_size, venn.difference_size)
+    def simple_sets(self, terms):
+        sets = (FDB_SET * len(terms))()
+        for i, term in enumerate(terms):
+            path, mask_filter = term.split('=')
+            sets[i].flags = FDB_SIMPLE
+            sets[i].simple.db = self.db
+            sets[i].simple.funnel_id = self.path_key(path)
+            sets[i].simple.cnf = self.simple_cnfs([mask_filter])
+        return sets
 
-    def count(self, ids, queries=None):
-        queries = seqify(queries)
-        N = len(queries)
-        counts = (fdb_eid * N)()
+    def complex_set(self, query):
+        tdb = self.traildb
+        q = Q.parse(query)
+        terms = list(set(l.term for c in q.clauses for l in c.literals))
+        cset = FDB_SET()
+        cnf = FDB_CNF()
+        cset.flags = FDB_COMPLEX
+        cset.complex.db = self.db
+        cset.complex.num_sets = len(terms)
+        cset.complex.sets = self.simple_sets(terms)
+        cset.complex.cnf = pointer(cnf)
+        cnf.num_clauses = len(q.clauses)
+        cnf.clauses = (FDB_CLAUSE * len(q.clauses))()
+        for n, c in enumerate(q.clauses):
+            for l in c.literals:
+                if l.negated:
+                    cnf.clauses[n].nterms |= 1 << terms.index(l.term)
+                else:
+                    cnf.clauses[n].terms |= 1 << terms.index(l.term)
+        return pointer(cset)
+
+    def count_set(self, query):
+        count = fdb_eid()
+        lib.fdb_count_set(self.complex_set(query), pointer(count))
+        return count.value
+
+    def count_families(self, keys, mask_filters=None):
+        fmasks = seqify(mask_filters)
         family = FDB_FAMILY(db=self.db)
-        cnfs = queries if isinstance(queries[0], FDB_CNF) else self.cnfs(queries)
-        for id in seqify(ids):
-            family.funnel_id = id
-            family.cnf = cnfs
-            lib.fdb_count(family, N, counts)
-            yield id, zip(queries, counts)
+        family.num_sets = len(fmasks)
+        family.cnfs = self.simple_cnfs(fmasks)
+        counts = (fdb_eid * family.num_sets)()
+        for key in seqify(keys):
+            family.funnel_id = key
+            lib.fdb_count_family(family, counts)
+            yield key, zip(fmasks, counts)
 
     @classmethod
     def easy(cls, traildb, keys=((),), mask_field=1):
@@ -235,11 +298,12 @@ class Q(object):
         return ','.join(format % c for c in self.clauses)
 
     @classmethod
-    def parse(cls, string):
+    def parse(cls, string, ext=False):
         import re
-        s = string.replace('!', '~').replace(',', '&').replace('+', '|')
-        return eval(re.sub(r'([^&|~+()\s][^&|~+()]*)',
-                           r'Q.wrap("""\1""".strip())', s) or 'Q([])')
+        if ext:
+            string = string.replace('!', '~').replace(',', '&').replace('+', '|')
+        return eval(re.sub(r'([^&|~()\s][^&|~()]*)',
+                           r'Q.wrap("""\1""".strip())', string) or 'Q([])')
 
     @classmethod
     def wrap(cls, proposition):
