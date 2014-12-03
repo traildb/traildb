@@ -124,6 +124,12 @@ def seqify(x):
     except TypeError:
         return x,
 
+def split(terms, n):
+    buckets = [[] for i in xrange(n)]
+    for i, term in enumerate(terms):
+        buckets[i % n].append(term)
+    return buckets
+
 class FunnelDBError(Exception):
     pass
 
@@ -199,18 +205,24 @@ class FunnelDB(object):
                 cnfs[i].num_clauses = 0
         return cnfs
 
-    def simple_sets(self, terms):
-        sets = (FDB_SET * len(terms))()
+    def fdb_sets(self, terms, sets=None):
+        sets = sets or (FDB_SET * len(terms))()
         for i, term in enumerate(terms):
-            path, mask_filter = term.split('=')
-            sets[i].flags = FDB_SIMPLE
-            sets[i].simple.db = self.db
-            sets[i].simple.funnel_id = self.path_key(path)
-            sets[i].simple.cnf = self.simple_cnfs([mask_filter])
+            if isinstance(term, FDB_SET):
+                sets[i] = term
+            else:
+                if isinstance(term, basestring):
+                    path, mask_filter = term.split('=')
+                    funnel_id = self.path_key(path)
+                else:
+                    funnel_id, mask_filter = term
+                sets[i].flags = FDB_SIMPLE
+                sets[i].simple.db = self.db
+                sets[i].simple.funnel_id = funnel_id
+                sets[i].simple.cnf = self.simple_cnfs([mask_filter])
         return sets
 
     def complex_set(self, query):
-        tdb = self.traildb
         q = Q.parse(query)
         terms = list(set(l.term for c in q.clauses for l in c.literals))
         cset = FDB_SET()
@@ -218,7 +230,7 @@ class FunnelDB(object):
         cset.flags = FDB_COMPLEX
         cset.complex.db = self.db
         cset.complex.num_sets = len(terms)
-        cset.complex.sets = self.simple_sets(terms)
+        cset.complex.sets = self.fdb_sets(terms)
         cset.complex.cnf = pointer(cnf)
         cnf.num_clauses = len(q.clauses)
         cnf.clauses = (FDB_CLAUSE * len(q.clauses))()
@@ -230,9 +242,12 @@ class FunnelDB(object):
                     cnf.clauses[n].terms |= 1 << terms.index(l.term)
         return pointer(cset)
 
-    def count_set(self, query):
+    def count_set(self, set):
         count = fdb_eid()
-        lib.fdb_count_set(self.complex_set(query), pointer(count))
+        if isinstance(set, FDB_SET):
+            lib.fdb_count_set(set, pointer(count))
+        else:
+            lib.fdb_count_set(self.complex_set(set), pointer(count))
         return count.value
 
     def count_families(self, keys, mask_filters=None):
@@ -245,6 +260,61 @@ class FunnelDB(object):
             family.funnel_id = key
             lib.fdb_count_family(family, counts)
             yield key, zip(fmasks, counts)
+
+    def conjunction(self, terms, cset=None, N=64):
+        cset = cset or FDB_SET()
+        cset.flags = FDB_COMPLEX
+        cset.complex.db = self.db
+        cnf = FDB_CNF()
+        cnf.num_clauses = N
+        cnf.clauses = (FDB_CLAUSE * N)()
+        for i in xrange(N):
+            cnf.clauses[i].terms = 1 << i
+        cset.complex.cnf = pointer(cnf)
+        if len(terms) <= N:
+            cset.complex.num_sets = len(terms)
+            cset.complex.sets = self.fdb_sets(terms)
+        else:
+            cset.complex.num_sets = N
+            cset.complex.sets = (FDB_SET * N)()
+            for i, bucket in enumerate(split(terms, n=N)):
+                self.conjunction(bucket, cset.complex.sets[i])
+        return cset
+
+    def disjunction(self, terms, cset=None, N=64):
+        cset = cset or FDB_SET()
+        cset.flags = FDB_COMPLEX
+        cset.complex.db = self.db
+        cnf = FDB_CNF()
+        cnf.num_clauses = 1
+        cnf.clauses = (FDB_CLAUSE * 1)()
+        cnf.clauses[0].terms = (1 << N) - 1
+        cset.complex.cnf = pointer(cnf)
+        if len(terms) <= N:
+            cset.complex.num_sets = len(terms)
+            cset.complex.sets = self.fdb_sets(terms)
+        else:
+            cset.complex.num_sets = N
+            cset.complex.sets = (FDB_SET * N)()
+            for i, bucket in enumerate(split(terms, n=N)):
+                self.disjunction(bucket, cset.complex.sets[i])
+        return cset
+
+    def difference(self, include, exclude):
+        cset = FDB_SET()
+        cset.flags = FDB_COMPLEX
+        cset.complex.db = self.db
+        cset.complex.num_sets = 2
+        cset.complex.sets = (FDB_SET * 2)()
+        cset.complex.sets[0] = include
+        cset.complex.sets[1] = exclude
+        cnf = FDB_CNF()
+        cnf.num_clauses = 2
+        cnf.clauses = (FDB_CLAUSE * 2)()
+        cnf.clauses[0].terms = 1
+        cnf.clauses[1].nterms = 2
+        cset.complex.cnf = pointer(cnf)
+        return cset
 
     @classmethod
     def easy(cls, traildb, keys=((),), mask_field=1):
@@ -271,12 +341,16 @@ class FunnelDB(object):
 
 class Q(object):
     def __init__(self, clauses):
-        self.clauses = frozenset(clauses)
+        self.clauses = frozenset(c for c in clauses if c.literals)
 
     def __and__(self, other):
         return Q(self.clauses | other.clauses)
 
     def __or__(self, other):
+        if not self.clauses:
+            return other
+        if not other.clauses:
+            return self
         return Q(c | d for c in self.clauses for d in other.clauses)
 
     def __invert__(self):
@@ -300,6 +374,8 @@ class Q(object):
     @classmethod
     def parse(cls, string, ext=False):
         import re
+        if isinstance(string, cls):
+            return string
         if ext:
             string = string.replace('!', '~').replace(',', '&').replace('+', '|')
         return eval(re.sub(r'([^&|~()\s][^&|~()]*)',
@@ -320,13 +396,13 @@ class Clause(object):
         self.literals = frozenset(literals)
 
     def __and__(self, other):
-        return Q((self, other))
+        return Q.wrap(self) & Q.wrap(other)
 
     def __or__(self, other):
         return Clause(self.literals | other.literals)
 
     def __invert__(self):
-        return Q.wrap(reduce(__and__, (~l for l in self.literals)))
+        return Q(Clause([~l]) for l in self.literals)
 
     def __eq__(self, other):
         return self.literals == other.literals
