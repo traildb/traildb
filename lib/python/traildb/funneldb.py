@@ -210,6 +210,8 @@ class FunnelDB(object):
         for i, term in enumerate(terms):
             if isinstance(term, FDB_SET):
                 sets[i] = term
+            elif isinstance(term, fdb_set):
+                sets[i] = term.contents
             else:
                 if isinstance(term, basestring):
                     path, mask_filter = term.split('=')
@@ -244,8 +246,10 @@ class FunnelDB(object):
 
     def count_set(self, set):
         count = fdb_eid()
-        if isinstance(set, FDB_SET):
+        if isinstance(set, fdb_set):
             lib.fdb_count_set(set, pointer(count))
+        elif isinstance(set, FDB_SET):
+            lib.fdb_count_set(pointer(set), pointer(count))
         else:
             lib.fdb_count_set(self.complex_set(set), pointer(count))
         return count.value
