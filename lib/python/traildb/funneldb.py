@@ -270,19 +270,20 @@ class FunnelDB(object):
         cset.flags = FDB_COMPLEX
         cset.complex.db = self.db
         cnf = FDB_CNF()
-        cnf.num_clauses = N
-        cnf.clauses = (FDB_CLAUSE * N)()
-        for i in xrange(N):
-            cnf.clauses[i].terms = 1 << i
         cset.complex.cnf = pointer(cnf)
         if len(terms) <= N:
+            cnf.num_clauses = len(terms)
             cset.complex.num_sets = len(terms)
             cset.complex.sets = self.fdb_sets(terms)
         else:
+            cnf.num_clauses = N
             cset.complex.num_sets = N
             cset.complex.sets = (FDB_SET * N)()
             for i, bucket in enumerate(split(terms, n=N)):
                 self.conjunction(bucket, cset.complex.sets[i])
+        cnf.clauses = (FDB_CLAUSE * cnf.num_clauses)()
+        for i in xrange(cnf.num_clauses):
+            cnf.clauses[i].terms = 1 << i
         return cset
 
     def disjunction(self, terms, cset=None, N=64):
