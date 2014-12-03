@@ -310,9 +310,7 @@ class FunnelDB(object):
         cset.flags = FDB_COMPLEX
         cset.complex.db = self.db
         cset.complex.num_sets = 2
-        cset.complex.sets = (FDB_SET * 2)()
-        cset.complex.sets[0] = include
-        cset.complex.sets[1] = exclude
+        cset.complex.sets = self.fdb_sets([include, exclude])
         cnf = FDB_CNF()
         cnf.num_clauses = 2
         cnf.clauses = (FDB_CLAUSE * 2)()
