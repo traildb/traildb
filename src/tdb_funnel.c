@@ -171,6 +171,16 @@ int fdb_filter(uint64_t mask, const fdb_cnf *cnf) {
 }
 
 static inline
+int fdb_required(unsigned int iid, const fdb_cnf *cnf) {
+  unsigned int i;
+  if (cnf)
+    for (i = 0; i < cnf->num_clauses; i++)
+      if (cnf->clauses[i].terms == (1LLU << iid) && !cnf->clauses[i].nterms)
+        return 1;
+  return 0;
+}
+
+static inline
 fdb_elem *fdb_iter_next_simple(fdb_iter *iter) {
   const fdb_set_simple *s = &iter->set->simple;
   const fdb_funnel *funnel = &s->db->funnels[s->funnel_id];
@@ -220,7 +230,10 @@ fdb_elem *fdb_iter_next_complex(fdb_iter *iter) {
       if (!(iter->empty & (1LLU << i)) && iter->iters[i]->next.id == min) {
         if (!fdb_iter_next(iter->iters[i])) {
           iter->empty |= 1LLU << i;
-          iter->num_left--;
+          if (iter->num_left)
+            iter->num_left--;
+          if (fdb_required(i, c->cnf))
+            iter->num_left = 0;
         }
         next->mask |= iter->iters[i]->next.mask;
         membership |= 1LLU << i;
@@ -229,7 +242,7 @@ fdb_elem *fdb_iter_next_complex(fdb_iter *iter) {
     if (fdb_filter(membership, c->cnf))
       return next;
   }
-  return 0;
+  return NULL;
 }
 
 fdb_iter *fdb_iter_new(const fdb_set *set) {
@@ -251,7 +264,10 @@ fdb_iter *fdb_iter_new(const fdb_set *set) {
       iter->iters[i] = fdb_iter_new(&c->sets[i]);
       if (!fdb_iter_next(iter->iters[i])) {
         iter->empty |= 1LLU << i;
-        iter->num_left--;
+        if (iter->num_left)
+          iter->num_left--;
+        if (fdb_required(i, c->cnf))
+          iter->num_left = 0;
       }
     }
   }
