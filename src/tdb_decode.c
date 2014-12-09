@@ -3,6 +3,8 @@
 #include "huffman.h"
 #include "util.h"
 
+#define toc(cookie_id) tdb_get_cookie_offs(db, cookie_id)
+
 uint32_t tdb_decode_trail(const tdb *db,
                           uint64_t cookie_id,
                           uint32_t *dst,
@@ -10,7 +12,6 @@ uint32_t tdb_decode_trail(const tdb *db,
                           int edge_encoded)
 {
     const char *data;
-    const uint32_t *toc = (uint32_t*)db->trails.data;
     const struct huff_codebook *codebook = (struct huff_codebook*)db->codebook.data;
     const struct field_stats *fstats = db->field_stats;
     uint32_t k, j, i = 0;
@@ -21,8 +22,8 @@ uint32_t tdb_decode_trail(const tdb *db,
     if (cookie_id >= db->num_cookies)
         return 0;
 
-    data = &db->trails.data[toc[cookie_id]];
-    size = 8 * (toc[cookie_id + 1] - toc[cookie_id]) - read_bits(data, 0, 3);
+    data = &db->trails.data[toc(cookie_id)];
+    size = 8 * (toc(cookie_id + 1) - toc(cookie_id)) - read_bits(data, 0, 3);
     offs = 3;
     if (edge_encoded){
         while (offs < size && i < dst_size){
@@ -112,7 +113,6 @@ uint32_t tdb_decode_trail(const tdb *db,
 
 void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc) {
     const char *data;
-    const uint32_t *toc = (uint32_t*)db->trails.data;
     const struct huff_codebook *codebook = (struct huff_codebook*)db->codebook.data;
     const struct field_stats *fstats = db->field_stats;
     tdb_field field;
@@ -121,8 +121,8 @@ void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc) {
 
     for (cookie_id = 0; cookie_id < db->num_cookies; cookie_id++){
         tstamp = db->min_timestamp;
-        data = &db->trails.data[toc[cookie_id]];
-        size = 8 * (toc[cookie_id + 1] - toc[cookie_id]) - read_bits(data, 0, 3);
+        data = &db->trails.data[toc(cookie_id)];
+        size = 8 * (toc(cookie_id + 1) - toc(cookie_id)) - read_bits(data, 0, 3);
         offs = 3;
 
         for (k = 1; k < db->num_fields; k++)

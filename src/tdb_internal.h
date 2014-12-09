@@ -70,6 +70,7 @@ struct _tdb {
     tdb_file cookie_index;
     tdb_file codebook;
     tdb_file trails;
+    tdb_file toc;
     tdb_file *lexicons;
 
     const char **field_names;

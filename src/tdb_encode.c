@@ -148,7 +148,8 @@ static void encode_trails(const tdb_item *items,
                           const Pvoid_t codemap,
                           const Pvoid_t gram_freqs,
                           const struct field_stats *fstats,
-                          const char *path)
+                          const char *path,
+                          const char *toc_path)
 {
     uint64_t *grams = NULL;
     tdb_item *prev_items = NULL;
@@ -157,31 +158,28 @@ static void encode_trails(const tdb_item *items,
     uint64_t i = 0;
     char *buf;
     FILE *out;
-    uint64_t file_offs = (num_cookies + 1) * 4;
+    uint64_t file_offs = 0, *toc;
     struct gram_bufs gbufs;
     tdb_event ev;
 
     init_gram_bufs(&gbufs, num_fields);
 
-    if (file_offs >= UINT32_MAX)
-        DIE("Trail file %s over 4GB!", path);
-
     if (!(out = fopen(path, "w")))
         DIE("Could not create trail file: %s", path);
-
-    /* reserve space for TOC */
-    SAFE_SEEK(out, file_offs, path);
 
     /* huff_encode_grams guarantees that it writes fewer
        than UINT32_MAX bits per buffer, or it fails */
     if (!(buf = calloc(1, UINT32_MAX / 8 + 8)))
         DIE("Could not allocate 512MB in encode_trails");
 
-    if (!(prev_items = malloc(num_fields * 4)))
+    if (!(prev_items = malloc(num_fields * sizeof(tdb_item))))
         DIE("Could not allocate %u fields", num_fields);
 
     if (!(grams = malloc(num_fields * 8)))
         DIE("Could not allocate %u grams", num_fields);
+
+    if (!(toc = malloc((num_cookies + 1) * 8)))
+        DIE("Could not allocate %llu offsets", num_cookies + 1);
 
     rewind(grouped);
     fread(&ev, sizeof(tdb_event), 1, grouped);
@@ -197,13 +195,10 @@ static void encode_trails(const tdb_item *items,
         uint64_t cookie_id = ev.cookie_id;
         uint64_t trail_size;
 
-        /* write offset to TOC */
-        SAFE_SEEK(out, cookie_id * 4, path);
-        SAFE_WRITE(&file_offs, 4, path, out);
+        toc[cookie_id] = file_offs;
+        memset(prev_items, 0, num_fields * sizeof(tdb_item));
 
-        memset(prev_items, 0, num_fields * 4);
-
-        for (;i < num_events && ev.cookie_id == cookie_id; i++){
+        for (; i < num_events && ev.cookie_id == cookie_id; i++){
 
             /* 1) produce an edge-encoded set of items for this event */
             uint32_t n = edge_encode_items(items,
@@ -240,31 +235,34 @@ static void encode_trails(const tdb_item *items,
         }
 
         /* append trail to the end of file */
-        SAFE_SEEK(out, file_offs, path);
         SAFE_WRITE(buf, trail_size, path, out);
 
         file_offs += trail_size;
-        if (file_offs >= UINT32_MAX)
-            DIE("Trail file %s over 4GB!", path);
-
         memset(buf, 0, trail_size);
+
     }
+    /* keep the redundant last offset in the TOC, so we can determine
+       trail length with toc[i + 1] - toc[i]. */
+    toc[num_cookies] = file_offs;
+
     /* write an extra 8 null bytes: huffman may require up to 7 when reading */
     uint64_t zero = 0;
     SAFE_WRITE(&zero, 8, path, out);
-
-    /* write the redundant last offset in the TOC, so we can determine
-       trail length with toc[i + 1] - toc[i]. */
-    SAFE_SEEK(out, num_cookies * 4, path);
-    SAFE_WRITE(&file_offs, 4, path, out);
-
     SAFE_CLOSE(out, path);
+
+    if (!(out = fopen(toc_path, "w")))
+        DIE("Could not create trail TOC: %s", toc_path);
+    size_t offs_size = file_offs < UINT32_MAX ? 4 : 8;
+    for (i = 0; i < num_cookies + 1; i++)
+        SAFE_WRITE(&toc[i], offs_size, toc_path, out);
+    SAFE_CLOSE(out, toc_path);
 
     free_gram_bufs(&gbufs);
     free(grams);
     free(encoded);
     free(prev_items);
     free(buf);
+    free(toc);
 }
 
 static void store_codebook(const Pvoid_t codemap, const char *path)
@@ -287,6 +285,7 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     char *root = cons->root, *read_buf;
     char path[TDB_MAX_PATH_SIZE];
     char grouped_path[TDB_MAX_PATH_SIZE];
+    char toc_path[TDB_MAX_PATH_SIZE];
     struct field_stats *fstats;
     uint64_t num_cookies = cons->num_cookies;
     uint64_t num_events = cons->num_events;
@@ -356,6 +355,7 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     /* 6. encode and write trails to disk */
     TDB_TIMER_START
     tdb_path(path, "%s/trails.data", root);
+    tdb_path(toc_path, "%s/trails.toc", root);
     encode_trails(items,
                   grouped_r,
                   num_events,
@@ -364,7 +364,8 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
                   codemap,
                   gram_freqs,
                   fstats,
-                  path);
+                  path,
+                  toc_path);
     TDB_TIMER_END("trail/encode_trails");
 
     /* 7. write huffman codebook to disk */

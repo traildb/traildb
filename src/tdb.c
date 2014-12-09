@@ -215,6 +215,12 @@ tdb *tdb_open(const char *root)
     if (tdb_mmap(path, &db->trails, db))
         goto err;
 
+    tdb_path(path, "%s/trails.toc", root);
+    if (access(path, F_OK)) // backwards compat
+        tdb_path(path, "%s/trails.data", root);
+    if (tdb_mmap(path, &db->toc, db))
+        goto err;
+
     if (tdb_fields_open(db, root, path))
         goto err;
 
@@ -327,6 +333,13 @@ const uint8_t *tdb_get_cookie(const tdb *db, uint64_t cookie_id)
     if (cookie_id < db->num_cookies)
         return (const uint8_t *)&db->cookies.data[cookie_id * 16];
     return NULL;
+}
+
+inline uint64_t tdb_get_cookie_offs(const tdb *db, uint64_t cookie_id)
+{
+    if (db->trails.size < UINT32_MAX)
+        return ((uint32_t*)db->toc.data)[cookie_id];
+    return ((uint64_t*)db->toc.data)[cookie_id];
 }
 
 uint64_t tdb_get_cookie_id(const tdb *db, const uint8_t *cookie)

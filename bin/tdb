@@ -72,7 +72,7 @@ def main():
                         help="name of field to operate on")
     parser.add_argument('-o', '--outdb',
                         default='a.tdb',
-                        help="name of field to operate on")
+                        help="name of output dbs for split / merge")
     parser.add_argument('-n', '--num-parts',
                         default=1,
                         type=int,

@@ -75,7 +75,9 @@ const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val);
 const char *tdb_get_item_value(tdb *db, tdb_item item);
 
 const uint8_t *tdb_get_cookie(const tdb *db, uint64_t cookie_id);
+uint64_t tdb_get_cookie_offs(const tdb *db, uint64_t cookie_id);
 uint64_t tdb_get_cookie_id(const tdb *db, const uint8_t cookie[16]);
+
 int tdb_has_cookie_index(const tdb *db);
 
 const char *tdb_error(const tdb *db);
