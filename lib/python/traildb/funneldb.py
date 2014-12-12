@@ -5,6 +5,7 @@ from ctypes import c_uint, c_uint8, c_uint32, c_uint64
 from ctypes import CDLL, POINTER, Structure, Union, byref, cast, pointer
 from itertools import product
 from operator import __and__, __or__
+from urllib import quote_plus, unquote_plus
 
 from .traildb import tdb, tdb_field, tdb_item, tdb_fold_fn
 
@@ -164,7 +165,7 @@ class FunnelDB(object):
 
     def funnel_id(self, key):
         if isinstance(key, basestring):
-            key = dict(i.split(':') for i in key.split('/') if i)
+            key = dict(map(unquote_plus, i.split(':')) for i in key.split('/') if i)
         if isinstance(key, dict):
             tdb = self.traildb
             O, F = self.params.key_offs, self.params.key_fields
@@ -181,8 +182,8 @@ class FunnelDB(object):
     def keys(self, serialize=False):
         tdb = self.traildb
         for _, key in sorted((v, k) for k, v in self.keymap.items()):
-            names = [tdb.fields[f] for f in key]
-            for which in product(*(tdb.lexicon(f) for f in key)):
+            names = [quote_plus(tdb.fields[f]) for f in key]
+            for which in product(*(map(quote_plus, tdb.lexicon(f)) for f in key)):
                 if serialize:
                     yield '/' + '/'.join('%s:%s' % item for item in zip(names, which))
                 else:
