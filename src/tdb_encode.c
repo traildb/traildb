@@ -179,7 +179,7 @@ static void encode_trails(const tdb_item *items,
         DIE("Could not allocate %u grams", num_fields);
 
     if (!(toc = malloc((num_cookies + 1) * 8)))
-        DIE("Could not allocate %llu offsets", num_cookies + 1);
+        DIE("Could not allocate %"PRIu64" offsets", num_cookies + 1);
 
     rewind(grouped);
     fread(&ev, sizeof(tdb_event), 1, grouped);
