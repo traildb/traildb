@@ -41,16 +41,16 @@ def make(tdb, path, opts):
 
 def keys(tdb, path, opts):
     fdb = FunnelDB.load(tdb, path)
-    for key in fdb.keys():
+    for key in fdb.keys(serialize=True):
         print key
 
 def count_families(tdb, path, opts):
     fdb = FunnelDB.load(tdb, path)
     masks = [m or '*' for m in opts.mask or [None]]
-    keys = [fdb.path_key(p) for p in opts.key or ('')]
+    keys = opts.key or list(fdb.keys(serialize=True))
     print '%-50s\t%s' % ('funnel', '\t'.join('%12s' % m for m in masks))
     for n, (key, mc) in enumerate(fdb.count_families(keys, masks)):
-        print '%-50s\t%s' % (opts.key[n], '\t'.join('%12d' % c for m, c in mc))
+        print '%-50s\t%s' % (key, '\t'.join('%12d' % c for m, c in mc))
 
 def count_sets(tdb, path, opts):
     fdb = FunnelDB.load(tdb, path)

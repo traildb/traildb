@@ -103,17 +103,17 @@ api(lib.fdb_iter_free, [fdb_iter], fdb_iter);
 api(lib.fdb_count_set, [fdb_set, POINTER(fdb_eid)], c_int)
 api(lib.fdb_count_family, [fdb_family, POINTER(fdb_eid)], c_int)
 
-def keys(num_keys, key_fields):
-    key = []
+def keymap(num_keys, key_fields):
+    combo = []
     for i, f in enumerate(key_fields):
         if not num_keys:
             return
         if f:
-            key.append(f)
+            combo.append(f)
         else:
             num_keys -= 1
-            yield tuple(sorted(key)), i - len(key)
-            key = []
+            yield tuple(sorted(combo)), i - len(combo)
+            combo = []
 
 def seqify(x):
     try:
@@ -121,7 +121,7 @@ def seqify(x):
         return x
     except IndexError:
         return x
-    except TypeError:
+    except KeyError, TypeError:
         return x,
 
 def split(terms, n):
@@ -139,7 +139,7 @@ class FunnelDB(object):
         self.traildb = traildb
         self.num_funnels = db.contents.num_funnels
         self.params = cast(db.contents.params, fdb_ez).contents
-        self.keydict = dict(keys(self.params.num_keys, self.params.key_fields))
+        self.keymap = dict(keymap(self.params.num_keys, self.params.key_fields))
         self.mask = traildb.fields[self.params.mask_field]
 
     def __del__(self):
@@ -162,27 +162,31 @@ class FunnelDB(object):
                 return
             yield next_.id, next_.mask
 
-    def key(self, **which):
-        tdb = self.traildb
-        O, F = self.params.key_offs, self.params.key_fields
-        which = dict((tdb.fields.index(k), v) for k, v in which.items())
-        index = self.keydict[tuple(sorted(which))]
-        key = O[index - 1] if index else 0
-        for i, f in enumerate(F[index:]):
-            if not f:
-                break
-            key += tdb.val(f, which[f]) * O[index + i]
+    def funnel_id(self, key):
+        if isinstance(key, basestring):
+            key = dict(i.split(':') for i in key.split('/') if i)
+        if isinstance(key, dict):
+            tdb = self.traildb
+            O, F = self.params.key_offs, self.params.key_fields
+            which = dict((tdb.fields.index(k), v) for k, v in key.items())
+            index = self.keymap[tuple(sorted(which))]
+            id = O[index - 1] if index else 0
+            for i, f in enumerate(F[index:]):
+                if not f:
+                    break
+                id += tdb.val(f, which[f]) * O[index + i]
+            return id
         return key
 
-    def keys(self):
+    def keys(self, serialize=False):
         tdb = self.traildb
-        for _, key in sorted((v, k) for k, v in self.keydict.items()):
+        for _, key in sorted((v, k) for k, v in self.keymap.items()):
             names = [tdb.fields[f] for f in key]
             for which in product(*(tdb.lexicon(f) for f in key)):
-                yield dict(zip(names, which))
-
-    def path_key(self, path):
-        return self.key(**dict(i.split(':') for i in path.split('/') if i))
+                if serialize:
+                    yield '/' + '/'.join('%s:%s' % item for item in zip(names, which))
+                else:
+                    yield dict(zip(names, which))
 
     def simple_cnfs(self, mask_filters):
         if isinstance(mask_filters[0], FDB_CNF):
@@ -214,13 +218,12 @@ class FunnelDB(object):
                 sets[i] = term.contents
             else:
                 if isinstance(term, basestring):
-                    path, mask_filter = term.split('=')
-                    funnel_id = self.path_key(path)
+                    key, mask_filter = term.split('=')
                 else:
-                    funnel_id, mask_filter = term
+                    key, mask_filter = term
                 sets[i].flags = FDB_SIMPLE
                 sets[i].simple.db = self.db
-                sets[i].simple.funnel_id = funnel_id
+                sets[i].simple.funnel_id = self.funnel_id(key)
                 sets[i].simple.cnf = self.simple_cnfs([mask_filter])
         return sets
 
@@ -261,7 +264,7 @@ class FunnelDB(object):
         family.cnfs = self.simple_cnfs(fmasks)
         counts = (fdb_eid * family.num_sets)()
         for key in seqify(keys):
-            family.funnel_id = key
+            family.funnel_id = self.funnel_id(key)
             lib.fdb_count_family(family, counts)
             yield key, zip(fmasks, counts)
 
