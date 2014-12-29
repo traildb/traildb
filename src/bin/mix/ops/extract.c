@@ -253,7 +253,7 @@ static void add_event(struct extract_ctx *ectx,
     for (i = 0; i < ectx->num_fields; i++)
         /* add just the vals, not the fields */
         ectx->trail_buf[ectx->trail_buf_len++] =
-            tdb_item_val(trail[ectx->fields[i] + 1]);
+            tdb_item_val(trail[ectx->fields[i]]);
 }
 
 static void flush_send_buf(struct extract_ctx *ectx)
