@@ -15,6 +15,9 @@
 #define pinfo(fmt, ...) fprintf(stderr, fmt"\n", ##__VA_ARGS__)
 #define pwarn(fmt, ...) fprintf(stderr, fmt"\n", ##__VA_ARGS__)
 
+/* FunnelDB creation uses a probe to determine which funnels an event occurs in.
+   The total number of funnels must be known in advance.
+   Params data is stored in the DB, but is limited to FDB_PARAMS bytes. */
 fdb *fdb_create(tdb *tdb, tdb_fold_fn probe, fdb_fid num_funnels, void *params) {
   fdb *db = NULL;
   fdb_cons cons = {};
@@ -23,6 +26,9 @@ fdb *fdb_create(tdb *tdb, tdb_fold_fn probe, fdb_fid num_funnels, void *params) 
   cons.params = params;
   if (cons.counters == NULL || cons.funnels == NULL)
     goto done;
+
+  /* Run through the TrailDB once to figure out how much space is needed,
+     and whether each funnel is dense or sparse */
   tdb_fold(tdb, probe, &cons);
 
   uint64_t data_size = 0, N = tdb_num_cookies(tdb), dense_size = N * sizeof(fdb_mask);
@@ -46,6 +52,8 @@ fdb *fdb_create(tdb *tdb, tdb_fold_fn probe, fdb_fid num_funnels, void *params) 
     counter->last = -1;
   }
 
+  /* Allocate memory and copy the header + table of contents
+     mmap instead of malloc, so we can always free using munmap */
   uint64_t size = fdb_size(num_funnels, data_size);
   db = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
   if (db == MAP_FAILED) {
@@ -60,6 +68,7 @@ fdb *fdb_create(tdb *tdb, tdb_fold_fn probe, fdb_fid num_funnels, void *params) 
   db->num_funnels = num_funnels;
   memcpy(db->funnels, cons.funnels, num_funnels * sizeof(fdb_funnel));
 
+  /* Run through the TrailDB again to actually store the funnel data */
   cons.data = ((uint8_t *)db) + db->data_offs;
   cons.phase = 1;
   tdb_fold(tdb, probe, &cons);
@@ -70,14 +79,16 @@ fdb *fdb_create(tdb *tdb, tdb_fold_fn probe, fdb_fid num_funnels, void *params) 
   return db;
 }
 
+/* Probe functions call fdb_detect when they want to emit a funnel for an event.
+   fdb_detect takes care of the details of how to store the info. */
 void fdb_detect(fdb_fid funnel_id, fdb_eid id, fdb_mask bits, fdb_cons *cons) {
   fdb_counter *counter = &cons->counters[funnel_id];
-  if (cons->phase == 0) {
+  if (cons->phase == 0) { /* allocation phase */
     if (counter->last < id || counter->count == 0) {
       counter->last = id;
       counter->count++;
     }
-  } else {
+  } else {               /* storage phase */
     fdb_funnel *funnel = &cons->funnels[funnel_id];
     if (funnel->flags & FDB_DENSE) {
       fdb_mask *mask = (fdb_mask *)&cons->data[funnel->offs];
@@ -91,6 +102,11 @@ void fdb_detect(fdb_fid funnel_id, fdb_eid id, fdb_mask bits, fdb_cons *cons) {
   }
 }
 
+/* This probe implements the most common use case for FunnelDB:
+   The user specifies which fields (or combinations) they are interested in.
+   Funnels are created for every possible value of those fields.
+   The user also specifies which field to use for the mask.
+   The mask uses 1 bit for every possible value in the mask field. */
 static
 void *fdb_ezprobe(const tdb *db, uint64_t id, const tdb_item *items, void *acc) {
   fdb_cons *cons = (fdb_cons *)acc;
@@ -99,15 +115,20 @@ void *fdb_ezprobe(const tdb *db, uint64_t id, const tdb_item *items, void *acc) 
   fdb_fid key, *O = params->key_offs;
   tdb_field k, *K = params->key_fields;
   unsigned int i, j = 0, N = params->num_keys;
+  /* compute the funnel id: much like a 1-D index for N-D matrix elements */
   for (i = 0; i < N; i++) {
     for (key = j ? O[j - 1] : 0; (k = K[j]); j++)
       key += tdb_item_val(items[k]) * O[j];
     j++;
-    fdb_detect(key, id, mask, cons);
+    fdb_detect(key, id, mask, cons); /* emit funnel + mask */
   }
   return acc;
 }
 
+/* The easy way to construct a FunnelDB using the fdb_ezprobe.
+   Every field (or combination) the user is interested in,
+   has number of funnels given by the product of the cardinality of the fields.
+   Compute total number of funnels, sanity check mask, and create the DB. */
 fdb *fdb_easy(tdb *tdb, fdb_ez *params) {
   fdb_fid num_funnels = 0, size = 0, *O = params->key_offs;
   tdb_field k, *K = params->key_fields;
@@ -160,6 +181,8 @@ fdb *fdb_free(fdb *db) {
   return NULL;
 }
 
+/* Apply a cnf filter to a particular mask.
+   The mask just represents a set of variables which are present or absent. */
 static inline
 int fdb_filter(uint64_t mask, const fdb_cnf *cnf) {
   unsigned int i;
@@ -170,6 +193,9 @@ int fdb_filter(uint64_t mask, const fdb_cnf *cnf) {
   return mask != 0;
 }
 
+/* Check if a particular term is required by a cnf formula.
+   This doesn't have to return true in all cases,
+   but when we know a term is required we can exit some queries early. */
 static inline
 int fdb_required(unsigned int iid, const fdb_cnf *cnf) {
   unsigned int i;
@@ -188,6 +214,7 @@ fdb_elem *fdb_iter_next_simple(fdb_iter *iter) {
   fdb_elem *next = &iter->next;
   uint8_t *data = (uint8_t *)s->db + s->db->data_offs;
   if (funnel->flags & FDB_DENSE) {
+    /* dense: copy the mask and write the implicit id */
     for (i = *index; i < funnel->length; i++) {
       fdb_mask *mask = (fdb_mask *)&data[funnel->offs];
       if (fdb_filter(mask[i], s->cnf)) {
@@ -198,6 +225,7 @@ fdb_elem *fdb_iter_next_simple(fdb_iter *iter) {
       }
     }
   } else {
+   /* sparse: copy the element exactly as is */
     for (i = *index; i < funnel->length; i++) {
       fdb_elem *elem = (fdb_elem *)&data[funnel->offs];
       if (fdb_filter(elem[i].mask, s->cnf)) {
@@ -218,29 +246,37 @@ fdb_elem *fdb_iter_next_complex(fdb_iter *iter) {
   fdb_eid min;
   unsigned int i, N = c->num_sets, argmin = 0;
   uint64_t membership;
-  while (iter->num_left) {
+  /* each term has an associated set, which we can iterate over in order
+     we just merge these iterators to traverse the elements in order */
+  while (iter->num_left) { /* as long as there are terms left */
     membership = 0;
-    min = -1; // unsigned
+    min = -1; /* unsigned, so begin with the largest possible value */
     for (i = 0; i < N; i++)
       if (!(iter->empty & (1LLU << i)) && iter->iters[i]->next.id < min)
-        min = iter->iters[argmin = i]->next.id;
+        min = iter->iters[argmin = i]->next.id; /* found a new minimum */
     next->id = min;
     next->mask = 0;
+    /* figure out all terms which contain the minimum */
     for (i = 0; i < N; i++) {
       if (!(iter->empty & (1LLU << i)) && iter->iters[i]->next.id == min) {
+        /* found one, pop it */
         if (!fdb_iter_next(iter->iters[i])) {
+          /* this was the last element in the iterator */
           iter->empty |= 1LLU << i;
           if (iter->num_left)
             iter->num_left--;
+          /* check if this term is required by the cnf, so we can exit early */
           if (fdb_required(i, c->cnf))
             iter->num_left = 0;
         }
+        /* mark the term as a member of this set */
         next->mask |= iter->iters[i]->next.mask;
         membership |= 1LLU << i;
       }
     }
+    /* apply the cnf to our set membership mask */
     if (fdb_filter(membership, c->cnf))
-      return next;
+      return next; /* return the next one that passes the test */
   }
   return NULL;
 }
@@ -257,8 +293,9 @@ fdb_iter *fdb_iter_new(const fdb_set *set) {
     iter->num_left = c->num_sets;
     iter->iters = calloc(c->num_sets, sizeof(fdb_iter));
     if (iter->iters == NULL || c->num_sets > 64)
-      return fdb_iter_free(iter);
+      return fdb_iter_free(iter); /* memory error or too many terms */
 
+    /* load up the first element of each term, or mark it empty */
     unsigned int i;
     for (i = 0; i < c->num_sets; i++) {
       iter->iters[i] = fdb_iter_new(&c->sets[i]);
@@ -291,6 +328,7 @@ fdb_iter *fdb_iter_free(fdb_iter *iter) {
   return NULL;
 }
 
+/* Straightforward counting of the number of elements in any set */
 int fdb_count_set(const fdb_set *set, fdb_eid *count) {
   int k;
   fdb_iter *iter = fdb_iter_new(set);
@@ -301,18 +339,20 @@ int fdb_count_set(const fdb_set *set, fdb_eid *count) {
   return 0;
 }
 
+/* Efficient counting of a family of related sets
+   (i.e. multiple queries on the same row) */
 int fdb_count_family(const fdb_family *family, fdb_eid *counts) {
   int i, k;
   fdb_set all = {
     .flags = FDB_SIMPLE,
     .simple = {.db = family->db, .funnel_id = family->funnel_id}
   };
-  fdb_iter *iter = fdb_iter_new(&all);
+  fdb_iter *iter = fdb_iter_new(&all); /* an iterator over the entire row */
   fdb_elem *next;
   memset(counts, 0, family->num_sets * sizeof(fdb_eid));
-  for (k = 0; (next = fdb_iter_next(iter)); k++)
+  for (k = 0; (next = fdb_iter_next(iter)); k++) /* look at each element once */
     for (i = 0; i < family->num_sets; i++)
-      if (fdb_filter(next->mask, &family->cnfs[i]))
+      if (fdb_filter(next->mask, &family->cnfs[i])) /* evaluate each query */
         counts[i]++;
   fdb_iter_free(iter);
   return 0;

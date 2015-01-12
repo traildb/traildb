@@ -1,6 +1,39 @@
 #ifndef __FUNNELDB_H__
 #define __FUNNELDB_H__
 
+/*
+ * FunnelDB provides efficient set operations on the keys of a TrailDB.
+ * It's perfect for performing user funnel analysis.
+ *
+ * Sets in a FunnelDB are either simple or complex.
+ * A simple set is a 'row' in the DB, plus a query term (filter).
+ * A complex set is a combination of other sets (simple or complex).
+ * Arbitrary logical operations can be computed using these building blocks.
+ *
+ * An individual row in FunnelDB contains many possible sets.
+ * A row is like a miniatiure universe within the database (aka 'funnel').
+ * Rows can represent many different kind of things, such as:
+ *  - all cookies seen on a particular network
+ *  - all cookies coming from a particular domain
+ *  - all cookies associated with a particular browser or device
+ * etc.
+ * Information about the sets within a row is stored in the 'mask'.
+ *
+ * A mask is a small group of flags used to represent steps in a funnel.
+ * Generally each bit in the mask indicates the presence of a 'type' of event.
+ * In the digital advertising world, the mask might contain bits for:
+ *  - the presence of a bid request on the cookie (within a row)
+ *  - the presence of a bid response on the cookie (within a row)
+ *  - the presence of an impression served to the cookie (within a row)
+ * etc.
+ *
+ * Finally, rows can be either dense or sparse.
+ * Each sparse row is an ordered lists of integers (+ mask).
+ * Each dense row is an array of masks.
+ * However, these are implementation details not exposed by the interface.
+ * FunnelDB automatically determines the most efficient way to store each row.
+ */
+
 #include <stdint.h>
 
 #include "traildb.h"
@@ -13,12 +46,14 @@
 
 #define FDB_PARAMS 1024
 
+/* The offset after the header + table of contents */
 #define fdb_offs(N) (sizeof(fdb) + N * sizeof(fdb_funnel))
+/* The total size of a database */
 #define fdb_size(N, S) (fdb_offs(N) + S)
 
-typedef uint32_t fdb_eid;
-typedef uint32_t fdb_fid;
-typedef uint8_t fdb_mask;
+typedef uint32_t fdb_eid; /* element id */
+typedef uint32_t fdb_fid; /* funnel id */
+typedef uint8_t fdb_mask; /* default mask is 8 bits */
 
 typedef struct {
   fdb_eid id;

@@ -270,6 +270,10 @@ class FunnelDB(object):
             yield key, zip(fmasks, counts)
 
     def conjunction(self, terms, cset=None, N=64):
+        """
+        Create a conjunction which avoids the 64 term limitation for a CNF,
+        by recursively breaking large formulas into 64 term buckets.
+        """
         cset = cset or FDB_SET()
         cset.flags = FDB_COMPLEX
         cset.complex.db = self.db
@@ -291,6 +295,10 @@ class FunnelDB(object):
         return cset
 
     def disjunction(self, terms, cset=None, N=64):
+        """
+        Create a disjunction which avoids the 64 term limitation for a CNF,
+        by recursively breaking large formulas into 64 term buckets.
+        """
         cset = cset or FDB_SET()
         cset.flags = FDB_COMPLEX
         cset.complex.db = self.db
@@ -310,6 +318,9 @@ class FunnelDB(object):
         return cset
 
     def difference(self, include, exclude):
+        """
+        Convenience function for creating a set difference.
+        """
         cset = FDB_SET()
         cset.flags = FDB_COMPLEX
         cset.complex.db = self.db
