@@ -36,11 +36,12 @@ def info(args, opts):
 def get(args, opts):
     for arg in args:
         tdb = TrailDB(arg)
+        fields = opts.field or tdb.fields
         for id in opts.id or [0]:
             id = int(id)
             cookie = tdb.cookie(id)
             for event in tdb.trail(id, ptime=True):
-                print '%s\t%s' % (cookie, event)
+                print '%s\t%s' % (cookie, '\t'.join(str(getattr(event, f)) for f in fields))
 
 def lex(args, opts):
     for arg in args:
