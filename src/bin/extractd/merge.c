@@ -89,7 +89,7 @@ static void output_fields(const struct extractd_ctx *ctx)
 
         for (j = 0; j < extractd_num_tokens(ctx->extd, i); j++){
             const char *token = extractd_get_token(ctx->extd, i, j);
-            SAFE_FPRINTF(out, path, "%s", token);
+            SAFE_FPRINTF(out, path, "%s\n", token);
         }
 
         ++k;
