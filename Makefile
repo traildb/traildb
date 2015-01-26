@@ -40,7 +40,7 @@ lib/libdiscodb.a: deps/discodb/src
 lib/libtraildb.a: $(COBJS)
 	$(AR) -ruvs $@ $^
 
-lib/libtraildb.so: $(COBJS)
+lib/libtraildb.so: $(COBJS) lib/libdiscodb.a
 	$(CC) $(CFLAGS) $(CINCL) -shared -o $@ $^ $(CLIBS)
 
 src/dsfmt/%.o: src/dsfmt/%.c
