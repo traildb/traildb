@@ -32,7 +32,6 @@ bin/%: src/bin/%.c $(COBJS)
 	$(CC) $(CFLAGS) $(CINCL) -o $@ $^ $(CLIBS)
 
 deps/discodb/src:
-	git submodule update --init deps/$*
 	make -C deps/discodb CFLAGS="$(CFLAGS)"
 
 lib/libdiscodb.a: deps/discodb/src
