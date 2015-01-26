@@ -30,11 +30,11 @@ bin/mix: src/bin/mix/*.c src/bin/mix/ops/*.c $(COBJS)
 bin/%: src/bin/%.c $(COBJS)
 	$(CC) $(CFLAGS) $(CINCL) -o $@ $^ $(CLIBS)
 
-deps/discodb/src:
-	git submodule update --init deps/$*
+deps/discodb/src/%.o:
 	make -C deps/discodb CFLAGS="$(CFLAGS)"
 
-lib/libdiscodb.a: deps/discodb/src
+lib/libdiscodb.a: deps/discodb/src/%.o
+	make -C deps/discodb CFLAGS="$(CFLAGS)"
 	$(AR) -ruvs $@ $(wildcard deps/discodb/src/*.o)
 
 lib/libtraildb.a: $(COBJS)
