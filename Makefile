@@ -9,6 +9,7 @@ COBJS  = $(patsubst %.c,%.o,$(CSRCS))
 PYTHON = python
 
 .PHONY: all bins libs clean python
+.PHONY: deps/discodb/src
 
 all: libs bins
 
