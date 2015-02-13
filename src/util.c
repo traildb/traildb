@@ -6,6 +6,11 @@
 #include <stdio.h>
 #include <errno.h>
 
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
 #include "util.h"
 
 static int compare(const void *p1, const void *p2)
@@ -97,4 +102,26 @@ char *dupstrs(const char *strs, size_t num)
     if ((dup = malloc(n * sizeof(char))) == NULL)
         return NULL;
     return memcpy((void *)dup, strs, n);
+}
+
+const char *mmap_file(const char *path, uint64_t *size)
+{
+    int fd;
+    struct stat stats;
+    const char *data;
+
+    if ((fd = open(path, O_RDONLY)) == -1)
+        DIE("Could not open path: %s", path);
+
+    if (fstat(fd, &stats))
+        DIE("Could not stat path: %s", path);
+
+    data = mmap(NULL, stats.st_size, PROT_READ, MAP_SHARED, fd, 0);
+    *size = stats.st_size;
+
+    if (data == MAP_FAILED)
+        DIE("Could not mmap path: %s", path);
+
+    close(fd);
+    return data;
 }

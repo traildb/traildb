@@ -75,4 +75,6 @@ void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed);
 
 char *dupstrs(const char *strs, size_t num);
 
+const char *mmap_file(const char *path, uint64_t *size);
+
 #endif /* __UTIL_H__ */
