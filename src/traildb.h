@@ -9,7 +9,9 @@
 #define TDB_MAX_NUM_COOKIES (1LLU << 60)  // Lexicon needs C * 16 space
 #define TDB_MAX_NUM_EVENTS  (1LLU << 54)  // Merge needs E * F * 4 space
 #define TDB_MAX_NUM_FIELDS  (1LLU << 8)
-#define TDB_MAX_NUM_VALUES ((1LLU << 24) - 1)
+#define TDB_MAX_NUM_VALUES ((1LLU << 24) - 2)
+#define TDB_OVERFLOW_VALUE ((1LLU << 24) - 1)
+#define TDB_OVERFLOW_STR   "[[OVERFLOW]]"
 #define TDB_MAX_VALUE_SIZE  (1LLU << 10)
 #define TDB_MAX_LEXICON_SIZE UINT32_MAX
 #define TDB_MAX_TIMEDELTA  ((1LLU << 24) - 2) // ~194 days
@@ -69,6 +71,7 @@ uint32_t tdb_lexicon_size(tdb *db, tdb_field field);
 
 int tdb_get_field(tdb *db, const char *field_name);
 const char *tdb_get_field_name(tdb *db, tdb_field field);
+int tdb_field_has_overflow_vals(tdb *db, tdb_field field);
 
 tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value);
 const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val);

@@ -265,17 +265,23 @@ int tdb_cons_add(tdb_cons *cons,
         tdb_field field = i + 1;
         tdb_item item = field;
         if (j){
-            JSLI(val_p, cons->lexicons[i], (uint8_t*)value);
-            if (*val_p == 0){
-                *val_p = ++cons->lexicon_counters[i];
-                if (*val_p > TDB_MAX_NUM_VALUES){
-                    WARN("Too many values for field %d (%s)",
-                         field,
-                         field_name(cons, field));
-                    return field;
+            if (cons->lexicon_counters[i] < TDB_MAX_NUM_VALUES){
+                JSLI(val_p, cons->lexicons[i], (uint8_t*)value);
+                if (*val_p == 0)
+                    *val_p = ++cons->lexicon_counters[i];
+                item |= (*val_p) << 8;
+            }else{
+                if (cons->lexicon_counters[i] == TDB_MAX_NUM_VALUES){
+                    JSLI(val_p, cons->lexicons[i], (uint8_t*)TDB_OVERFLOW_STR);
+                    *val_p = TDB_OVERFLOW_VALUE;
+                    ++cons->lexicon_counters[i];
                 }
+                JSLG(val_p, cons->lexicons[i], (uint8_t*)value);
+                if (val_p)
+                    item |= (*val_p) << 8;
+                else
+                    item |= TDB_OVERFLOW_VALUE << 8;
             }
-            item |= (*val_p) << 8;
         }
         *((tdb_item*)arena_add_item(&cons->items)) = item;
         ++event->num_items;

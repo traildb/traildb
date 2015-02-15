@@ -294,6 +294,11 @@ const char *tdb_get_field_name(tdb *db, tdb_field field)
     return NULL;
 }
 
+int tdb_field_has_overflow_vals(tdb *db, tdb_field field)
+{
+    return tdb_lexicon_size(db, field) > TDB_MAX_NUM_VALUES + 1;
+}
+
 tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
 {
     const tdb_lexicon *lex;

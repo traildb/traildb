@@ -33,6 +33,7 @@ api(lib.tdb_lexicon_size, [tdb, tdb_field], c_int)
 
 api(lib.tdb_get_field, [tdb, c_char_p], c_uint)
 api(lib.tdb_get_field_name, [tdb, tdb_field], c_char_p)
+api(lib.tdb_field_has_overflow_vals, [tdb, tdb_field], c_int)
 
 api(lib.tdb_get_item, [tdb, tdb_field, c_char_p], c_uint)
 api(lib.tdb_get_value, [tdb, tdb_field, tdb_val], c_char_p)
@@ -226,6 +227,10 @@ class TrailDB(object):
 
     def has_cookie_index(self):
         return True if lib.tdb_has_cookie_index(self._db) else False
+
+    def has_overflow_vals(self, fieldish):
+        field = self.field(fieldish)
+        return lib.tdb_field_has_overflow_vals(self._db, field) != 0
 
     def time_range(self, ptime=False):
         tmin = lib.tdb_min_timestamp(self._db)
