@@ -11,12 +11,15 @@
 #define TDB_MAX_NUM_FIELDS  (1LLU << 8)
 #define TDB_MAX_NUM_VALUES ((1LLU << 24) - 2)
 #define TDB_OVERFLOW_VALUE ((1LLU << 24) - 1)
-#define TDB_OVERFLOW_STR   "[[OVERFLOW]]"
 #define TDB_MAX_VALUE_SIZE  (1LLU << 10)
 #define TDB_MAX_LEXICON_SIZE UINT32_MAX
 #define TDB_MAX_TIMEDELTA  ((1LLU << 24) - 2) // ~194 days
 #define TDB_FAR_TIMEDELTA  ((1LLU << 24) - 1)
 #define TDB_FAR_TIMESTAMP    UINT32_MAX
+
+#define TDB_OVERFLOW_STR   "OVERFLOW"
+#define TDB_OVERFLOW_LSEP  '['
+#define TDB_OVERFLOW_RSEP  ']'
 
 /*
    Internally we deal with ids:

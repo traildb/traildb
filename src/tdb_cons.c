@@ -7,15 +7,6 @@
 #include "arena.h"
 #include "util.h"
 
-static const char *field_name(const tdb_cons *cons, tdb_field field)
-{
-    const char *field_name = cons->ofield_names;
-    int i;
-    for (i = 0; i < field - 1; i++)
-        field_name += strlen(field_name) + 1;
-    return field_name;
-}
-
 static uint64_t lexicon_size(const Pvoid_t lexicon, uint64_t *size)
 {
     uint8_t value[TDB_MAX_VALUE_SIZE];
@@ -227,6 +218,31 @@ void tdb_cons_free(tdb_cons *cons)
     free(cons);
 }
 
+/*
+this function guarantees that the string representation of
+TDB_OVERFLOW_VAL is unique in this lexicon.
+*/
+static const uint8_t *find_overflow_value(tdb_cons *cons, tdb_field field)
+{
+    static const int LEN = sizeof(TDB_OVERFLOW_STR) - 1;
+    int i, j;
+    Word_t *ptr;
+
+    for (i = 1; i * 2 + LEN < TDB_MAX_VALUE_SIZE; i++){
+        for (j = 0; j < i; j++){
+            cons->overflow_str[j] = TDB_OVERFLOW_LSEP;
+            cons->overflow_str[i + LEN + j] = TDB_OVERFLOW_RSEP;
+        }
+        memcpy(&cons->overflow_str[i], TDB_OVERFLOW_STR, LEN);
+        cons->overflow_str[i * 2 + LEN] = 0;
+        JSLG(ptr, cons->lexicons[field], cons->overflow_str);
+        if (!ptr)
+            return cons->overflow_str;
+    }
+    DIE("Field %u overflows and could not generate a unique overflow value",
+        field);
+}
+
 int tdb_cons_add(tdb_cons *cons,
                  const uint8_t cookie[16],
                  const uint32_t timestamp,
@@ -259,9 +275,9 @@ int tdb_cons_add(tdb_cons *cons,
 
     int i;
     Word_t *val_p;
-    const char *value = values;
+    const uint8_t *value = (const uint8_t*)values;
     for (i = 0; i < cons->num_ofields; i++){
-        size_t j = strlen(value);
+        size_t j = strlen((const char*)value);
         tdb_field field = i + 1;
         tdb_item item = field;
         if (j){
@@ -271,16 +287,18 @@ int tdb_cons_add(tdb_cons *cons,
                     *val_p = ++cons->lexicon_counters[i];
                 item |= (*val_p) << 8;
             }else{
-                if (cons->lexicon_counters[i] == TDB_MAX_NUM_VALUES){
-                    JSLI(val_p, cons->lexicons[i], (uint8_t*)TDB_OVERFLOW_STR);
-                    *val_p = TDB_OVERFLOW_VALUE;
-                    ++cons->lexicon_counters[i];
-                }
                 JSLG(val_p, cons->lexicons[i], (uint8_t*)value);
                 if (val_p)
                     item |= (*val_p) << 8;
-                else
+                else{
+                    if (cons->lexicon_counters[i] == TDB_MAX_NUM_VALUES){
+                        value = find_overflow_value(cons, i);
+                        JSLI(val_p, cons->lexicons[i], value);
+                        *val_p = TDB_OVERFLOW_VALUE;
+                        ++cons->lexicon_counters[i];
+                    }
                     item |= TDB_OVERFLOW_VALUE << 8;
+                }
             }
         }
         *((tdb_item*)arena_add_item(&cons->items)) = item;
@@ -341,34 +359,43 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
     int ret = 0;
     tdb_field i;
     for (i = 0; i < num_ofields; i++){
-        tdb_field field = i + 1;
         tdb_lexicon *lex = (tdb_lexicon*)db->lexicons[i].data;
         uint32_t v, N = lex->size;
         uint32_t *map = cons->lexicon_maps[i] = malloc(N * sizeof(uint32_t));
         for (v = 0; v < N; v++){
-            char *value = (char*)lex + (&lex->toc)[v];
             Word_t *val_p;
-            JSLI(val_p, cons->lexicons[i], (uint8_t*)value);
-            if (*val_p == 0){
-                *val_p = ++cons->lexicon_counters[i];
-                if (*val_p > TDB_MAX_NUM_VALUES){
-                    WARN("Too many values for field %d (%s)",
-                         field,
-                         field_name(cons, field));
-                    ret = i;
-                    goto done;
+            const uint8_t *value =
+                (const uint8_t*)((char*)lex + (&lex->toc)[v]);
+            /* We use TDB_OVERFLOW_VALUE - 1 here since we are looping over
+               the lexicon, not actual values. The lexicon skips the NULL
+               value at 0, decreasing the index of all values by one. */
+            if (v == TDB_OVERFLOW_VALUE - 1)
+                map[v] = TDB_OVERFLOW_VALUE;
+            else if (cons->lexicon_counters[i] < TDB_MAX_NUM_VALUES){
+                JSLI(val_p, cons->lexicons[i], value);
+                if (*val_p == 0)
+                    *val_p = ++cons->lexicon_counters[i];
+                map[v] = *val_p;
+            }else{
+                JSLG(val_p, cons->lexicons[i], (uint8_t*)value);
+                if (val_p)
+                    map[v] = *val_p;
+                else{
+                    if (cons->lexicon_counters[i] == TDB_MAX_NUM_VALUES){
+                        value = find_overflow_value(cons, i);
+                        JSLI(val_p, cons->lexicons[i], value);
+                        *val_p = TDB_OVERFLOW_VALUE;
+                        ++cons->lexicon_counters[i];
+                    }
+                    map[v] = TDB_OVERFLOW_VALUE;
                 }
             }
-            map[v] = *val_p;
         }
     }
 
-    if ((tdb_fold(db, append_fn, cons) == NULL)){
+    if ((tdb_fold(db, append_fn, cons) == NULL))
         ret = -1;
-        goto done;
-    }
 
- done:
     for (i = 0; i < num_ofields; i++)
         free(cons->lexicon_maps[i]);
     return ret;

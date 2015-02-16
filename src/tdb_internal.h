@@ -45,6 +45,7 @@ struct _tdb_cons {
     Word_t *lexicon_counters;
     uint32_t **lexicon_maps;
     char tempfile[TDB_MAX_PATH_SIZE];
+    uint8_t overflow_str[TDB_MAX_VALUE_SIZE];
 };
 
 struct _tdb_file {
