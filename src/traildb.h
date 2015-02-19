@@ -68,6 +68,7 @@ int tdb_cookie_hex(const uint8_t cookie[16], uint8_t hexcookie[32]);
 
 tdb *tdb_open(const char *root);
 void tdb_close(tdb *db);
+void tdb_dontneed(tdb *db);
 
 int tdb_lexicon_read(tdb *db, tdb_field field, const tdb_lexicon **lex);
 uint32_t tdb_lexicon_size(tdb *db, tdb_field field);
