@@ -13,6 +13,8 @@
 #define DSFMT_MEXP 521
 #include "dsfmt/dSFMT.h"
 
+#define MAX_PATH_SIZE 1024
+
 #define DIE(msg, ...)\
     do { fprintf(stderr, "FAIL: "msg"\n", ##__VA_ARGS__);   \
          exit(EXIT_FAILURE); } while (0)
@@ -76,5 +78,7 @@ void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed);
 char *dupstrs(const char *strs, size_t num);
 
 const char *mmap_file(const char *path, uint64_t *size);
+
+void make_path(char path[MAX_PATH_SIZE], char *fmt, ...);
 
 #endif /* __UTIL_H__ */

@@ -125,3 +125,13 @@ const char *mmap_file(const char *path, uint64_t *size)
     close(fd);
     return data;
 }
+
+void make_path(char path[MAX_PATH_SIZE], char *fmt, ...)
+{
+    va_list aptr;
+
+    va_start(aptr, fmt);
+    if (vsnprintf(path, MAX_PATH_SIZE, fmt, aptr) >= MAX_PATH_SIZE)
+        DIE("Path too long (fmt %s)", fmt);
+    va_end(aptr);
+}
