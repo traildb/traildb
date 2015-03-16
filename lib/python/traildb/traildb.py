@@ -3,7 +3,7 @@ import os
 from collections import namedtuple
 from ctypes import c_char, c_char_p, c_ubyte, c_int, c_void_p
 from ctypes import c_uint, c_uint8, c_uint32, c_uint64
-from ctypes import CDLL, CFUNCTYPE, POINTER
+from ctypes import CDLL, CFUNCTYPE, POINTER, string_at
 from datetime import datetime
 
 cd = os.path.dirname(os.path.abspath(__file__))
@@ -59,7 +59,7 @@ api(lib.tdb_fold, [tdb, tdb_fold_fn, c_void_p], c_void_p)
 def hexcookie(cookie):
     if isinstance(cookie, basestring):
         return cookie
-    return ''.join('%.2x' % x for x in cookie[:16])
+    return string_at(cookie, 16).encode('hex')
 
 def rawcookie(cookie):
     if isinstance(cookie, basestring):
@@ -213,10 +213,13 @@ class TrailDB(object):
             raise TrailDBError(lib.tdb_error(self._db))
         return value
 
-    def cookie(self, id):
+    def cookie(self, id, raw=False):
         cookie = lib.tdb_get_cookie(self._db, id)
         if cookie:
-            return hexcookie(cookie)
+            if raw:
+                return string_at(cookie, 16)
+            else:
+                return hexcookie(cookie)
         raise IndexError("Cookie index out of range")
 
     def cookie_id(self, cookie):
