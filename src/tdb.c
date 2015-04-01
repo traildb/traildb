@@ -246,6 +246,7 @@ void tdb_dontneed(tdb *db)
         madvise((void*)db->cookies.data, db->cookies.size, MADV_DONTNEED);
         madvise((void*)db->codebook.data, db->codebook.size, MADV_DONTNEED);
         madvise((void*)db->trails.data, db->trails.size, MADV_DONTNEED);
+        madvise((void*)db->toc.data, db->toc.size, MADV_DONTNEED);
     }
 }
 
@@ -261,6 +262,7 @@ void tdb_close(tdb *db)
         munmap((void*)db->cookies.data, db->cookies.size);
         munmap((void*)db->codebook.data, db->codebook.size);
         munmap((void*)db->trails.data, db->trails.size);
+        munmap((void*)db->toc.data, db->toc.size);
 
         free(db->lexicons);
         free(db->previous_items);
