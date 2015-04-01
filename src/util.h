@@ -47,8 +47,13 @@
         DIE("Seeking to %llu in %s failed", (unsigned long long)offset, path);\
     }
 
+#define SAFE_SEEK_END(f, path)\
+    if (fseek(f, 0, SEEK_END) == -1){\
+        DIE("Seeking to the end of %s failed", path);\
+    }
+
 #define SAFE_TELL(f, val, path)\
-    if ((val = ftell(f)) == 1){\
+    if ((val = ftell(f)) == -1){\
         DIE("Checking file position of %s failed", path);\
     }
 
