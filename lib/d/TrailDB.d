@@ -19,6 +19,55 @@ DateTime unix_ts_to_datetime(uint timestamp) pure
     return DateTime(Date(1970, 1, 1)) + dur!"seconds"(timestamp);
 }
 
+/* D Range representing trail of events */
+struct Trail {
+    TrailDB _tdb;
+    uint idx = 0;
+    ulong size;
+    uint[BUFFER_SIZE] _buff; // Stores raw trail
+    uint _num_fields;
+    uint _num_events;
+
+    char[][] fields;
+
+    this(TrailDB tdb_)
+    {
+        _tdb = tdb_;
+        fields = new string[](_tdb._numDims);
+    }
+
+    @property bool empty()
+    {
+        return (idx == _num_events);
+    }
+
+    @property char[][] front()
+    {
+        fields[] = []; // Clear old fields
+
+        foreach(j ; 0.._num_fields)
+        {
+            char[] val;
+            if(j == 0)
+            {
+                val = to!(char[])(_buff[idx * (_num_fields + 1)]);
+            }
+            else
+            {
+                val = _tdb.decode_val(_buff[idx * (_num_fields + 1) + j ]);
+            }
+            fields[j] = val;
+        }
+
+        return fields;
+    }
+
+    void popFront()
+    {
+        idx++;
+    }
+}
+
 class TrailDB {
 
     string _db_path;
@@ -28,8 +77,7 @@ class TrailDB {
     string[] _dimNames;
     uint _eventTypeInd;
 
-    uint[BUFFER_SIZE] _buff;
-    char[BUFFER_SIZE] res;
+    uint[BUFFER_SIZE] _buff; // Stores a trail
 
     this(string db_path)
     {
@@ -57,6 +105,17 @@ class TrailDB {
     @property uint numDimensions(){ return _numDims; }
     @property string[] dimNames(){ return _dimNames; }
     @property bool hasCookieIndex() { return tdb_has_cookie_index(_db) == 1; }
+
+    /* Returns trail of events (a D Range)*/
+    Trail trail(uint cookie_index)
+    {
+        Trail trl = Trail(this);
+        uint trail_size = tdb_decode_trail(_db, cookie_index, trl._buff.ptr, BUFFER_SIZE, 0);
+        trl._num_fields = _numDims;
+        trl._num_events = trail_size / (_numDims + 1);
+
+        return trl;
+    }
 
     /* Returns the 16 bytes cookie ID at a given position in the DB. */
     void getCookieByInd(uint ind, ref ubyte[16] res)
@@ -90,39 +149,12 @@ class TrailDB {
         return val;
     }
 
-
-    char[] get_trail_per_index(uint index)
-    {
-        uint num_events = _rawDecode(index);
-
-        ulong size = 0;
-        for(uint e = 0; e < num_events; ++e)
-        {
-            auto ts_str = to!(char[])(_buff[e * (_numDims + 2)]); //timestamp
-            res[size..size + ts_str.length] = ts_str;
-            res[size + ts_str.length] = DIM_DELIMITER;
-            size += ts_str.length + 1;
-            for(uint j = 0; j < _numDims; ++j)
-            {
-                char[] val = decode_val(_buff[e * (_numDims + 2) + j + 1]);
-                res[size..size + val.length] = val;
-                res[size + val.length] = DIM_DELIMITER;
-                size += val.length + 1;
-            }
-            res[size - 1] = EVENT_DELIMITER;
-        }
-        return res[0..size-1];
-    }
-
     // returns the number of events
     uint _rawDecode(uint index)
     {
         uint len = tdb_decode_trail(_db, index, _buff.ptr, BUFFER_SIZE, 0);
-        if((len % (_numDims + 2)) != 0)
-            return 0;
-        //assert((len % (_numDims + 2)) == 0); <- some cookies fail this test
-        //potential bug in traildb. investigate.
-        return len / (_numDims + 2);
+        assert((len % (_numDims + 1)) == 0);
+        return len / (_numDims + 1);
     }
 
     DateTime[] get_trail_timestamps(uint index)
@@ -162,6 +194,7 @@ class TrailDB {
 
     void read_dim_names()
     {
+        _dimNames ~= "timestamp";
         auto f = File(buildPath(_db_path, "fields"), "r");
         foreach(line; f.byLine())
         {
