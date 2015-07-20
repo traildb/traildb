@@ -52,7 +52,7 @@ struct Trail {
         foreach(j ; 0.._num_fields)
         {
             char[] val;
-            if(j == 0)
+            if(j == 0) // Timestamp
             {
                 val = to!(char[])(_buff[idx * (_num_fields + 1)]);
             }
