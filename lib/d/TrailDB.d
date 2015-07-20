@@ -24,16 +24,20 @@ struct Trail {
     TrailDB _tdb;
     uint idx = 0;
     ulong size;
-    uint[BUFFER_SIZE] _buff; // Stores raw trail
     uint _num_fields;
-    uint _num_events;
+    ulong _num_events;
 
     char[][] fields;
+    uint[] _buff;
 
-    this(TrailDB tdb_)
+    this(TrailDB tdb_, uint[] buff_) // TrailDB has decode_val
     {
         _tdb = tdb_;
-        fields = new string[](_tdb._numDims);
+        _buff = buff_;
+        _num_fields = tdb_._numDims;
+        _num_events = _buff.length / (_num_fields + 1);
+
+        fields = new char[][](_num_fields); // Note: revisit?
     }
 
     @property bool empty()
@@ -109,11 +113,8 @@ class TrailDB {
     /* Returns trail of events (a D Range)*/
     Trail trail(uint cookie_index)
     {
-        Trail trl = Trail(this);
-        uint trail_size = tdb_decode_trail(_db, cookie_index, trl._buff.ptr, BUFFER_SIZE, 0);
-        trl._num_fields = _numDims;
-        trl._num_events = trail_size / (_numDims + 1);
-
+        uint trail_size = tdb_decode_trail(_db, cookie_index, _buff.ptr, BUFFER_SIZE, 0);
+        Trail trl = Trail(this, _buff[0..trail_size]);
         return trl;
     }
 
