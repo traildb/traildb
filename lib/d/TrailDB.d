@@ -10,34 +10,46 @@ import traildb;
 
 
 immutable static BUFFER_SIZE = 1 << 18;
-immutable static EVENT_DELIMITER = '|';
-immutable static DIM_DELIMITER = '&';
 
-/* Convert a unix timestamp in seconds into a D DateTime object. */
-DateTime unix_ts_to_datetime(uint timestamp) pure
-{
-    return DateTime(Date(1970, 1, 1)) + dur!"seconds"(timestamp);
+/* Event in a TrailDB trail. Lazily computes field values. */
+struct Event {
+    void* _db; // Needed to get item value
+    uint[] _buff; // Raw buffer of event
+
+    this(void* db_, uint[] buff_)
+    {
+        _db = db_;
+        _buff = buff_;
+    }
+
+    char[] opIndex(uint j)
+    {
+        if(j == 0) // Timestamp
+        {
+            return to!(char[])(_buff[0]);
+        }
+        else
+        {
+            return to!(char[])(tdb_get_item_value(_db, _buff[j]));
+        }
+    }
 }
+
 
 /* D Range representing trail of events */
 struct Trail {
-    TrailDB _tdb;
+    void* _db;
     uint idx = 0;
-    ulong size;
     uint _num_fields;
     ulong _num_events;
+    uint[] _buff; // Raw buffer of the trail
 
-    char[][] fields;
-    uint[] _buff;
-
-    this(TrailDB tdb_, uint[] buff_) // TrailDB has decode_val
+    this(void* db_, uint num_fields_, uint[] buff_)
     {
-        _tdb = tdb_;
+        _db = db_;
         _buff = buff_;
-        _num_fields = tdb_._numDims;
+        _num_fields = num_fields_;
         _num_events = _buff.length / (_num_fields + 1);
-
-        fields = new char[][](_num_fields); // Note: revisit?
     }
 
     @property bool empty()
@@ -45,25 +57,10 @@ struct Trail {
         return (idx == _num_events);
     }
 
-    @property char[][] front()
+    @property Event front()
     {
-        fields[] = []; // Clear old fields
-
-        foreach(j ; 0.._num_fields)
-        {
-            char[] val;
-            if(j == 0) // Timestamp
-            {
-                val = to!(char[])(_buff[idx * (_num_fields + 1)]);
-            }
-            else
-            {
-                val = _tdb.decode_val(_buff[idx * (_num_fields + 1) + j ]);
-            }
-            fields[j] = val;
-        }
-
-        return fields;
+        Event evt = Event(_db, _buff[idx * (_num_fields + 1).. (idx + 1) * (_num_fields + 1)]);
+        return evt;
     }
 
     void popFront()
@@ -79,9 +76,8 @@ class TrailDB {
     uint _numCookies;
     uint _numDims;
     string[] _dimNames;
-    uint _eventTypeInd;
 
-    uint[BUFFER_SIZE] _buff; // Stores a trail
+    uint[BUFFER_SIZE] _buff; // Raw buffer of trail
 
     this(string db_path)
     {
@@ -90,14 +86,6 @@ class TrailDB {
         _numCookies = tdb_num_cookies(_db);
         _numDims = tdb_num_fields(_db);
         read_dim_names();
-
-        // store index of log line type dim.
-        for(int i = 0; i < _dimNames.length; ++i)
-            if(_dimNames[i] == "type")
-            {
-                _eventTypeInd = i;
-                break;
-            }
     }
 
     void close()
@@ -114,7 +102,7 @@ class TrailDB {
     Trail trail(uint cookie_index)
     {
         uint trail_size = tdb_decode_trail(_db, cookie_index, _buff.ptr, BUFFER_SIZE, 0);
-        Trail trl = Trail(this, _buff[0..trail_size]);
+        Trail trl = Trail(_db, _numDims, _buff[0..trail_size]);
         return trl;
     }
 
@@ -156,35 +144,6 @@ class TrailDB {
         uint len = tdb_decode_trail(_db, index, _buff.ptr, BUFFER_SIZE, 0);
         assert((len % (_numDims + 1)) == 0);
         return len / (_numDims + 1);
-    }
-
-    DateTime[] get_trail_timestamps(uint index)
-    {
-        uint num_events = _rawDecode(index);
-        DateTime[] res = new DateTime[num_events];
-        for(int i = 0; i < num_events; ++i)
-            res[i] = unix_ts_to_datetime(_buff[i * (_numDims + 2)]);
-        return res;
-    }
-
-    uint num_events(uint index, string type = "")
-    {
-        if(type == "")
-            return _rawDecode(index);
-
-        uint tot_events = _rawDecode(index);
-
-        uint evt_type_encoded = tdb_get_item(_db, _eventTypeInd, toStringz(type));
-
-        uint cnt = 0;
-        for(int i = 0; i < tot_events; ++i)
-        {
-            uint val = _buff[i * (_numDims + 2) + _eventTypeInd + 1];
-            if(val == evt_type_encoded)
-                ++cnt;
-        }
-
-        return cnt;
     }
 
     char[] decode_val(uint val)
