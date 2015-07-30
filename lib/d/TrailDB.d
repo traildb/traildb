@@ -59,8 +59,7 @@ struct Trail {
 
     @property Event front()
     {
-        Event evt = Event(_db, _buff[idx * (_num_fields + 1).. (idx + 1) * (_num_fields + 1)]);
-        return evt;
+        return Event(_db, _buff[idx * (_num_fields + 1).. (idx + 1) * (_num_fields + 1)]);
     }
 
     void popFront()
@@ -69,7 +68,7 @@ struct Trail {
     }
 }
 
-class TrailDB {
+class TrailDB { // Make this a struct?
 
     string _db_path;
     void* _db;
@@ -106,6 +105,31 @@ class TrailDB {
         return trl;
     }
 
+
+    // C API -- Faster perhaps?
+    uint load_cookie(uint cookie_index)
+    {
+        uint trail_size = tdb_decode_trail(_db, cookie_index, _buff.ptr, BUFFER_SIZE, 0);
+        uint _num_events = trail_size / (_numDims + 1);
+        return _num_events;
+    }
+
+    char[] get_at(uint event_idx, uint field_idx)
+    {
+        uint absolute_idx = event_idx * (_numDims + 1) + field_idx;
+        if(field_idx == 0) // Timestamp
+        {
+            return to!(char[])(_buff[absolute_idx]);
+        }
+        else
+        {
+            return to!(char[])(tdb_get_item_value(_db, _buff[absolute_idx]));
+        }
+    }
+    // End C API
+
+
+
     /* Returns the 16 bytes cookie ID at a given position in the DB. */
     void getCookieByInd(uint ind, ref ubyte[16] res)
     {
@@ -116,13 +140,13 @@ class TrailDB {
     /* Returns the HEX string representing the cookie at a given index
        in the DB.
     */
-    char[] getHEXCookieByInd(uint ind)
+    char[32] getHEXCookieByInd(uint ind)
     {
         ubyte[16] cookie;
         this.getCookieByInd(ind, cookie);
-        char[] cookiestr;
-        foreach(u; cookie)
-            cookiestr ~= format("%.2x",u);
+
+        char[32] cookiestr;
+        tdb_cookie_hex(cast(ubyte*)(&cookie), cast(char*)(&cookiestr));
         return cookiestr;
     }
 
