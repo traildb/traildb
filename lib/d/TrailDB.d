@@ -10,26 +10,73 @@ import traildb;
 
 
 immutable static BUFFER_SIZE = 1 << 18;
-immutable static EVENT_DELIMITER = '|';
-immutable static DIM_DELIMITER = '&';
 
-/* Convert a unix timestamp in seconds into a D DateTime object. */
-DateTime unix_ts_to_datetime(uint timestamp) pure
-{
-    return DateTime(Date(1970, 1, 1)) + dur!"seconds"(timestamp);
+/* Event in a TrailDB trail. Lazily computes field values. */
+struct Event {
+    void* _db; // Needed to get item value
+    uint[] _buff; // Raw buffer of event
+
+    this(void* db_, uint[] buff_)
+    {
+        _db = db_;
+        _buff = buff_;
+    }
+
+    char[] opIndex(uint j)
+    {
+        if(j == 0) // Timestamp
+        {
+            return to!(char[])(_buff[0]);
+        }
+        else
+        {
+            return to!(char[])(tdb_get_item_value(_db, _buff[j]));
+        }
+    }
 }
 
-class TrailDB {
+
+/* D Range representing trail of events */
+struct Trail {
+    void* _db;
+    uint idx = 0;
+    uint _num_fields;
+    ulong _num_events;
+    uint[] _buff; // Raw buffer of the trail
+
+    this(void* db_, uint num_fields_, uint[] buff_)
+    {
+        _db = db_;
+        _buff = buff_;
+        _num_fields = num_fields_;
+        _num_events = _buff.length / (_num_fields + 1);
+    }
+
+    @property bool empty()
+    {
+        return (idx == _num_events);
+    }
+
+    @property Event front()
+    {
+        return Event(_db, _buff[idx * (_num_fields + 1).. (idx + 1) * (_num_fields + 1)]);
+    }
+
+    void popFront()
+    {
+        idx++;
+    }
+}
+
+class TrailDB { // Make this a struct?
 
     string _db_path;
     void* _db;
     uint _numCookies;
     uint _numDims;
     string[] _dimNames;
-    uint _eventTypeInd;
 
-    uint[BUFFER_SIZE] _buff;
-    char[BUFFER_SIZE] res;
+    uint[BUFFER_SIZE] _buff; // Raw buffer of trail
 
     this(string db_path)
     {
@@ -38,14 +85,6 @@ class TrailDB {
         _numCookies = tdb_num_cookies(_db);
         _numDims = tdb_num_fields(_db);
         read_dim_names();
-
-        // store index of log line type dim.
-        for(int i = 0; i < _dimNames.length; ++i)
-            if(_dimNames[i] == "type")
-            {
-                _eventTypeInd = i;
-                break;
-            }
     }
 
     void close()
@@ -58,6 +97,39 @@ class TrailDB {
     @property string[] dimNames(){ return _dimNames; }
     @property bool hasCookieIndex() { return tdb_has_cookie_index(_db) == 1; }
 
+    /* Returns trail of events (a D Range)*/
+    Trail trail(uint cookie_index)
+    {
+        uint trail_size = tdb_decode_trail(_db, cookie_index, _buff.ptr, BUFFER_SIZE, 0);
+        Trail trl = Trail(_db, _numDims, _buff[0..trail_size]);
+        return trl;
+    }
+
+
+    // C API -- Faster perhaps?
+    uint load_cookie(uint cookie_index)
+    {
+        uint trail_size = tdb_decode_trail(_db, cookie_index, _buff.ptr, BUFFER_SIZE, 0);
+        uint _num_events = trail_size / (_numDims + 1);
+        return _num_events;
+    }
+
+    char[] get_at(uint event_idx, uint field_idx)
+    {
+        uint absolute_idx = event_idx * (_numDims + 1) + field_idx;
+        if(field_idx == 0) // Timestamp
+        {
+            return to!(char[])(_buff[absolute_idx]);
+        }
+        else
+        {
+            return to!(char[])(tdb_get_item_value(_db, _buff[absolute_idx]));
+        }
+    }
+    // End C API
+
+
+
     /* Returns the 16 bytes cookie ID at a given position in the DB. */
     void getCookieByInd(uint ind, ref ubyte[16] res)
     {
@@ -68,13 +140,13 @@ class TrailDB {
     /* Returns the HEX string representing the cookie at a given index
        in the DB.
     */
-    char[] getHEXCookieByInd(uint ind)
+    char[32] getHEXCookieByInd(uint ind)
     {
         ubyte[16] cookie;
         this.getCookieByInd(ind, cookie);
-        char[] cookiestr;
-        foreach(u; cookie)
-            cookiestr ~= format("%.2x",u);
+
+        char[32] cookiestr;
+        tdb_cookie_hex(cast(ubyte*)(&cookie), cast(char*)(&cookiestr));
         return cookiestr;
     }
 
@@ -90,68 +162,12 @@ class TrailDB {
         return val;
     }
 
-
-    char[] get_trail_per_index(uint index)
-    {
-        uint num_events = _rawDecode(index);
-
-        ulong size = 0;
-        for(uint e = 0; e < num_events; ++e)
-        {
-            auto ts_str = to!(char[])(_buff[e * (_numDims + 2)]); //timestamp
-            res[size..size + ts_str.length] = ts_str;
-            res[size + ts_str.length] = DIM_DELIMITER;
-            size += ts_str.length + 1;
-            for(uint j = 0; j < _numDims; ++j)
-            {
-                char[] val = decode_val(_buff[e * (_numDims + 2) + j + 1]);
-                res[size..size + val.length] = val;
-                res[size + val.length] = DIM_DELIMITER;
-                size += val.length + 1;
-            }
-            res[size - 1] = EVENT_DELIMITER;
-        }
-        return res[0..size-1];
-    }
-
     // returns the number of events
     uint _rawDecode(uint index)
     {
         uint len = tdb_decode_trail(_db, index, _buff.ptr, BUFFER_SIZE, 0);
-        if((len % (_numDims + 2)) != 0)
-            return 0;
-        //assert((len % (_numDims + 2)) == 0); <- some cookies fail this test
-        //potential bug in traildb. investigate.
-        return len / (_numDims + 2);
-    }
-
-    DateTime[] get_trail_timestamps(uint index)
-    {
-        uint num_events = _rawDecode(index);
-        DateTime[] res = new DateTime[num_events];
-        for(int i = 0; i < num_events; ++i)
-            res[i] = unix_ts_to_datetime(_buff[i * (_numDims + 2)]);
-        return res;
-    }
-
-    uint num_events(uint index, string type = "")
-    {
-        if(type == "")
-            return _rawDecode(index);
-
-        uint tot_events = _rawDecode(index);
-
-        uint evt_type_encoded = tdb_get_item(_db, _eventTypeInd, toStringz(type));
-
-        uint cnt = 0;
-        for(int i = 0; i < tot_events; ++i)
-        {
-            uint val = _buff[i * (_numDims + 2) + _eventTypeInd + 1];
-            if(val == evt_type_encoded)
-                ++cnt;
-        }
-
-        return cnt;
+        assert((len % (_numDims + 1)) == 0);
+        return len / (_numDims + 1);
     }
 
     char[] decode_val(uint val)
@@ -162,6 +178,7 @@ class TrailDB {
 
     void read_dim_names()
     {
+        _dimNames ~= "timestamp";
         auto f = File(buildPath(_db_path, "fields"), "r");
         foreach(line; f.byLine())
         {
