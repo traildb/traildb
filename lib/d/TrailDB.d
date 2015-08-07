@@ -5,8 +5,9 @@ import std.datetime;
 import std.path : buildPath;
 import std.stdio;
 import std.string : format, toStringz;
+import std.typecons;
 
-import traildb;
+import traildbc;
 
 
 immutable static BUFFER_SIZE = 1 << 18;
@@ -77,6 +78,11 @@ class TrailDB { // Make this a struct?
     string[] _dimNames;
 
     uint[BUFFER_SIZE] _buff; // Raw buffer of trail
+
+    this() // Useful to make mock subclasses
+    {
+
+    }
 
     this(string db_path)
     {
@@ -185,5 +191,40 @@ class TrailDB { // Make this a struct?
             _dimNames ~= to!string(line);
         }
         assert(_dimNames.length == _numDims);
+    }
+}
+
+///// Mock ///////////////
+
+alias MockTrail = char[][uint][uint]; // event_idx, field_idx -> char[]
+
+alias MockTrailCookie = Tuple!(MockTrail, "trail", char[32], "cookie");
+
+class MockTrailDB : TrailDB
+{
+    uint curr_cookie_index;
+    MockTrailCookie[] trails;
+
+    this(MockTrailCookie[] trails_)
+    {
+        trails = trails_;
+        _numCookies = to!(uint)(trails.length);
+    }
+
+    override uint load_cookie(uint cookie_index)
+    {
+        curr_cookie_index = cookie_index;
+        return to!uint(trails[cookie_index].trail.length);
+    }
+
+    override char[] get_at(uint event_idx, uint field_idx)
+    {
+        MockTrail trail = trails[curr_cookie_index].trail;
+        return trail[event_idx][field_idx];
+    }
+
+    override char[32] getHEXCookieByInd(uint ind)
+    {
+        return trails[curr_cookie_index].cookie;
     }
 }
