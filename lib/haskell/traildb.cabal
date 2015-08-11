@@ -12,6 +12,7 @@ library
   exposed-modules:     System.TrailDB
   build-depends:       base >=4.6 && <5.0
                       ,bytestring
+                      ,lens
                       ,text
                       ,time
                       ,transformers

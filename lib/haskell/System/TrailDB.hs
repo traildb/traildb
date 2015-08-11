@@ -52,8 +52,17 @@ module System.TrailDB
   , FieldName
   , FieldNameLike(..)
   , Feature()
+  , Crumb
+  , Trail
   , TdbCons()
   , Tdb()
+  -- * Folds, traversals
+  , feature
+  , timestamp
+  -- * Utilities
+  , findFromTrail
+  , findFromTrail_
+  , findFromCrumb
   -- ** Time
   , UnixTime
   , getUnixTime
@@ -66,6 +75,7 @@ module System.TrailDB
 import Control.Applicative
 import Control.Concurrent
 import Control.Exception
+import Control.Lens
 import Control.Monad
 import Control.Monad.IO.Class
 import qualified Data.ByteString as B
@@ -173,6 +183,9 @@ type CookieID = Word64
 
 type FieldID = Word8
 type Value = Word32
+
+type Trail = [Crumb]
+type Crumb = (UnixTime, [Feature])
 
 -- | Exceptions that may happen with trailDBs.
 --
@@ -388,7 +401,7 @@ closeTrailDB (Tdb mvar) = liftIO $ mask_ $ modifyMVar_ mvar $ \case
 decodeTrailDB :: MonadIO m
               => Tdb
               -> CookieID
-              -> m [(UnixTime, [Feature])]
+              -> m Trail
 decodeTrailDB tdb@(Tdb mvar) cid = liftIO $ join $ modifyMVar mvar $ \case
   Nothing -> error "decodeTrailDB: tdb is closed."
   old_st@(Just st) -> do
@@ -504,4 +517,58 @@ getItemByField :: MonadIO m => Tdb -> FieldName -> B.ByteString -> m Feature
 getItemByField tdb fid bs = liftIO $ do
   fid <- getFieldID tdb fid
   getItem tdb fid bs
+
+-- | Finds a specific feature from a crumb.
+findFromCrumb :: (Feature -> Bool)
+              -> Crumb
+              -> Maybe Feature
+findFromCrumb fun (_, features) = loop_it features
+ where
+  loop_it [] = Nothing
+  loop_it (f:rest) =
+    if fun f
+      then Just f
+      else loop_it rest
+{-# INLINE findFromCrumb #-}
+
+-- | Finds a specific feature from a trail.
+findFromTrail :: (Feature -> Bool)
+              -> Trail
+              -> Maybe (Crumb, Feature)
+findFromTrail fun trail = loop_it trail
+ where
+  loop_it [] = Nothing
+  loop_it (crumb:rest) =
+    case findFromCrumb fun crumb of
+      Nothing -> loop_it rest
+      Just feature -> Just (crumb, feature)
+{-# INLINE findFromTrail #-}
+
+-- | Same as `findFromTrail` but does not return `Crumb` with the feature.
+findFromTrail_ :: (Feature -> Bool)
+               -> Trail
+               -> Maybe Feature
+findFromTrail_ fun trail = case findFromTrail fun trail of
+  Nothing -> Nothing
+  Just (_, feature) -> Just feature
+{-# INLINE findFromTrail_ #-}
+
+-- | Traversal to features in a trail.
+feature :: Traversal' Trail Feature
+feature _ [] = pure []
+feature fun (crumb:rest) =
+  (:) <$> loop_it crumb <*> feature fun rest
+ where
+  loop_it (tm, item) =
+    (,) <$> pure tm <*> traverse fun item
+{-# INLINE feature #-}
+
+-- | Traversal to timestamps in a trail
+timestamp :: Traversal' Trail UnixTime
+timestamp _ [] = pure []
+timestamp fun (crumb:rest) =
+  (:) <$> loop_it crumb <*> timestamp fun rest
+ where
+  loop_it (tm, item) = (,) <$> fun tm <*> pure item
+{-# INLINE timestamp #-}
 
