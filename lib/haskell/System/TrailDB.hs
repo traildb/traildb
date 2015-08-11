@@ -44,6 +44,7 @@ module System.TrailDB
   -- ** Fields
   , getFieldName
   , getFieldID
+  , getValue
   -- * Data types
   , Cookie
   , FieldName
@@ -151,6 +152,10 @@ foreign import ccall unsafe tdb_get_field
   :: Ptr TdbRaw
   -> Ptr CChar
   -> IO CInt
+foreign import ccall unsafe tdb_get_item_value
+   :: Ptr TdbRaw
+   -> Word32
+   -> IO (Ptr CChar)
 
 -- | Cookies should be 16 bytes in size.
 type Cookie = B.ByteString
@@ -172,6 +177,7 @@ data TrailDBException
   | NoSuchCookie            -- ^ A `Cookie` was used that doesn't exist in `Tdb`.
   | NoSuchFieldID           -- ^ A `FieldID` was used that doesn't exist in `Tdb`.
   | NoSuchField             -- ^ A `Field` was used that doesn't exist in `Tdb`.
+  | NoSuchValue             -- ^ A `Feature` was used that doesn't contain a valid value.
   deriving ( Eq, Ord, Show, Read, Typeable, Data, Generic, Enum )
 
 instance Exception TrailDBException
@@ -473,5 +479,12 @@ getFieldID tdb field_name = withTdb tdb "getFieldID" $ \ptr ->
     result <- tdb_get_field ptr field_name_cstr
     when (result == -1) $ throwIO NoSuchField
     return $ fromIntegral result
+
+getValue :: MonadIO m => Tdb -> Feature -> m B.ByteString
+getValue tdb (Feature ft) = withTdb tdb "getValue" $ \ptr -> do
+  cstr <- tdb_get_item_value ptr ft
+  when (cstr == nullPtr) $ throwIO NoSuchValue
+  B.packCString cstr
+{-# INLINE getValue #-}
 
 
