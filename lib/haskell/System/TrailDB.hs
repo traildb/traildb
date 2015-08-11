@@ -44,6 +44,7 @@ module System.TrailDB
   -- ** Fields
   , getFieldName
   , getFieldID
+  , getItemByField
   , getValue
   , getItem
   -- * Data types
@@ -498,4 +499,9 @@ getItem tdb fid bs = withTdb tdb "getItem" $ \ptr -> do
   B.useAsCString bs $ \cstr -> do
     ft <- tdb_get_item ptr fid cstr
     return $ Feature ft
+
+getItemByField :: MonadIO m => Tdb -> FieldName -> B.ByteString -> m Feature
+getItemByField tdb fid bs = liftIO $ do
+  fid <- getFieldID tdb fid
+  getItem tdb fid bs
 
