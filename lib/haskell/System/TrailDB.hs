@@ -391,7 +391,6 @@ decodeTrailDB tdb@(Tdb mvar) cid = liftIO $ join $ modifyMVar mvar $ \case
  where
   grow st = do
     let new_size = decodeBufferSize st * 2
-    print new_size
     ptr <- mallocForeignPtrArray $ fromIntegral new_size
     return (Just st { decodeBufferSize = new_size
                     , decodeBuffer = ptr }
