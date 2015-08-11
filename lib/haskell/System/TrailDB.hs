@@ -79,7 +79,6 @@ import Foreign.C.String
 import Foreign.C.Types
 import Foreign.ForeignPtr
 import Foreign.Marshal.Alloc
-import Foreign.Marshal.Array
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
@@ -382,7 +381,6 @@ decodeTrailDB tdb@(Tdb mvar) cid = liftIO $ join $ modifyMVar mvar $ \case
   old_st@(Just st) -> do
     let ptr = tdbPtr st
     withForeignPtr (decodeBuffer st) $ \decode_buffer -> do
-      fillBytes decode_buffer 0 (fromIntegral $ decodeBufferSize st * 4)
       result <- tdb_decode_trail ptr cid decode_buffer (fromIntegral $ decodeBufferSize st) 0
       when (result == 0) $
         throwIO NoSuchCookieID
