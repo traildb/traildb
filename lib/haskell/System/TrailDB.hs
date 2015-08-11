@@ -6,6 +6,7 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 
 -- ¦ Haskell bindings to trailDB library.
@@ -375,18 +376,19 @@ closeTrailDB (Tdb mvar) = liftIO $ mask_ $ modifyMVar_ mvar $ \case
 decodeTrailDB :: MonadIO m
               => Tdb
               -> CookieID
-              -> m [Feature]
+              -> m [(UnixTime, [Feature])]
 decodeTrailDB tdb@(Tdb mvar) cid = liftIO $ join $ modifyMVar mvar $ \case
   Nothing -> error "decodeTrailDB: tdb is closed."
   old_st@(Just st) -> do
     let ptr = tdbPtr st
     withForeignPtr (decodeBuffer st) $ \decode_buffer -> do
+      fillBytes decode_buffer 0 (fromIntegral $ decodeBufferSize st * 4)
       result <- tdb_decode_trail ptr cid decode_buffer (fromIntegral $ decodeBufferSize st) 0
       when (result == 0) $
         throwIO NoSuchCookieID
       if result == decodeBufferSize st
         then grow st
-        else do results <- fmap Feature <$> peekArray (fromIntegral result) decode_buffer
+        else do results <- process decode_buffer 0 $ fromIntegral result
                 return (old_st, return results)
  where
   grow st = do
@@ -395,7 +397,25 @@ decodeTrailDB tdb@(Tdb mvar) cid = liftIO $ join $ modifyMVar mvar $ \case
     return (Just st { decodeBufferSize = new_size
                     , decodeBuffer = ptr }
            ,decodeTrailDB tdb cid)
+
+  process !_ n l | n >= l = return []
+  process ptr n l = do
+    time_stamp <- peekElemOff ptr n
+    (item, new_n) <- process2 ptr (n+1) l
+    ((time_stamp, item):) <$> process ptr new_n l
+
+  process2 !_ n l | n >= l = return ([], n)
+  process2 ptr n l = do
+    feature <- peekElemOff ptr n
+    if feature == 0
+      then return ([], n+1)
+      else do (lst, new_n) <- process2 ptr (n+1) l
+              return $ (Feature feature:lst, new_n)
+    
 {-# INLINE decodeTrailDB #-}
+
+        --results <- fmap Feature <$> peekArray (fromIntegral result) decode_buffer
+        --        return (old_st, return results)
 
 withTdb :: MonadIO m => Tdb -> String -> (Ptr TdbRaw -> IO a) -> m a
 withTdb (Tdb mvar) errstring action = liftIO $ withMVar mvar $ \case
