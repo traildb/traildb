@@ -2,6 +2,8 @@
 *.dSYM
 *.o
 *.so
+lib/haskell/.stack-work
+lib/haskell/dist
 lib/python/build
 bin/encode
 bin/extractd
