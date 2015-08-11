@@ -45,6 +45,7 @@ module System.TrailDB
   , getFieldName
   , getFieldID
   , getValue
+  , getItem
   -- * Data types
   , Cookie
   , FieldName
@@ -156,6 +157,11 @@ foreign import ccall unsafe tdb_get_item_value
    :: Ptr TdbRaw
    -> Word32
    -> IO (Ptr CChar)
+foreign import ccall unsafe tdb_get_item
+   :: Ptr TdbRaw
+   -> Word8
+   -> Ptr CChar
+   -> IO Word32
 
 -- | Cookies should be 16 bytes in size.
 type Cookie = B.ByteString
@@ -487,4 +493,9 @@ getValue tdb (Feature ft) = withTdb tdb "getValue" $ \ptr -> do
   B.packCString cstr
 {-# INLINE getValue #-}
 
+getItem :: MonadIO m => Tdb -> FieldID -> B.ByteString -> m Feature
+getItem tdb fid bs = withTdb tdb "getItem" $ \ptr -> do
+  B.useAsCString bs $ \cstr -> do
+    ft <- tdb_get_item ptr fid cstr
+    return $ Feature ft
 
