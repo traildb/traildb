@@ -17,3 +17,6 @@ extern(C):
     uint tdb_decode_trail(void*, uint, uint*, uint, int);
 
     int tdb_cookie_hex( ubyte*, char*);
+
+    uint tdb_min_timestamp(void*);
+    uint tdb_max_timestamp(void*);
