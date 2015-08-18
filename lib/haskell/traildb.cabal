@@ -13,6 +13,7 @@ library
   build-depends:       base >=4.6 && <5.0
                       ,bytestring
                       ,lens
+                      ,exceptions
                       ,text
                       ,time
                       ,transformers

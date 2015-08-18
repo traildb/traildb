@@ -74,9 +74,9 @@ module System.TrailDB
 
 import Control.Applicative
 import Control.Concurrent
-import Control.Exception
 import Control.Lens
 import Control.Monad
+import Control.Monad.Catch
 import Control.Monad.IO.Class
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
@@ -265,7 +265,7 @@ newTrailDBCons filepath fields' = liftIO $ mask_ $
       tdb_cons <- tdb_cons_new root ofield_names (fromIntegral $ length fields)
 
       when (tdb_cons == nullPtr) $
-        throwIO CannotOpenTrailDBCons
+        throwM CannotOpenTrailDBCons
 
       -- MVar will protect the handle from being used in multiple threads
       -- simultaneously.
@@ -364,7 +364,7 @@ openTrailDB root = liftIO $ mask_ $
   withCString root $ \root_str -> do
     tdb <- tdb_open root_str
     when (tdb == nullPtr) $
-      throwIO CannotOpenTrailDB
+      throwM CannotOpenTrailDB
 
     buf <- mallocForeignPtrArray 1
 
@@ -409,7 +409,7 @@ decodeTrailDB tdb@(Tdb mvar) cid = liftIO $ join $ modifyMVar mvar $ \case
     withForeignPtr (decodeBuffer st) $ \decode_buffer -> do
       result <- tdb_decode_trail ptr cid decode_buffer (fromIntegral $ decodeBufferSize st) 0
       when (result == 0) $
-        throwIO NoSuchCookieID
+        throwM NoSuchCookieID
       if result == decodeBufferSize st
         then grow st
         else do results <- process decode_buffer 0 $ fromIntegral result
@@ -452,7 +452,7 @@ getCookie :: MonadIO m => Tdb -> CookieID -> m Cookie
 getCookie tdb cid = withTdb tdb "getCookie" $ \ptr -> do
   cptr <- tdb_get_cookie ptr cid
   when (cptr == nullPtr) $
-    throwIO NoSuchCookieID
+    throwM NoSuchCookieID
   B.packCStringLen (castPtr cptr, 16)
 {-# INLINE getCookie #-}
 
@@ -463,7 +463,7 @@ getCookieID tdb cookie = withTdb tdb "getCookieID" $ \ptr ->
   B.unsafeUseAsCString cookie $ \cookie_str -> do
     result <- tdb_get_cookie_id ptr (castPtr cookie_str)
     if result == 0xffffffffffffffff
-      then throwIO NoSuchCookie
+      then throwM NoSuchCookie
       else return result
 {-# INLINE getCookieID #-}
 
@@ -490,20 +490,20 @@ getMaxTimestamp tdb = withTdb tdb "getMaxTimestamp" tdb_max_timestamp
 getFieldName :: MonadIO m => Tdb -> FieldID -> m FieldName
 getFieldName tdb fid = withTdb tdb "getFieldName" $ \ptr -> do
   result <- tdb_get_field_name ptr fid
-  when (result == nullPtr) $ throwIO NoSuchFieldID
+  when (result == nullPtr) $ throwM NoSuchFieldID
   B.packCString result
 
 getFieldID :: MonadIO m => Tdb -> FieldName -> m FieldID
 getFieldID tdb field_name = withTdb tdb "getFieldID" $ \ptr ->
   B.useAsCString field_name $ \field_name_cstr -> do
     result <- tdb_get_field ptr field_name_cstr
-    when (result == -1) $ throwIO NoSuchField
+    when (result == -1) $ throwM NoSuchField
     return $ fromIntegral result
 
 getValue :: MonadIO m => Tdb -> Feature -> m B.ByteString
 getValue tdb (Feature ft) = withTdb tdb "getValue" $ \ptr -> do
   cstr <- tdb_get_item_value ptr ft
-  when (cstr == nullPtr) $ throwIO NoSuchValue
+  when (cstr == nullPtr) $ throwM NoSuchValue
   B.packCString cstr
 {-# INLINE getValue #-}
 
