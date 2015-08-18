@@ -29,6 +29,13 @@ module System.TrailDB
   , closeTrailDB
   , dontneedTrailDB
   , decodeTrailDB
+  , withTrailDB
+  -- * Folding
+  , foldOverTrailDB
+  , foldOverTrailDB_
+  -- * Wizardry
+  , tdbFunction
+  , tdbFold
   -- ** Features
   , field
   , value
@@ -59,6 +66,7 @@ module System.TrailDB
   -- * Folds, traversals
   , feature
   , timestamp
+  , crumbs
   -- * Utilities
   , findFromTrail
   , findFromTrail_
@@ -96,6 +104,7 @@ import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
 import GHC.Generics
+import System.IO.Unsafe
 
 data TdbConsRaw
 data TdbRaw
@@ -333,6 +342,8 @@ closeTrailDBCons (TdbCons mvar) = liftIO $ mask_ $ modifyMVar_ mvar $ \case
   Nothing -> return Nothing
   Just ptr -> tdb_cons_free ptr >> return Nothing
 
+-- For debugging. Creates a traildb to \"tdb_test\" directory and
+-- adds dummy data.
 makeRandomTrailDB :: MonadIO m => m ()
 makeRandomTrailDB = do
   cons <- newTrailDBCons "tdb_test" ["hello" :: B.ByteString, "world"]
@@ -571,4 +582,83 @@ timestamp fun (crumb:rest) =
  where
   loop_it (tm, item) = (,) <$> fun tm <*> pure item
 {-# INLINE timestamp #-}
+
+-- | Convenience function that opens a TrailDB and folds over all trails.
+foldOverTrailDB :: MonadIO m
+                => FilePath
+                -> (Tdb -> m (Trail -> a -> m a))  -- ^ Create a folder.
+                -> a                               -- ^ Initial value.
+                -> m a
+foldOverTrailDB filepath fold_create accum = do
+  tdb <- openTrailDB filepath
+  num_cookies <- getNumCookies tdb
+  folder <- fold_create tdb
+  loop_it tdb folder 0 num_cookies accum
+ where
+  loop_it _ _ n num_cookies !accum | n >= num_cookies = return accum
+  loop_it tdb folder n num_cookies !accum = do
+    trail <- decodeTrailDB tdb n
+    new_accum <- folder trail accum
+    loop_it tdb folder (n+1) num_cookies new_accum
+{-# INLINE foldOverTrailDB #-}
+
+-- | Same as `foldOverTrailDB` but you don't get access to `Tdb` itself.
+foldOverTrailDB_ :: MonadIO m
+                 => FilePath
+                 -> (Trail -> a -> m a)
+                 -> a
+                 -> m a
+foldOverTrailDB_ filepath folder accum = do
+  tdb <- openTrailDB filepath
+  num_cookies <- getNumCookies tdb
+  loop_it tdb 0 num_cookies accum
+ where
+  loop_it _ n num_cookies !accum | n >= num_cookies = return accum
+  loop_it tdb n num_cookies !accum = do
+    trail <- decodeTrailDB tdb n
+    new_accum <- folder trail accum
+    loop_it tdb (n+1) num_cookies new_accum
+{-# INLINE foldOverTrailDB_ #-}
+
+-- | Dive into crumbs in trail.
+crumbs :: Traversal' Trail Crumb
+crumbs = each
+{-# INLINE crumbs #-}
+
+-- | Returns a pure function that returns trails from `Tdb`.
+--
+-- This function can be unsafe. If you close the `Tdb` and still use the
+-- returned function, the function will break referential transparency by
+-- throwing an exception. Same thing can happen if something happens to the
+-- `Tdb` in the Real World, modifying results.
+--
+-- However, the purity can be a major convenience if your `Tdb` is stable and
+-- you won't close it manually.
+tdbFunction :: Tdb -> (CookieID -> Maybe Trail)
+tdbFunction tdb cid = unsafePerformIO $ do
+  catch (Just <$> decodeTrailDB tdb cid)
+        (\NoSuchCookieID -> return Nothing)
+{-# INLINE tdbFunction #-}
+
+-- | Returns a pure `Fold` for `Tdb`. Same caveats as listed in `tdbFunction` apply.
+tdbFold :: Fold Tdb Trail
+tdbFold fun tdb = unsafePerformIO $ do
+  cookies <- getNumCookies tdb
+  if cookies == 0
+    then return $ pure tdb
+    else do first_trail <- unsafeInterleaveIO $ decodeTrailDB tdb 0
+            let first_result = fun first_trail
+            (first_result *>) <$> unsafeInterleaveIO (loop_it 1 cookies)
+ where
+  loop_it n cookies | n >= cookies = return (pure tdb)
+  loop_it n cookies = do
+    trail <- unsafeInterleaveIO $ decodeTrailDB tdb n
+    (fun trail *>) <$> unsafeInterleaveIO (loop_it (n+1) cookies)
+{-# INLINE tdbFold #-}
+
+-- | Opens a `Tdb` and then closes it after action is over.
+withTrailDB :: (MonadIO m, MonadMask m) => FilePath -> (Tdb -> m a) -> m a
+withTrailDB fpath action = mask $ \restore -> do
+  tdb <- openTrailDB fpath
+  finally (restore $ action tdb) (closeTrailDB tdb)
 
