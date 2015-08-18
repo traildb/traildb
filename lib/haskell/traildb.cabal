@@ -17,7 +17,7 @@ library
                       ,text
                       ,time
                       ,transformers
-  extra-libraries:     traildb
+  extra-libraries:     traildb, Judy, discodb, cmph
   ghc-options:         -Wall -fno-warn-name-shadowing
   default-language:    Haskell2010
 
