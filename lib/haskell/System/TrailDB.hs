@@ -641,19 +641,19 @@ tdbFunction tdb cid = unsafePerformIO $ do
 {-# INLINE tdbFunction #-}
 
 -- | Returns a pure `Fold` for `Tdb`. Same caveats as listed in `tdbFunction` apply.
-tdbFold :: Fold Tdb Trail
+tdbFold :: Fold Tdb (CookieID, Trail)
 tdbFold fun tdb = unsafePerformIO $ do
   cookies <- getNumCookies tdb
   if cookies == 0
     then return $ pure tdb
     else do first_trail <- unsafeInterleaveIO $ decodeTrailDB tdb 0
-            let first_result = fun first_trail
+            let first_result = fun (0, first_trail)
             (first_result *>) <$> unsafeInterleaveIO (loop_it 1 cookies)
  where
   loop_it n cookies | n >= cookies = return (pure tdb)
   loop_it n cookies = do
     trail <- unsafeInterleaveIO $ decodeTrailDB tdb n
-    (fun trail *>) <$> unsafeInterleaveIO (loop_it (n+1) cookies)
+    (fun (n, trail) *>) <$> unsafeInterleaveIO (loop_it (n+1) cookies)
 {-# INLINE tdbFold #-}
 
 -- | Opens a `Tdb` and then closes it after action is over.
