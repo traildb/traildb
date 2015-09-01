@@ -102,6 +102,8 @@ class TrailDB { // Make this a struct?
     @property uint numDimensions(){ return _numDims; }
     @property string[] dimNames(){ return _dimNames; }
     @property bool hasCookieIndex() { return tdb_has_cookie_index(_db) == 1; }
+    @property uint min_timestamp() { return tdb_min_timestamp(_db); }
+    @property uint max_timestamp() { return tdb_max_timestamp(_db); }
 
     /* Returns trail of events (a D Range)*/
     Trail trail(uint cookie_index)
@@ -111,6 +113,24 @@ class TrailDB { // Make this a struct?
         return trl;
     }
 
+    int opApply(int delegate(ref Trail) foreach_body)
+    {
+        int result = 0;
+        Trail t;
+
+        foreach(i; 0 .. numCookies)
+        {
+            t = trail(i);
+            result = foreach_body(t);
+
+            if(result)
+            {
+                break;
+            }
+        }
+
+        return result;
+    }
 
     // C API -- Faster perhaps?
     uint load_cookie(uint cookie_index)
