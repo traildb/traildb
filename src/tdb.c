@@ -320,6 +320,8 @@ int tdb_field_has_overflow_vals(tdb *db, tdb_field field)
 tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
 {
     const tdb_lexicon *lex;
+    if (!strlen(value))
+        return field;
     if (tdb_lexicon_read(db, field, &lex))
         return 0;
     if (*value){
