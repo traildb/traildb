@@ -268,6 +268,7 @@ void tdb_close(tdb *db)
         free(db->previous_items);
         free(db->field_names);
         free(db->field_stats);
+        free(db->filter);
         free(db);
     }
 }
@@ -426,6 +427,29 @@ uint32_t tdb_min_timestamp(const tdb *db)
 uint32_t tdb_max_timestamp(const tdb *db)
 {
     return db->max_timestamp;
+}
+
+int tdb_set_filter(tdb *db, const uint32_t *filter, uint32_t filter_len)
+{
+    free(db->filter);
+    if (filter){
+        if (!(db->filter = malloc(filter_len * 4))){
+            tdb_err(db, "Could not alloc new filter");
+            return -1;
+        }
+        memcpy(db->filter, filter, filter_len * 4);
+        db->filter_len = filter_len;
+    }else{
+        db->filter = NULL;
+        db->filter_len = 0;
+    }
+    return 0;
+}
+
+const uint32_t *tdb_get_filter(const tdb *db, uint32_t *filter_len)
+{
+    *filter_len = db->filter_len;
+    return db->filter;
 }
 
 static void *split_fn(const tdb *db,

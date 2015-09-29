@@ -77,6 +77,9 @@ struct _tdb {
     const char **field_names;
     struct field_stats *field_stats;
 
+    uint32_t *filter;
+    uint32_t filter_len;
+
     int error_code;
     char error[TDB_MAX_ERROR_SIZE];
 };

@@ -87,6 +87,9 @@ uint64_t tdb_get_cookie_id(const tdb *db, const uint8_t cookie[16]);
 
 int tdb_has_cookie_index(const tdb *db);
 
+int tdb_set_filter(tdb *db, const uint32_t *filter, uint32_t filter_len);
+const uint32_t *tdb_get_filter(const tdb *db, uint32_t *filter_len);
+
 const char *tdb_error(const tdb *db);
 
 uint64_t tdb_num_cookies(const tdb *db);
@@ -119,6 +122,14 @@ uint32_t tdb_decode_trail(const tdb *db,
                           uint32_t *dst,
                           uint32_t dst_size,
                           int edge_encoded);
+
+uint32_t tdb_decode_trail_filtered(const tdb *db,
+                                   uint64_t cookie_id,
+                                   uint32_t *dst,
+                                   uint32_t dst_size,
+                                   int edge_encoded,
+                                   const uint32_t *filter,
+                                   uint32_t filter_len);
 
 void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc);
 

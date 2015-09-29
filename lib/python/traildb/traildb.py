@@ -1,9 +1,10 @@
 import os
 
-from collections import namedtuple
+from collections import namedtuple, defaultdict
+from collections import Mapping
 from ctypes import c_char, c_char_p, c_ubyte, c_int, c_void_p
 from ctypes import c_uint, c_uint8, c_uint32, c_uint64
-from ctypes import CDLL, CFUNCTYPE, POINTER, string_at
+from ctypes import CDLL, CFUNCTYPE, POINTER, string_at, byref
 from datetime import datetime
 
 cd = os.path.dirname(os.path.abspath(__file__))
@@ -53,7 +54,14 @@ api(lib.tdb_max_timestamp, [tdb], c_uint32)
 
 api(lib.tdb_split, [tdb, c_uint, c_char_p, c_uint64], c_int)
 
+api(lib.tdb_set_filter, [tdb, POINTER(c_uint32), c_uint32], c_int)
+api(lib.tdb_get_filter, [tdb, POINTER(c_uint32)], POINTER(c_uint32))
+
 api(lib.tdb_decode_trail, [tdb, c_uint64, POINTER(c_uint32), c_uint32, c_int], c_uint32)
+api(lib.tdb_decode_trail_filtered,
+    [tdb, c_uint64, POINTER(c_uint32), c_uint32, POINTER(c_uint32), c_uint32, c_int],
+    c_uint32)
+
 api(lib.tdb_fold, [tdb, tdb_fold_fn, c_void_p], c_void_p)
 
 def hexcookie(cookie):
@@ -146,15 +154,30 @@ class TrailDB(object):
         for i in xrange(len(self)):
             yield self.cookie(i), self.trail(i, **kwds)
 
-    def trail(self, id, expand=True, ptime=False):
+    def trail(self, id, expand=True, ptime=False, filter_expr=None):
         db, cls = self._db, self._evcls
         buf, size = self._trail_buf, self._trail_buf_size
+        q = None
+
+        if id >= self.num_cookies:
+            raise IndexError("Cookie index out of range")
+
+        if filter_expr != None:
+            q = self._parse_filter(filter_expr)
 
         while True:
-            num = lib.tdb_decode_trail(db, id, buf, size, 0)
-            if num == 0:
-                raise IndexError("Cookie index out of range")
-            elif num == size:
+            if q:
+                num = lib.tdb_decode_trail_filtered(db,
+                                                    id,
+                                                    buf,
+                                                    size,
+                                                    0,
+                                                    q,
+                                                    len(q))
+            else:
+                num = lib.tdb_decode_trail(db, id, buf, size, 0)
+
+            if num == size:
                 buf, size = self._grow_buffer()
             else:
                 break
@@ -247,3 +270,77 @@ class TrailDB(object):
         if ret:
             raise TrailDBError("Could not split into %d parts" % num_parts)
         return [TrailDB(fmt % n) for n in xrange(num_parts)]
+
+    def _parse_filter(self, filter_expr):
+        # filter_expr syntax in CNF:
+        # CNF is a list of clauses. A clause is a dictionary, a mapping from
+        # fields to a list of allowed field values. A negative value can be
+        # expressed with a dictionary {'is_negative': True, 'value': value}.
+        #
+        # Example:
+        #
+        # [
+        #   {'network': ['Google', {'is_negative': True, 'value': 'Yahoo'}],
+        #    'browser': ['Chrome']},
+        #   {'is_valid': ['1']}
+        # ]
+        def item(value, field):
+            return lib.tdb_get_item(self._db, field, value)
+
+        def parse_clause(clause_expr):
+            clause = [0]
+            for field_str, values in clause_expr.iteritems():
+                field = self.field(field_str)
+                for value in values:
+                    if isinstance(value, Mapping):
+                        clause.append(1 if value['is_negative'] else 0)
+                        clause.append(item(value['value'], field))
+                    else:
+                        clause.extend((0, item(value, field)))
+            clause[0] = len(clause) - 1
+            return clause
+
+        q = []
+        for clause in filter_expr:
+            q.extend(parse_clause(clause))
+
+        return (c_uint32 * len(q))(*q)
+
+    def set_filter(self, filter_expr):
+        q = self._parse_filter(filter_expr)
+        print 'fu', list(q)
+        if lib.tdb_set_filter(self._db, q, len(q)):
+            raise TrailDBError("Setting filter failed (out of memory?)")
+
+    def get_filter(self):
+
+        def construct_clause(clause_arr):
+            clause = defaultdict(list)
+            for i in range(0, len(clause_arr), 2):
+                is_negative = clause_arr[i]
+                item = clause_arr[i + 1]
+                field = item & 255
+                field_str = self.fields[field]
+                val = item >> 8
+                value = lib.tdb_get_value(self._db, field, val)
+                if is_negative:
+                    clause[field_str].append({'is_negative': True,
+                                              'value': value})
+                else:
+                    clause[field_str].append(value)
+            return clause
+
+        filter_len = c_uint32(0)
+        filter_arr = lib.tdb_get_filter(self._db, byref(filter_len))
+        q = []
+        i = 0
+        while i < filter_len.value:
+            clause_len = filter_arr[i]
+            q.append(construct_clause(filter_arr[i + 1:i + 1 + clause_len]))
+            i += 1 + clause_len
+
+        return q
+
+
+
+
