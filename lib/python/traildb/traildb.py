@@ -308,7 +308,6 @@ class TrailDB(object):
 
     def set_filter(self, filter_expr):
         q = self._parse_filter(filter_expr)
-        print 'fu', list(q)
         if lib.tdb_set_filter(self._db, q, len(q)):
             raise TrailDBError("Setting filter failed (out of memory?)")
 

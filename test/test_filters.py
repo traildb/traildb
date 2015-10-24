@@ -113,7 +113,6 @@ class TestFilterDecode(unittest.TestCase):
                                 stats.update([event[f + 1]])
                     for f in q:
                         key = f.values()[0][0]
-                        print key, stats, q
                         self.assertEquals(stats[key], self.stats[key])
 
     def test_impossible_conjunction(self):
@@ -127,11 +126,30 @@ class TestFilterDecode(unittest.TestCase):
                     impossible = False
             self.assertTrue(impossible)
 
+    def test_conjunction_of_disjunctions(self):
+        for fields in combinations(self.fields, 2):
+            q = [{fields[0]: ['%s%d' % (fields[0], i) for i in range(2,5)]},
+                 {fields[1]: ['%s%d' % (fields[1], i) for i in range(2,5)]}]
+            self.tdb.set_filter(q)
+            stats = Counter()
+            for cookie, trail in self.tdb.crumbs():
+                for event in trail:
+                    for f, field in enumerate(fields):
+                        self.assertTrue(getattr(event, field) in q[f][field])
+                        stats.update([getattr(event, field)])
+            num = 0
+            for f in q:
+                for key in f.values()[0]:
+                    num += 1
+                    self.assertEquals(stats[key], self.stats[key])
+            self.assertTrue(num, len(stats))
+
     def tearDown(self):
         shutil.rmtree('test.tdb', True)
 
 
-#class TestFilterEdgeEncoded(unittest.TestCase):
+class TestFilterEdgeEncoded(unittest.TestCase):
+    pass
 
 if __name__ == '__main__':
     unittest.main()

@@ -10,21 +10,18 @@ static int event_satisfies_filter(const uint32_t *event,
                                   uint32_t filter_len)
 {
     uint32_t i = 0;
-    printf("f:");
     while (i < filter_len){
         uint32_t clause_len = filter[i++];
         uint32_t next_clause = i + clause_len;
         int match = 0;
-        printf("\n%d %d\n", i, clause_len);
         if (next_clause > filter_len)
             return 0;
 
-        while (i < clause_len){
+        while (i < next_clause){
             uint32_t is_negative = filter[i++];
             uint32_t filter_item = filter[i++];
             uint32_t field = tdb_item_field(filter_item);
             if (field){
-                printf(" c[%d]", filter_item);
                 if ((event[field] == filter_item) != is_negative){
                     match = 1;
                     break;
@@ -32,10 +29,8 @@ static int event_satisfies_filter(const uint32_t *event,
             }
         }
         if (!match){
-            printf(" NUH\n");
             return 0;
         }
-        printf("next\n");
         i = next_clause;
     }
     return 1;
