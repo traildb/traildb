@@ -149,7 +149,63 @@ class TestFilterDecode(unittest.TestCase):
 
 
 class TestFilterEdgeEncoded(unittest.TestCase):
-    pass
+    fields = ['f1', 'f2']
+    data = [('a', 'x0'), ('a', 'x1'), ('a', 'x0'), ('a', 'x0'), ('a', 'x1'),
+            ('b', 'x0'), ('b', 'x1'), ('b', 'x0'), ('b', 'x0'), ('b', 'x1'), ('b', 'x1')]
+
+    def setUp(self):
+        cons = TrailDBConstructor('test.tdb', self.fields)
+        for i, event in enumerate(self.data):
+            cons.add('a' * 32, 123 + i, event)
+        self.tdb = cons.finalize()
+
+    def test_simple_filter(self):
+        q = [{'f2': ['x0']}]
+        stats = Counter()
+        res = self.tdb.trail(0, filter_expr=q, edge_encoded=True)
+        for _time, event in res:
+            stats.update(event.itervalues())
+        self.assertEquals(len(res), 6)
+        self.assertEquals(stats, {'x0': 4, 'a': 1, 'b': 1})
+
+    def test_disjunction(self):
+        q = [{'f2': ['x0', 'x1']}]
+        stats = Counter()
+        res = self.tdb.trail(0, filter_expr=q, edge_encoded=True)
+        for _time, event in res:
+            stats.update(event.itervalues())
+        self.assertEquals(len(res), len(self.data))
+        self.assertEquals(stats, {'a': 1, 'b': 1, 'x0': 4, 'x1': 4})
+
+    def test_negative(self):
+        q = [{'f1': [{'value': 'a', 'is_negative': True}]}]
+        stats = Counter()
+        res = self.tdb.trail(0, filter_expr=q, edge_encoded=True)
+        for _time, event in res:
+            stats.update(event.itervalues())
+        self.assertEquals(len(res), 6)
+        self.assertEquals(stats, {'b': 1, 'x0': 2, 'x1': 2})
+
+    def test_conjunction(self):
+        q = [{'f2': ['x1']}, {'f1': ['b']}]
+        stats = Counter()
+        res = self.tdb.trail(0, filter_expr=q, edge_encoded=True)
+        for _time, event in res:
+            stats.update(event.itervalues())
+        self.assertEquals(len(res), 3)
+        self.assertEquals(stats, {'b': 1, 'x1': 2})
+
+    def test_impossible_conjunction(self):
+        q = [{'f2': ['x0']}, {'f2': ['x1']}]
+        stats = Counter()
+        res = self.tdb.trail(0, filter_expr=q, edge_encoded=True)
+        for _time, event in res:
+            stats.update(event.itervalues())
+        self.assertEquals(len(res), 0)
+        self.assertEquals(stats, {})
+
+    def tearDown(self):
+        shutil.rmtree('test.tdb', True)
 
 if __name__ == '__main__':
     unittest.main()

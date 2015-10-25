@@ -65,6 +65,7 @@ uint32_t tdb_decode_trail_filtered(const tdb *db,
     uint32_t k, j, orig_i, i = 0;
     uint32_t tstamp = db->min_timestamp;
     uint64_t delta, prev_offs, offs, size, item;
+    int first_satisfying = 1;
     tdb_field field;
 
     if (cookie_id >= db->num_cookies)
@@ -131,11 +132,26 @@ uint32_t tdb_decode_trail_filtered(const tdb *db,
         if (!filter ||
             event_satisfies_filter(db->previous_items, filter, filter_len)){
             /* no filter or filter matches, finalize the event */
-            if (!edge_encoded){
+            if (!edge_encoded || first_satisfying){
                 /* dump all the fields of this event in the result, if edge
-                   encoding is not requested */
+                   encoding is not requested or this is the first event
+                   that satisfies the filter */
                 for (j = 1; j < db->num_fields && i < dst_size; j++)
                     dst[i++] = db->previous_items[j];
+
+                /*
+                consider a sequence of events like
+
+                (A, X), (A, Y), (B, X), (B, Y), (B, Y)
+
+                and a CNF filter "B & Y". Without 'first_satisfying'
+                special case, the query would return
+
+                Y instead of (B, Y)
+
+                when edge_encoded=1
+                */
+                first_satisfying = 0;
             }
             /* end the event with a zero */
             if (i < dst_size)
