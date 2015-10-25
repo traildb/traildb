@@ -59,7 +59,7 @@ api(lib.tdb_get_filter, [tdb, POINTER(c_uint32)], POINTER(c_uint32))
 
 api(lib.tdb_decode_trail, [tdb, c_uint64, POINTER(c_uint32), c_uint32, c_int], c_uint32)
 api(lib.tdb_decode_trail_filtered,
-    [tdb, c_uint64, POINTER(c_uint32), c_uint32, POINTER(c_uint32), c_uint32, c_int],
+    [tdb, c_uint64, POINTER(c_uint32), c_uint32, c_int, POINTER(c_uint32), c_uint32],
     c_uint32)
 
 api(lib.tdb_fold, [tdb, tdb_fold_fn, c_void_p], c_void_p)
@@ -154,13 +154,21 @@ class TrailDB(object):
         for i in xrange(len(self)):
             yield self.cookie(i), self.trail(i, **kwds)
 
-    def trail(self, id, expand=True, ptime=False, filter_expr=None):
+    def trail(self,
+              id,
+              expand=True,
+              ptime=False,
+              filter_expr=None,
+              edge_encoded=False):
+
         db, cls = self._db, self._evcls
         buf, size = self._trail_buf, self._trail_buf_size
         q = None
 
         if id >= self.num_cookies:
             raise IndexError("Cookie index out of range")
+
+        edge_flag = 1 if edge_encoded else 0
 
         if filter_expr != None:
             q = self._parse_filter(filter_expr)
@@ -171,11 +179,11 @@ class TrailDB(object):
                                                     id,
                                                     buf,
                                                     size,
-                                                    0,
+                                                    edge_flag,
                                                     q,
                                                     len(q))
             else:
-                num = lib.tdb_decode_trail(db, id, buf, size, 0)
+                num = lib.tdb_decode_trail(db, id, buf, size, edge_flag)
 
             if num == size:
                 buf, size = self._grow_buffer()
@@ -197,7 +205,20 @@ class TrailDB(object):
                     i += 1
                 i += 1
                 yield cls(tstamp, *values)
-        return list(gen())
+
+        def gen_edge(i=0):
+            while i < num:
+                tstamp = datetime.utcfromtimestamp(buf[i]) if ptime else buf[i]
+                values = {}
+                i += 1
+                while i < num and buf[i]:
+                    field = self.fields[buf[i] & 255]
+                    values[field] = value(buf[i] & 255, buf[i] >> 8)
+                    i += 1
+                i += 1
+                yield tstamp, values
+
+        return list(gen_edge() if edge_encoded else gen())
 
     def fold(self, fun, acc=None):
         db, cls, N = self._db, self._evcls, self.num_fields
