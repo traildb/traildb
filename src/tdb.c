@@ -234,6 +234,22 @@ err:
     return NULL;
 }
 
+void tdb_willneed(tdb *db)
+{
+    if (db){
+        tdb_field i;
+        for (i = 0; i < db->num_fields - 1; i++)
+            madvise((void*)db->lexicons[i].data,
+                    db->lexicons[i].size,
+                    MADV_WILLNEED);
+
+        madvise((void*)db->cookies.data, db->cookies.size, MADV_WILLNEED);
+        madvise((void*)db->codebook.data, db->codebook.size, MADV_WILLNEED);
+        madvise((void*)db->trails.data, db->trails.size, MADV_WILLNEED);
+        madvise((void*)db->toc.data, db->toc.size, MADV_WILLNEED);
+    }
+}
+
 void tdb_dontneed(tdb *db)
 {
     if (db){
