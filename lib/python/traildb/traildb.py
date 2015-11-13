@@ -294,37 +294,42 @@ class TrailDB(object):
 
     def _parse_filter(self, filter_expr):
         # filter_expr syntax in CNF:
-        # CNF is a list of clauses. A clause is a dictionary, a mapping from
-        # fields to a list of allowed field values. A negative value can be
-        # expressed with a dictionary {'is_negative': True, 'value': value}.
+        # CNF is a list of clauses. A clause is a list of terms. Each term
+        # is an expression of the form FIELD OP VALUE, where FIELD is a field
+        # name, VALUE is field value and OP is either 'equal' or 'notequal'.
+        # Term is represented as dictionary {'field': F, 'value' : V, 'op' : O}
+        # If op is omitted, it defaults to 'equal'
         #
         # Example:
         #
         # [
-        #   {'network': ['Google', {'is_negative': True, 'value': 'Yahoo'}],
-        #    'browser': ['Chrome']},
-        #   {'is_valid': ['1']}
+        #   [{'field' : 'network', 'value' : 'Google', 'op' : 'notequal'},
+        #    {'field' : 'network', 'value' : 'Yahoo', 'op' : 'equal'},
+        #    {'field' : 'browser', 'value' : 'Chrome'}],
+        #   ['field' : 'is_valud', 'value' : '1'}
         # ]
         def item(value, field):
             return lib.tdb_get_item(self._db, field, value)
 
         def parse_clause(clause_expr):
             clause = [0]
-            for field_str, values in clause_expr.iteritems():
-                field = self.field(field_str)
-                for value in values:
-                    if isinstance(value, Mapping):
-                        clause.append(1 if value['is_negative'] else 0)
-                        clause.append(item(value['value'], field))
-                    else:
-                        clause.extend((0, item(value, field)))
+            for term in clause_expr:
+                op = term.get('op', 'equal')
+                if op not in ('equal', 'notequal'):
+                    raise ValueError('Invalid op: ' + op)
+                try:
+                    field = self.field(term['field'])
+                    clause.extend((0 if op == 'equal' else 1,
+                                   item(term['value'], field)))
+                except ValueError:
+                    always_true = (term['value'] == '') == (op == 'equal')
+                    clause.extend((1 if always_true else 0, 0))
             clause[0] = len(clause) - 1
             return clause
 
         q = []
         for clause in filter_expr:
             q.extend(parse_clause(clause))
-
         return (c_uint32 * len(q))(*q)
 
     def set_filter(self, filter_expr):
@@ -335,19 +340,18 @@ class TrailDB(object):
     def get_filter(self):
 
         def construct_clause(clause_arr):
-            clause = defaultdict(list)
+            clause = []
             for i in range(0, len(clause_arr), 2):
                 is_negative = clause_arr[i]
                 item = clause_arr[i + 1]
-                field = item & 255
-                field_str = self.fields[field]
-                val = item >> 8
-                value = lib.tdb_get_value(self._db, field, val)
-                if is_negative:
-                    clause[field_str].append({'is_negative': True,
-                                              'value': value})
+                if item == 0:
+                    clause.append(is_negative == 1)
                 else:
-                    clause[field_str].append(value)
+                    field = item & 255
+                    field_str = self.fields[field]
+                    val = item >> 8
+                    value = lib.tdb_get_value(self._db, field, val)
+                    clause.append({'op': 'notequal' if is_negative else 'equal', 'field' : field_str, 'value': value})
             return clause
 
         filter_len = c_uint32(0)

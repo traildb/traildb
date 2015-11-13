@@ -1,7 +1,6 @@
 from itertools import combinations, chain
 from collections import Counter
 import unittest
-import string
 import hashlib
 import shutil
 
@@ -23,17 +22,23 @@ class TestFilterSetter(unittest.TestCase):
         self.assertEquals(self.tdb.get_filter(), [])
 
     def test_simple_filter(self):
-        q = [{'a': ['a1']}]
+        q = [[{'field' : 'a', 'value' : 'a1', 'op' : 'equal'}]]
         self.tdb.set_filter(q)
-        print self.assertEquals(self.tdb.get_filter(), q)
+        self.assertEquals(self.tdb.get_filter(), q)
+
+    def test_simple_filter_missing_field(self):
+        q = [[{'field' : 'z', 'value' : 'a1', 'op' : 'equal'}]]
+        self.tdb.set_filter(q)
+        self.assertEquals(self.tdb.get_filter(), [[False]])
 
     def test_many_filters(self):
         for c in range(1, len(self.fields) + 1):
             for fields in combinations(self.fields, c):
-                q = [{f: ['%s%d' % (f, i) for i in range(10)]}
+                q = [[{'value': '%s%d' % (f, i) , 'field' : f, 'op' : 'equal'} for i in range(10)]
                      for f in fields]
-                q += [{f: [{'is_negative': True, 'value': '%s%d' % (f, i)}
-                           for i in range(10)]}
+
+                q += [[{'op': 'notequal', 'field' : f, 'value': '%s%d' % (f, i)}
+                           for i in range(10)]
                       for f in fields]
                 self.tdb.set_filter(q)
                 self.assertEquals(self.tdb.get_filter(), q)
@@ -60,7 +65,7 @@ class TestFilterDecode(unittest.TestCase):
         for field_id, field in enumerate(self.fields):
             for i in range(10):
                 key = '%s%d' % (field, i)
-                self.tdb.set_filter([{field: [key]}])
+                self.tdb.set_filter([[{'field' : field, 'value' : key}]])
                 found = 0
                 for cookie, trail in self.tdb.crumbs():
                     for event in trail:
@@ -72,8 +77,9 @@ class TestFilterDecode(unittest.TestCase):
         for field_id, field in enumerate(self.fields):
             for i in range(10):
                 key = '%s%d' % (field, i)
-                self.tdb.set_filter([{field: [{'is_negative': True,
-                                               'value': key}]}])
+                self.tdb.set_filter([[{'field' : field,
+                                       'op': 'notequal',
+                                       'value': key}]])
 
                 stats = Counter()
                 for cookie, trail in self.tdb.crumbs():
@@ -85,11 +91,59 @@ class TestFilterDecode(unittest.TestCase):
                            if f != key and f[0] == key[0]}
                 self.assertEquals(stats, correct)
 
+    def test_missing_field(self):
+
+        num_items_nf = sum([len(trail) for cookie, trail in self.tdb.crumbs()])
+        self.assertTrue(num_items_nf > 0)
+
+        q = [
+                [{'field' : 'z', 'value' : 'test'}]
+            ]
+        self.tdb.set_filter(q)
+        num_items = sum([len(trail) for cookie, trail in self.tdb.crumbs()])
+        self.assertEquals(num_items, 0)
+
+        q = [
+                [{'field' : 'z', 'value' : ''}]
+            ]
+        self.tdb.set_filter(q)
+        num_items = sum([len(trail) for cookie, trail in self.tdb.crumbs()])
+        self.assertEquals(num_items, num_items_nf)
+
+        q = [
+                [{'field' : 'z', 'value' : '', 'op' : 'notequal'}]
+            ]
+        self.tdb.set_filter(q)
+        num_items = sum([len(trail) for cookie, trail in self.tdb.crumbs()])
+        self.assertEquals(num_items, 0)
+
+    def test_missing_field_conjunction(self):
+        for i in range(9):
+            q = [[{'field' : 'a', 'value' : 'a%d' % i}]]
+            self.tdb.set_filter(q)
+            num_items_nf = sum([len(trail) for cookie, trail in self.tdb.crumbs()])
+            self.assertTrue(num_items_nf > 0)
+            self.tdb.set_filter(q + [[{'field' : 'z', 'value' : 'test'}]])
+            num_items = sum([len(trail) for cookie, trail in self.tdb.crumbs()])
+            self.assertEquals(num_items, 0)
+            self.tdb.set_filter(q + [[{'field' : 'z', 'value' : ''}]])
+            num_items = sum([len(trail) for cookie, trail in self.tdb.crumbs()])
+            self.assertEquals(num_items, num_items_nf)
+            self.tdb.set_filter(q + [[{'field' : 'z', 'value' : '', 'op' : 'notequal'}]])
+            num_items = sum([len(trail) for cookie, trail in self.tdb.crumbs()])
+            self.assertEquals(num_items, 0)
+            self.tdb.set_filter(q + [[{'field' : 'z', 'value' : 'test', 'op' : 'notequal'}]])
+            num_items = sum([len(trail) for cookie, trail in self.tdb.crumbs()])
+            self.assertEquals(num_items, num_items_nf)
+
     def test_disjunction(self):
         for i in range(9):
             q = {f: ['%s%d' % (f, i), '%s%d' % (f, i + 1)]
                  for f in self.fields}
-            self.tdb.set_filter([q])
+
+            fltr = [[{'field' : f, 'value' : v}
+                        for f in q for v in q[f]]]
+            self.tdb.set_filter(fltr)
             stats = Counter()
             for cookie, trail in self.tdb.crumbs():
                 for event in trail:
@@ -103,7 +157,8 @@ class TestFilterDecode(unittest.TestCase):
         for c in range(2, len(self.fields) + 1):
             for fields in combinations(self.fields, c):
                 for i in range(10):
-                    q = [{f: ['%s%d' % (f, i)]} for f in fields]
+                    q = [[{'field' : f, 'value' : '%s%d' % (f, i)}] for f in fields]
+
                     self.tdb.set_filter(q)
                     stats = Counter()
                     for cookie, trail in self.tdb.crumbs():
@@ -112,13 +167,14 @@ class TestFilterDecode(unittest.TestCase):
                                 self.assertTrue(event[f + 1], '%s%d' % (field, i))
                                 stats.update([event[f + 1]])
                     for f in q:
-                        key = f.values()[0][0]
+                        key = f[0]['value']
                         self.assertEquals(stats[key], self.stats[key])
 
     def test_impossible_conjunction(self):
         for i in range(9):
-            q = [{f: ['%s%d' % (f, i + j)]}
+            q = [[{'field' : f, 'value' : '%s%d' % (f, i + j)}]
                  for j, f in enumerate(self.fields)]
+
             self.tdb.set_filter(q)
             impossible = True
             for cookie, trail in self.tdb.crumbs():
@@ -130,7 +186,10 @@ class TestFilterDecode(unittest.TestCase):
         for fields in combinations(self.fields, 2):
             q = [{fields[0]: ['%s%d' % (fields[0], i) for i in range(2,5)]},
                  {fields[1]: ['%s%d' % (fields[1], i) for i in range(2,5)]}]
-            self.tdb.set_filter(q)
+
+            fltr = [[{'field' : f, 'value' : v} for v in c[f]]
+                        for c in q for f in c]
+            self.tdb.set_filter(fltr)
             stats = Counter()
             for cookie, trail in self.tdb.crumbs():
                 for event in trail:
@@ -160,7 +219,7 @@ class TestFilterEdgeEncoded(unittest.TestCase):
         self.tdb = cons.finalize()
 
     def test_simple_filter(self):
-        q = [{'f2': ['x0']}]
+        q = [[{'field' : 'f2', 'value' : 'x0'}]]
         stats = Counter()
         res = self.tdb.trail(0, filter_expr=q, edge_encoded=True)
         for _time, event in res:
@@ -169,7 +228,8 @@ class TestFilterEdgeEncoded(unittest.TestCase):
         self.assertEquals(stats, {'x0': 4, 'a': 1, 'b': 1})
 
     def test_disjunction(self):
-        q = [{'f2': ['x0', 'x1']}]
+        q = [[{'field' : 'f2', 'value' : 'x0'},
+              {'field' : 'f2', 'value' : 'x1'}]]
         stats = Counter()
         res = self.tdb.trail(0, filter_expr=q, edge_encoded=True)
         for _time, event in res:
@@ -178,7 +238,7 @@ class TestFilterEdgeEncoded(unittest.TestCase):
         self.assertEquals(stats, {'a': 1, 'b': 1, 'x0': 4, 'x1': 4})
 
     def test_negative(self):
-        q = [{'f1': [{'value': 'a', 'is_negative': True}]}]
+        q = [[{'field' : 'f1', 'value': 'a', 'op': 'notequal'}]]
         stats = Counter()
         res = self.tdb.trail(0, filter_expr=q, edge_encoded=True)
         for _time, event in res:
@@ -187,7 +247,8 @@ class TestFilterEdgeEncoded(unittest.TestCase):
         self.assertEquals(stats, {'b': 1, 'x0': 2, 'x1': 2})
 
     def test_conjunction(self):
-        q = [{'f2': ['x1']}, {'f1': ['b']}]
+        q = [[{'field' : 'f2', 'value' : 'x1' }],
+             [{'field' : 'f1', 'value' : 'b'}]]
         stats = Counter()
         res = self.tdb.trail(0, filter_expr=q, edge_encoded=True)
         for _time, event in res:
@@ -196,7 +257,8 @@ class TestFilterEdgeEncoded(unittest.TestCase):
         self.assertEquals(stats, {'b': 1, 'x1': 2})
 
     def test_impossible_conjunction(self):
-        q = [{'f2': ['x0']}, {'f2': ['x1']}]
+        q = [[{'field':'f2', 'value' :'x0'}],
+             [{'field':'f2', 'value' :'x1'}]]
         stats = Counter()
         res = self.tdb.trail(0, filter_expr=q, edge_encoded=True)
         for _time, event in res:
