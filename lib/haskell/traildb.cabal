@@ -20,12 +20,14 @@ library
                        System.TrailDB.Internal
   build-depends:       base >=4.6 && <5.0
                       ,bytestring
+                      ,directory
                       ,lens
                       ,exceptions
                       ,primitive
                       ,text
                       ,time
                       ,transformers
+                      ,unix
                       ,vector
   extra-libraries:     traildb, Judy, discodb, cmph
   ghc-options:         -Wall -fno-warn-name-shadowing -O2

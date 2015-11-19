@@ -147,7 +147,13 @@ module System.TrailDB
   , UnixTime
   , getUnixTime
   -- * Exceptions
-  , TrailDBException(..) )
+  , TrailDBException(..)
+  -- * Multiple TrailDBs
+  --
+  -- | Operations in this section are conveniences that may be useful if you
+  --   have many TrailDB directories you want to query.
+  , findTrailDBs
+  , filterTrailDBDirectories )
   where
 
 import Control.Concurrent
@@ -156,6 +162,7 @@ import Control.Monad
 import Control.Monad.Catch
 import Control.Monad.IO.Class
 import Control.Monad.Primitive
+import Control.Monad.Trans.State.Strict
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Lazy as BL
@@ -183,7 +190,10 @@ import Foreign.Ptr
 import Foreign.StablePtr
 import Foreign.Storable
 import GHC.Generics
+import System.Directory
+import System.IO.Error
 import System.IO.Unsafe
+import System.Posix.Files.ByteString
 
 import System.TrailDB.Internal
 
@@ -877,4 +887,50 @@ withTrailDB :: (MonadIO m, MonadMask m) => FilePath -> (Tdb -> m a) -> m a
 withTrailDB fpath action = mask $ \restore -> do
   tdb <- openTrailDB fpath
   finally (restore $ action tdb) (closeTrailDB tdb)
+{-# INLINE withTrailDB #-}
+
+-- | Given a directory, find all valid TrailDB paths inside it, recursively.
+findTrailDBs :: forall m. (MonadIO m, MonadMask m)
+             => FilePath
+             -> Bool            -- ^ Follow symbolic links?
+             -> m [FilePath]
+findTrailDBs filepath follow_symbolic_links = do
+  contents <- liftIO $ getDirectoryContents filepath
+  dirs <- execStateT (filterChildDirectories filepath contents) [filepath]
+  filterTrailDBDirectories dirs
+ where
+  filterChildDirectories :: FilePath -> [FilePath] -> StateT [FilePath] m ()
+  filterChildDirectories prefix (".":rest) = filterChildDirectories prefix rest
+  filterChildDirectories prefix ("..":rest) = filterChildDirectories prefix rest
+  filterChildDirectories prefix (dir_raw:rest) = do
+    let dir = prefix <> "/" <> dir_raw
+    is_dir <- liftIO $ doesDirectoryExist dir
+    is_symbolic_link_maybe <- liftIO $ tryIOError $ getFileStatus (T.encodeUtf8 $ T.pack dir)
+    case is_symbolic_link_maybe of
+      Left exc | isDoesNotExistError exc -> filterChildDirectories prefix rest
+      Left exc -> throwM exc
+      Right is_symbolic_link ->
+        if is_dir
+          then (if (isSymbolicLink is_symbolic_link && follow_symbolic_links) ||
+                   (not $ isSymbolicLink is_symbolic_link)
+                  then modify (dir:) >> recurse dir >> filterChildDirectories prefix rest
+                  else filterChildDirectories prefix rest)
+          else filterChildDirectories prefix rest
+  filterChildDirectories _ [] = return ()
+
+  recurse dir = do
+    contents <- liftIO $ getDirectoryContents dir
+    filterChildDirectories dir contents
+
+-- | Given a list of directories, filters it, returning only directories that
+-- are valid TrailDB directories.
+--
+-- Used internally by `findTrailDBs` but is useful in general so we export it.
+filterTrailDBDirectories :: (MonadIO m, MonadMask m) => [FilePath] -> m [FilePath]
+filterTrailDBDirectories = filterM $ \dir -> do
+  result <- try $ openTrailDB dir
+  case result of
+    Left CannotOpenTrailDB -> return False
+    Left exc -> throwM exc
+    Right ok -> closeTrailDB ok >> return True
 
