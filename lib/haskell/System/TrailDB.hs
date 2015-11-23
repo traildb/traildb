@@ -320,6 +320,7 @@ data TrailDBException
   | NoSuchFieldID           -- ^ A `FieldID` was used that doesn't exist in `Tdb`.
   | NoSuchField             -- ^ A `Field` was used that doesn't exist in `Tdb`.
   | NoSuchValue             -- ^ A `Feature` was used that doesn't contain a valid value.
+  | NoSuchFeature           -- ^ Attempted to find `Feature` for human readable name that doesn't exist.
   | FinalizationFailure     -- ^ For some reason, finalizing a `TdbCons` failed.
   deriving ( Eq, Ord, Show, Read, Typeable, Data, Generic, Enum )
 
@@ -701,7 +702,9 @@ getItem :: MonadIO m => Tdb -> FieldID -> B.ByteString -> m Feature
 getItem tdb fid bs = withTdb tdb "getItem" $ \ptr -> do
   B.useAsCString bs $ \cstr -> do
     ft <- tdb_get_item ptr (fid+1) cstr
-    return $ Feature ft
+    if ft == 0
+      then throwM NoSuchFeature
+      else return $ Feature ft
 
 -- | Same as `getItem` but uses a resolved field name rather than raw `FieldID`.
 --
