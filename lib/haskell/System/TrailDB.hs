@@ -81,6 +81,11 @@ module System.TrailDB
   , dontneedTrailDB
   , willneedTrailDB
   , withTrailDB
+  -- * Low-level
+  , withRawTdb
+  , getRawTdb
+  , touchTdb
+  , TdbRaw
   -- * Accessing TrailDBs
   -- | All the functions in this section get trails and crumbs from the TrailDB
   -- with their cookie IDs but they differ in the way you invoke them.
@@ -758,6 +763,35 @@ timestamp fun (crumb:rest) =
  where
   loop_it (tm, item) = (,) <$> fun tm <*> pure item
 {-# INLINE timestamp #-}
+
+-- | Returns the raw pointer to a TrailDB.
+--
+-- You can pass this pointer to C code and use the normal traildb functions to
+-- use it.
+--
+-- You become responsible for ensuring Haskell doesn't clean up and close the
+-- managed `Tdb` handle. You can use `touchTdb` to do that.
+getRawTdb :: MonadIO m => Tdb -> m (Ptr TdbRaw)
+getRawTdb (Tdb cvar) = liftIO $ withCVar cvar $ \case
+  Nothing -> error "getRawTdb: tdb is closed."
+  Just tdbstate -> return (tdbPtr tdbstate)
+
+-- | Touch a `Tdb`.
+--
+-- Ensures that `Tdb` has not been garbage collected at the point `touchTdb` is
+-- invoked. Has no other effect.
+touchTdb :: MonadIO m => Tdb -> m ()
+touchTdb (Tdb cvar) = liftIO $ void $ withCVar cvar $ \case
+  Nothing -> return ()
+  Just tdbstate -> touch (tdbPtr tdbstate)
+
+-- | Run an action with a raw pointer to `Tdb`.
+--
+-- The `Tdb` is guaranteed not to be garbage collected while the given action is running.
+withRawTdb :: MonadIO m => Tdb -> (Ptr TdbRaw -> IO a) -> m a
+withRawTdb tdb action = do
+  ptr <- getRawTdb tdb
+  liftIO $ finally (action ptr) (touchTdb tdb) 
 
 -- | Folds over an opened TrailDB.
 --
