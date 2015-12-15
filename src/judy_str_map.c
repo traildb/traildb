@@ -15,11 +15,54 @@ struct jsm_item{
     char value[0];
 } __attribute__((packed));
 
+static uint64_t jsm_get_small(const struct judy_str_map *jsm,
+                              const char *buf,
+                              uint64_t length)
+{
+    char key[8];
+    Word_t *ptr;
+
+    key[0] = length;
+    memcpy(&key[1], buf, length);
+
+    JLG(ptr, jsm->small_map, *(Word_t*)key);
+    if (ptr)
+        return *ptr;
+    else
+        return 0;
+}
+
+static uint64_t jsm_get_large(struct judy_str_map *jsm,
+                              const char *buf,
+                              uint64_t length,
+                              int num_retries)
+{
+
+    Word_t *ptr;
+    Word_t key;
+
+    XXH64_reset(&jsm->hash_state, num_retries + 1);
+    XXH64_update(&jsm->hash_state, buf, length);
+    key = XXH64_digest(&jsm->hash_state);
+
+    JLG(ptr, jsm->large_map, key);
+    if (ptr){
+        const struct jsm_item *item_ro =
+            (const struct jsm_item*)&jsm->buffer[*ptr - 1];
+
+        if (item_ro->length == length && !memcmp(item_ro->value, buf, length))
+            return item_ro->id;
+        else if (++num_retries < MAX_NUM_RETRIES)
+            return jsm_get_large(jsm, buf, length, num_retries);
+    }
+    return 0;
+}
+
 static uint64_t jsm_insert_small(struct judy_str_map *jsm,
                                  const char *buf,
                                  uint64_t length)
 {
-    char key[8];
+    char key[8] = {};
     Word_t *ptr;
 
     key[0] = length;
@@ -28,6 +71,7 @@ static uint64_t jsm_insert_small(struct judy_str_map *jsm,
     JLI(ptr, jsm->small_map, *(Word_t*)key);
     if (!*ptr)
         *ptr = ++jsm->num_keys;
+
     return *ptr;
 }
 
@@ -46,7 +90,7 @@ static uint64_t jsm_insert_large(struct judy_str_map *jsm,
     JLI(ptr, jsm->large_map, key);
     if (*ptr){
         const struct jsm_item *item_ro =
-            (const struct jsm_item*)&jsm->buffer[*ptr];
+            (const struct jsm_item*)&jsm->buffer[*ptr - 1];
 
         if (item_ro->length == length && !memcmp(item_ro->value, buf, length))
             return item_ro->id;
@@ -70,7 +114,7 @@ static uint64_t jsm_insert_large(struct judy_str_map *jsm,
                 return 0;
         }
 
-        *ptr = jsm->buffer_offset;
+        *ptr = jsm->buffer_offset + 1;
         item.id = ++jsm->num_keys;
         item.length = length;
         memcpy(&jsm->buffer[jsm->buffer_offset], &item, sizeof(item));
@@ -119,6 +163,18 @@ uint64_t jsm_insert(struct judy_str_map *jsm, const char *buf, uint64_t length)
         return jsm_insert_small(jsm, buf, length);
 }
 
+uint64_t jsm_get(struct judy_str_map *jsm,
+                 const char *buf,
+                 uint64_t length)
+{
+    if (length == 0)
+        return 0;
+    else if (length > 7)
+        return jsm_get_large(jsm, buf, length, 0);
+    else
+        return jsm_get_small(jsm, buf, length);
+}
+
 int jsm_init(struct judy_str_map *jsm)
 {
     memset(jsm, 0, sizeof(struct judy_str_map));
@@ -138,9 +194,19 @@ void jsm_free(struct judy_str_map *jsm)
     free(jsm->buffer);
 }
 
+uint64_t jsm_num_keys(const struct judy_str_map *jsm)
+{
+    return jsm->num_keys;
+}
+
 #if 0
 int main(int argc, char **argv)
 {
+    void *print_key(uint64_t id, const char *value, uint64_t len, void *state)
+    {
+        printf("%s", value);
+    }
+
     FILE *in = fopen(argv[1], "r");
     char *line = NULL;
     size_t len = 0;
@@ -149,8 +215,11 @@ int main(int argc, char **argv)
 
     jsm_init(&jsm);
 
-   while ((read = getline(&line, &len, in)) != -1) {
-        uint64_t x = jsm_insert(&jsm, line, read);
-   }
+    while ((read = getline(&line, &len, in)) != -1) {
+        uint64_t x = jsm_insert(&jsm, line, read + 1);
+    }
+
+    fprintf(stderr, "Found %"PRIu64" unique lines\n", jsm_num_keys(&jsm));
+    jsm_fold(&jsm, print_key, NULL);
 }
 #endif
