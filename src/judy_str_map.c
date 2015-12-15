@@ -7,6 +7,8 @@
 
 #include <judy_str_map.h>
 
+#define MAX_NUM_RETRIES 16
+
 struct jsm_item{
     uint64_t id;
     uint64_t length;
@@ -32,16 +34,16 @@ static uint64_t jsm_insert_small(struct judy_str_map *jsm,
 static uint64_t jsm_insert_large(struct judy_str_map *jsm,
                                  const char *buf,
                                  uint64_t length,
-                                 int cuckoo_iteration)
+                                 int num_retries)
 {
     Word_t *ptr;
     Word_t key;
 
-    XXH64_reset(&jsm->hash_state, cuckoo_iteration + 1);
+    XXH64_reset(&jsm->hash_state, num_retries + 1);
     XXH64_update(&jsm->hash_state, buf, length);
     key = XXH64_digest(&jsm->hash_state);
 
-    JLI(ptr, jsm->maps[cuckoo_iteration], key);
+    JLI(ptr, jsm->large_map, key);
     if (*ptr){
         const struct jsm_item *item_ro =
             (const struct jsm_item*)&jsm->buffer[*ptr];
@@ -49,10 +51,10 @@ static uint64_t jsm_insert_large(struct judy_str_map *jsm,
         if (item_ro->length == length && !memcmp(item_ro->value, buf, length))
             return item_ro->id;
         else{
-            if (++cuckoo_iteration < NUM_CUCKOO_MAPS)
-                return jsm_insert_large(jsm, buf, length, cuckoo_iteration);
+            if (++num_retries < MAX_NUM_RETRIES)
+                return jsm_insert_large(jsm, buf, length, num_retries);
             else{
-                fprintf(stderr, "All cuckoo lookups failed for a key of size %"
+                fprintf(stderr, "All hash lookups failed for a key of size %"
                                 PRIu64". Very strange!\n", length);
                 return 0;
             }
@@ -129,24 +131,26 @@ int jsm_init(struct judy_str_map *jsm)
 void jsm_free(struct judy_str_map *jsm)
 {
     Word_t tmp;
-    int i;
 
     JLFA(tmp, jsm->small_map);
-    for (i = 0; i < NUM_CUCKOO_MAPS; i++)
-        JLFA(tmp, jsm->maps[i]);
+    JLFA(tmp, jsm->large_map);
 
     free(jsm->buffer);
 }
 
+#if 0
 int main(int argc, char **argv)
 {
     FILE *in = fopen(argv[1], "r");
-    char line[1000000];
+    char *line = NULL;
+    size_t len = 0;
     struct judy_str_map jsm;
+    ssize_t read;
+
     jsm_init(&jsm);
 
-    while (fscanf(in, "%s", &line) == 1){
-        uint64_t x = jsm_insert(&jsm, line, strlen(line) + 1);
-        //printf("PUT %s (%u) %"PRIu64"\n", line, strlen(line), x);
-    }
+   while ((read = getline(&line, &len, in)) != -1) {
+        uint64_t x = jsm_insert(&jsm, line, read);
+   }
 }
+#endif
