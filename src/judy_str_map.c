@@ -19,13 +19,15 @@ static uint64_t jsm_get_small(const struct judy_str_map *jsm,
                               const char *buf,
                               uint64_t length)
 {
-    char key[8] = {};
+    char keybuf[8] = {};
     Word_t *ptr;
+    Word_t key;
 
-    key[0] = length;
-    memcpy(&key[1], buf, length);
+    keybuf[0] = length;
+    memcpy(&keybuf[1], buf, length);
+    memcpy(&key, keybuf, 8);
 
-    JLG(ptr, jsm->small_map, *(Word_t*)key);
+    JLG(ptr, jsm->small_map, key);
     if (ptr)
         return *ptr;
     else
@@ -62,13 +64,15 @@ static uint64_t jsm_insert_small(struct judy_str_map *jsm,
                                  const char *buf,
                                  uint64_t length)
 {
-    char key[8] = {};
+    char keybuf[8] = {};
     Word_t *ptr;
+    Word_t key;
 
-    key[0] = length;
-    memcpy(&key[1], buf, length);
+    keybuf[0] = length;
+    memcpy(&keybuf[1], buf, length);
+    memcpy(&key, keybuf, 8);
 
-    JLI(ptr, jsm->small_map, *(Word_t*)key);
+    JLI(ptr, jsm->small_map, key);
     if (!*ptr)
         *ptr = ++jsm->num_keys;
 
@@ -205,6 +209,7 @@ int main(int argc, char **argv)
     void *print_key(uint64_t id, const char *value, uint64_t len, void *state)
     {
         printf("%s", value);
+        return NULL;
     }
 
     FILE *in = fopen(argv[1], "r");
@@ -215,11 +220,12 @@ int main(int argc, char **argv)
 
     jsm_init(&jsm);
 
-    while ((read = getline(&line, &len, in)) != -1) {
-        uint64_t x = jsm_insert(&jsm, line, read + 1);
-    }
+    while ((read = getline(&line, &len, in)) != -1)
+        jsm_insert(&jsm, line, read + 1);
 
     fprintf(stderr, "Found %"PRIu64" unique lines\n", jsm_num_keys(&jsm));
     jsm_fold(&jsm, print_key, NULL);
+
+    return 0;
 }
 #endif
