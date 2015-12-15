@@ -199,7 +199,7 @@ uint64_t jsm_num_keys(const struct judy_str_map *jsm)
     return jsm->num_keys;
 }
 
-#if 0
+#ifdef JSM_MAIN
 int main(int argc, char **argv)
 {
     void *print_key(uint64_t id, const char *value, uint64_t len, void *state)
