@@ -166,6 +166,8 @@ tdb_cons *tdb_cons_new(const char *root,
                        uint32_t num_ofields)
 {
     tdb_cons *cons;
+    if (num_ofields > TDB_MAX_NUM_FIELDS)
+        return NULL;
     if ((cons = calloc(1, sizeof(tdb_cons))) == NULL)
         return NULL;
 
