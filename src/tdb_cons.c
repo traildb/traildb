@@ -161,12 +161,30 @@ static int dump_cookie_pointers(tdb_cons *cons)
     return 0;
 }
 
+static int contains_invalid_field_names(const char* fields, uint32_t num_fields)
+{
+    int i, j;
+
+    j = 0;
+    for (i = 0; i < num_fields; j++) {
+        if (fields[j] == '/')
+            return 1;
+        if (fields[j] < 32 && fields[j] > 0)
+            return 1;
+        if (fields[j] == 0)
+            i++;
+    }
+    return 0;
+}
+
 tdb_cons *tdb_cons_new(const char *root,
                        const char *ofield_names,
                        uint32_t num_ofields)
 {
     tdb_cons *cons;
     if (num_ofields > TDB_MAX_NUM_FIELDS)
+        return NULL;
+    if (contains_invalid_field_names(ofield_names, num_ofields))
         return NULL;
     if ((cons = calloc(1, sizeof(tdb_cons))) == NULL)
         return NULL;
