@@ -19,7 +19,7 @@ static uint64_t jsm_get_small(const struct judy_str_map *jsm,
                               const char *buf,
                               uint64_t length)
 {
-    char key[8];
+    char key[8] = {};
     Word_t *ptr;
 
     key[0] = length;
