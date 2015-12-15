@@ -1,5 +1,5 @@
 ==============
-API Documentation
+API Reference
 ==============
 
 --------------
@@ -30,7 +30,7 @@ TrailDB construction
     :param cookie: 16-byte trail identifier.
     :param timestamp: integer timestamp. Usually unix time, but TrailDB makes no assumptions about how this should be interpreted
                       aside from ordering events within the trail by increasing timestamp.
-    :param values: values of each field, as a list of zero-terminated strings, in the same order as specified 
+    :param values: values of each field, as a list of zero-terminated strings, in the same order as specified
                    in a previous call to :c:func:`tdb_cons_new`.
 
     :return: zero on success.
@@ -151,7 +151,9 @@ Decoding Trails
 ---------------
 .. c:function:: uint32_t tdb_decode_trail(const tdb *db, uint64_t cookie_id, uint32_t *dst, uint32_t dst_size, int edge_encoded)
 
-    Decode trail.
+    Decode trail. This will use global filter, if set by :c:func:`tdb_set_filter`. This function will decode as many events as
+    ``dst`` bufer fits; if trail is larger than that, return value would be equal to ``dst_size``. Common pattern when decoding trails
+    is to reuse buffer for multiple calls of :c:func:`tdb_decode_trail` and resize it lazily when necessary. See example.
 
     :param db: TrailDB object.
     :param cookie_id: cookie id for the trail to decode.
@@ -161,8 +163,19 @@ Decoding Trails
 
     :return: Number of events decoded. If this number is equal to ``dst_size``, buffer wasn't big enough.
 
-.. c:function:: uint32_t tdb_decode_trail_filtered(const tdb *db, uint64_t cookie_id, uint32_t *dst, uint32_t dst_size, int edge_encoded, const uint32_t *filter, uint32_t filter_len);
+.. c:function:: uint32_t tdb_decode_trail_filtered(const tdb *db, uint64_t cookie_id, uint32_t *dst, uint32_t dst_size, int edge_encoded, const uint32_t *filter, uint32_t filter_len)
 
+    A variant of :c:func:`tdb_decode_trail` with filter specified explicitly instead of using global filter set by :c:func:`tdb_set_filter`.
+
+    :param db: TrailDB object.
+    :param cookie_id: cookie id for the trail to decode.
+    :param dst: buffer to decode to.
+    :param dst_size: buffer size in events.
+    :param edge_encoded: edge encoding mode boolean flag
+    :param filter: filter specification (see Filter format)
+    :param filter_len: filter size in 32-bit words
+
+    :return: Number of events decoded. If this number is equal to ``dst_size``, buffer wasn't big enough.
 --------------
 Error Handling
 --------------
@@ -220,7 +233,18 @@ Filter Functions
 
 .. c:function:: int tdb_set_filter(tdb *db, const uint32_t *filter, uint32_t filter_len)
 
+    Set global decoding filter that is later used by :c:func:`tdb_decode_trail`
+
+    :param filter: filter specification (see Filter format). Can be NULL to remove filter.
+    :param filter_len: filter size in 32-bit words
+
 .. c:function:: const uint32_t *tdb_get_filter(const tdb *db, uint32_t *filter_len)
+
+    Get global decoding filter that is later used by :c:func:`tdb_decode_trail`
+
+    :param filter_len: Variable to store filter size in 32-bit words
+    :return: Pointer to filter. Memory owned by the TrailDB object (caller doesn't have to free this pointer). 
+             May be NULL if filter is not set.
 
 -----------------
 Utility Functions
@@ -230,7 +254,48 @@ Utility Functions
 
     Converts cookie from a hexadecimal string to a binary representation.
 
-.. c:function:: int tdb_cookie_hex(const uint8_t cookie[16], uint8_t hexcookie[32]);
+.. c:function:: int tdb_cookie_hex(const uint8_t cookie[16], uint8_t hexcookie[32])
 
     Converts cookie from 16-byte binary representation to a hexadecimal string.
 
+
+----------------
+Filter Format
+----------------
+
+Functions :c:func:`tdb_decode_trail` and :c:func:`tdb_decode_trail_filtered` can be configured to filter out events
+from trail that do not match a specified filter expression while decoding.
+
+Filters are `conjuctive normal form boolean expressions <https://en.wikipedia.org/wiki/Conjunctive_normal_form>`_, that is::
+
+    ((Field1 = X) OR (Field2 != Y ))  AND ((Field3 = Z) | (Field1 = N) | ...) ...
+
+Filters are stored as arrays of ``uint32_t``, exact format described below.
+
+Each inner expression of the form ``Field OP Value`` is stored as three values
+
+.. code-block:: c
+
+    struct {
+        uint32_t op;        /* 0 for equal, 1 for not equal */
+        uint32_t field_id;   /* field id as returned by tdb_get_field() */
+        uint32_t value_id;   /* value id as returned by tdb_get_field() */
+    } expr_t;
+
+Each ``OR`` clause is stored as
+
+.. code-block:: c
+
+    struct {
+        uint32_t num_exprs;
+        expr_t exprs[num_exprs];
+    } clause_t;
+
+And entire filter is stored as
+
+.. code-block:: c
+
+    struct {
+        uint32_t num_clauses;
+        clause_t clauses[num_clauses];
+    } clause_t;
