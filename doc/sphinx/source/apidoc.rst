@@ -68,9 +68,11 @@ same TrailDB at the same time, and memory overhead shouldn't be very high.
 
     Close an open TrailDB.
 
--------------------
-Working with fields
--------------------
+.. _fields-values-functions:
+
+--------------------------------------
+Working with fields and values
+--------------------------------------
 
 .. c:function:: int tdb_get_field(tdb *db, const char *field_name)
 
@@ -299,3 +301,25 @@ And entire filter is stored as
         uint32_t num_clauses;
         clause_t clauses[num_clauses];
     } clause_t;
+
+
+----------------------
+Decoded Trail Format
+----------------------
+
+Each trail is decoded to an array of ``uint32_t``.
+
+Each event in the trail is represented by a
+
+.. code-block:: c
+
+    uint32_t timestamp;                  /* event timestamp */
+    tdb_item field_vals[num_fields-1];   /* event field/value pairs */
+    uint32_t zero;                       /* zero item */
+
+Here ``num_fields`` is the value returned by :c:func:`tdb_num_fields`. That value includes timestamp, therefore there
+are ``num_fields-1`` string-valued fields for each event. There's a zero item after each event for convenience when
+scanning through the trail.
+
+Each field is a key/value pair of field and value ids (``tdb_field`` and ``tdb_val``), you can convert to/from string
+field names and corresponding numeric ids using functions from :ref:`fields-values-functions`.
