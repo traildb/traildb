@@ -291,7 +291,7 @@ fdb_iter *fdb_iter_new(const fdb_set *set) {
   if (set->flags & FDB_COMPLEX) {
     const fdb_set_complex *c = &iter->set->complex;
     iter->num_left = c->num_sets;
-    iter->iters = calloc(c->num_sets, sizeof(fdb_iter));
+    iter->iters = calloc(c->num_sets, sizeof(fdb_iter*));
     if (iter->iters == NULL || c->num_sets > 64)
       return fdb_iter_free(iter); /* memory error or too many terms */
 
