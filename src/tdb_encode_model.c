@@ -52,7 +52,8 @@ static void event_fold(event_op op,
         DIE("Couldn't allocate %u items", num_fields);
 
     rewind(grouped);
-    fread(&ev, sizeof(tdb_event), 1, grouped);
+    SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
+
 
     /* this function scans through *all* unencoded data, takes a sample
        of cookies, edge-encodes events for a cookie, and calls the
@@ -84,13 +85,13 @@ static void event_fold(event_op op,
 
                     op(encoded, n, &ev, state);
                 }
-                fread(&ev, sizeof(tdb_event), 1, grouped);
+                SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
             }
         }else{
             /* given that we are sampling cookies, we need to skip all events
                related to a cookie not included in the sample */
             for (;i < num_events && ev.cookie_id == cookie_id; i++)
-                fread(&ev, sizeof(tdb_event), 1, grouped);
+                SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
         }
     }
 
