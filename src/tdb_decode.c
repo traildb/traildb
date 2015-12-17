@@ -47,8 +47,8 @@ uint32_t tdb_decode_trail(const tdb *db,
                                      dst,
                                      dst_size,
                                      edge_encoded,
-                                     NULL,
-                                     0);
+                                     db->filter,
+                                     db->filter_len);
 }
 
 uint32_t tdb_decode_trail_filtered(const tdb *db,
@@ -70,11 +70,6 @@ uint32_t tdb_decode_trail_filtered(const tdb *db,
 
     if (cookie_id >= db->num_cookies)
         return 0;
-
-    if (filter == NULL && db->filter){
-        filter = db->filter;
-        filter_len = db->filter_len;
-    }
 
     data = &db->trails.data[toc(cookie_id)];
     size = 8 * (toc(cookie_id + 1) - toc(cookie_id)) - read_bits(data, 0, 3);

@@ -182,7 +182,7 @@ static void encode_trails(const tdb_item *items,
         DIE("Could not allocate %"PRIu64" offsets", num_cookies + 1);
 
     rewind(grouped);
-    fread(&ev, sizeof(tdb_event), 1, grouped);
+    SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
 
     while (i < num_events){
         /* encode trail for one cookie (multiple events) */
@@ -223,7 +223,7 @@ static void encode_trails(const tdb_item *items,
                               &offs,
                               fstats);
 
-            fread(&ev, sizeof(tdb_event), 1, grouped);
+            SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
         }
 
         /* write the length residual */
