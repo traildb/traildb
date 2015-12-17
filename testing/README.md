@@ -20,6 +20,14 @@ turned on and installs it to a temporary directory. The tests are run with full
 coverage information. Returns 0 if all tests succeeded and -1 if one or more
 tests failed.
 
+Test installed TrailDB
+----------------------
+
+    $ ./support/test.py
+
+This just runs the tests and uses whatever TrailDB has been installed (or is in
+`LD_LIBRARY_PATH`).
+
 How to write tests
 ------------------
 

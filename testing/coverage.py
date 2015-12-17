@@ -16,10 +16,10 @@ def run_coverage_test(coverage):
     # 3. We set up library path (LD_LIBRARY_PATH) to the temporary directory
     #    and then run tests (so the tests will use the temporarily compiled
     #    libraries)
-    # 4. This thing shows test.py results on standard output so use can
+    # 4. When we invoke `test.py`, results go to standard output so user can
     #    see if tests succeeded.
     # 5. (Optional) coverage files are turned to html and copied to current
-    #    directory
+    #    directory.
 
     temp_dir_path = tempfile.mkdtemp()
     script_path = os.path.dirname(os.path.realpath(__file__))
