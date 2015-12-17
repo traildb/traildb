@@ -48,6 +48,9 @@ static void event_fold(event_op op,
     const uint32_t sample_size = get_sample_size();
     tdb_event ev;
 
+    if (num_events == 0)
+        return;
+
     if (!(prev_items = malloc(num_fields * sizeof(tdb_item))))
         DIE("Couldn't allocate %u items", num_fields);
 
@@ -353,6 +356,7 @@ Pvoid_t collect_unigrams(FILE *grouped,
 
     /* calculate frequencies of all items */
     event_fold(all_freqs, grouped, num_events, items, num_fields, (void *)&g);
+
     return g.ngram_freqs;
 }
 

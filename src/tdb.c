@@ -98,9 +98,13 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
         goto error;
     }
 
-    if (!(db->lexicons = calloc(num_ofields, sizeof(tdb_file)))){
-        tdb_err(db, "Could not alloc %u files", num_ofields);
-        goto error;
+    if (num_ofields) {
+        if (!(db->lexicons = calloc(num_ofields, sizeof(tdb_file)))){
+            tdb_err(db, "Could not alloc %u files", num_ofields);
+            goto error;
+        }
+    } else {
+        db->lexicons = NULL;
     }
 
     if (!(db->previous_items = calloc(db->num_fields, 4))){
@@ -112,7 +116,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
 
     db->field_names[0] = "time";
 
-    for (i = 1; getline(&line, &n, f) != -1; i++){
+    for (i = 1; getline(&line, &n, f) != -1 && i < db->num_fields; i++){
 
         line[strlen(line) - 1] = 0;
 
@@ -147,8 +151,12 @@ static int init_field_stats(tdb *db)
     tdb_field i;
     uint64_t *field_cardinalities;
 
-    if (!(field_cardinalities = calloc(db->num_fields - 1, 8)))
-        return -1;
+    if (db->num_fields > 1) {
+        if (!(field_cardinalities = calloc(db->num_fields - 1, 8)))
+            return -1;
+    } else {
+        field_cardinalities = NULL;
+    }
 
     for (i = 1; i < db->num_fields; i++){
         const tdb_lexicon *lex;
@@ -208,27 +216,29 @@ tdb *tdb_open(const char *root)
     if (read_info(db, path))
         goto err;
 
-    tdb_path(path, "%s/cookies", root);
-    if (tdb_mmap(path, &db->cookies, db))
-        goto err;
+    if (db->num_cookies) {
+        tdb_path(path, "%s/cookies", root);
+        if (tdb_mmap(path, &db->cookies, db))
+            goto err;
 
-    tdb_path(path, "%s/cookies.index", root);
-    if (tdb_mmap(path, &db->cookie_index, db))
-        db->cookie_index.data = NULL;
+        tdb_path(path, "%s/cookies.index", root);
+        if (tdb_mmap(path, &db->cookie_index, db))
+            db->cookie_index.data = NULL;
 
-    tdb_path(path, "%s/trails.codebook", root);
-    if (tdb_mmap(path, &db->codebook, db))
-        goto err;
+        tdb_path(path, "%s/trails.codebook", root);
+        if (tdb_mmap(path, &db->codebook, db))
+            goto err;
 
-    tdb_path(path, "%s/trails.data", root);
-    if (tdb_mmap(path, &db->trails, db))
-        goto err;
-
-    tdb_path(path, "%s/trails.toc", root);
-    if (access(path, F_OK)) // backwards compat
         tdb_path(path, "%s/trails.data", root);
-    if (tdb_mmap(path, &db->toc, db))
-        goto err;
+        if (tdb_mmap(path, &db->trails, db))
+            goto err;
+
+        tdb_path(path, "%s/trails.toc", root);
+        if (access(path, F_OK)) // backwards compat
+            tdb_path(path, "%s/trails.data", root);
+        if (tdb_mmap(path, &db->toc, db))
+            goto err;
+    }
 
     if (tdb_fields_open(db, root, path))
         goto err;

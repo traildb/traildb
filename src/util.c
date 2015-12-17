@@ -34,9 +34,12 @@ struct sortpair *sort_judyl(const Pvoid_t judy, Word_t *num_items)
 
     JLC(*num_items, judy, 0, -1);
 
+    if (*num_items == 0)
+        return NULL;
+
     if (!(pairs = calloc(*num_items, sizeof(struct sortpair))))
         DIE("Couldn't allocate sortpairs (%llu pairs)",
-            (unsigned long long)num_items);
+            (unsigned long long)*num_items);
 
     key = i = 0;
     JLF(val, judy, key);
@@ -93,6 +96,9 @@ void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed)
 
 char *dupstrs(const char *strs, size_t num)
 {
+    if (num == 0)
+        return NULL;
+
     char *dup;
     const char *str = strs;
     size_t i, n;
