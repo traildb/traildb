@@ -8,7 +8,7 @@ import os
 def has_coverage_tools():
     return bool(distutils.spawn.find_executable("lcov") and distutils.spawn.find_executable("gcov"))
 
-def run_coverage_test():
+def run_coverage_test(coverage):
     # Here's what happens:
     # 1. We create a temporary directory
     # 2. We run ./configure from this project but build objects and stuff to
@@ -22,12 +22,13 @@ def run_coverage_test():
     #    directory
 
     temp_dir_path = tempfile.mkdtemp()
+    script_path = os.path.dirname(os.path.realpath(__file__))
     old_cwd = os.getcwd()
-    upper_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
+    upper_path = os.path.abspath(os.path.join(script_path, ".."))
     has_coverage = has_coverage_tools()
 
     try:
-        if has_coverage:
+        if has_coverage and coverage:
             os.putenv("CFLAGS", "-I%s/src --coverage" % upper_path)
         else:
             os.putenv("CFLAGS", "-I%s/src" % upper_path)
@@ -35,13 +36,15 @@ def run_coverage_test():
         os.system("cd %s && %s --prefix %s && make install" % (temp_dir_path, os.path.join(upper_path, "configure"), temp_dir_path))
         ld_lib_path = os.getenv("LD_LIBRARY_PATH") or ""
         os.putenv("LD_LIBRARY_PATH", "%s:%s" % (os.path.join(temp_dir_path, "lib"), ld_lib_path))
-        result = os.system("cd %s && ./support/test.py" % old_cwd)
+        result = os.system("cd %s && ./support/test.py" % script_path)
 
-        if has_coverage:
+        if has_coverage and coverage:
             os.system("cd %s && lcov --capture --directory . --output-file gcov.info" % temp_dir_path)
             os.system("cd %s && genhtml gcov.info --output-directory %s" % (temp_dir_path, os.path.join(old_cwd, "coverage-html")))
+            print("Generated coverage information to current working directory in coverage-html. If you don't want to generate coverage information, run with --no-coverage.")
         else:
-            print("I will not generate coverage information because 'lcov' and/or 'gcov' is missing.")
+            if coverage and not has_coverage:
+                print("I will not generate coverage information because 'lcov' and/or 'gcov' is missing.")
         return result
     finally:
         try:
@@ -51,5 +54,8 @@ def run_coverage_test():
             pass
 
 if __name__ == '__main__':
-    sys.exit(run_coverage_test())
+    if '--no-coverage' in sys.argv:
+        sys.exit(run_coverage_test(coverage=False))
+    else:
+        sys.exit(run_coverage_test(coverage=True))
 
