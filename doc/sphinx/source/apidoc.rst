@@ -280,8 +280,7 @@ Each inner expression of the form ``Field OP Value`` is stored as three values
 
     struct {
         uint32_t op;        /* 0 for equal, 1 for not equal */
-        uint32_t field_id;   /* field id as returned by tdb_get_field() */
-        uint32_t value_id;   /* value id as returned by tdb_get_field() */
+        uint32_t item;      /* field/value pair as returned by tdb_get_item() */
     } expr_t;
 
 Each ``OR`` clause is stored as
