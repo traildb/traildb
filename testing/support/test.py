@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import tempfile
 import shutil
+import sys
 import os
 
 class Testing:
@@ -52,8 +53,11 @@ class Testing:
         self.runCTests()
         print("Number of failed tests: %d" % len(self.failed_tests))
         print("Number of succeeded tests: %d" % len(self.succeeded_tests))
+        if self.failed_tests > 0:
+            return -1
+        return 0
 
 if __name__ == '__main__':
     t = Testing()
-    t.runTests()
+    sys.exit(t.runTests())
 

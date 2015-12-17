@@ -3,12 +3,22 @@ TrailDB tests
 
 This directory contains tests for TrailDB.
 
+Directory structure
+-------------------
+
+    coverage.py    The file you want to invoke to run tests.
+    c-tests/       Contains tests written in C language.
+    support/       Support python files for testing.
+
 Invoking
 --------
 
-    $ ./test.py
+    $ ./coverage.py
 
-The above command would run the tests against system-installed TrailDB.
+This command compiles TrailDB from parent directory with profiling and coverage
+turned on and installs it to a temporary directory. The tests are run with full
+coverage information. Returns 0 if all tests succeeded and -1 if one or more
+tests failed.
 
 How to write tests
 ------------------
