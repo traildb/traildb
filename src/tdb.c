@@ -563,6 +563,7 @@ int tdb_split_with(const tdb *db,
         if (s.cons[i])
             tdb_cons_free(s.cons[i]);
     free(s.values);
+    free(s.cons);
     free(ofield_names);
     return ret;
 }
