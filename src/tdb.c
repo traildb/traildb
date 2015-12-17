@@ -53,6 +53,11 @@ int tdb_mmap(const char *path, tdb_file *dst, tdb *db)
 
     if ((dst->size = stats.st_size))
         dst->data = mmap(NULL, dst->size, PROT_READ, MAP_SHARED, fd, 0);
+    else {
+        tdb_err(db, "Could not mmap path: %s", path);
+        close(fd);
+        return -1;
+    }
 
     if (dst->data == MAP_FAILED){
         tdb_err(db, "Could not mmap path: %s", path);
@@ -85,26 +90,22 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
     if (!feof(f)){
         /* we can get here if malloc fails inside getline() */
         tdb_err(db, "getline failed when opening fields");
-        fclose(f);
-        return -1;
+        goto error;
     }
 
     if (!(db->field_names = calloc(db->num_fields, sizeof(char*)))){
         tdb_err(db, "Could not alloc %u field names", db->num_fields);
-        fclose(f);
-        return -1;
+        goto error;
     }
 
     if (!(db->lexicons = calloc(num_ofields, sizeof(tdb_file)))){
         tdb_err(db, "Could not alloc %u files", num_ofields);
-        fclose(f);
-        return -1;
+        goto error;
     }
 
     if (!(db->previous_items = calloc(db->num_fields, 4))){
         tdb_err(db, "Could not alloc %u values", db->num_fields);
-        fclose(f);
-        return -1;
+        goto error;
     }
 
     rewind(f);
@@ -117,20 +118,28 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
 
         if (!(db->field_names[i] = strdup(line))){
             tdb_err(db, "Could not allocate field name %d", i);
-            fclose(f);
-            return -1;
+            goto error;
         }
 
         tdb_path(path, "%s/lexicon.%s", root, line);
         if (tdb_mmap(path, &db->lexicons[i - 1], db)){
-            fclose(f);
-            return -1;
+            goto error;
         }
+    }
+
+    if (i != db->num_fields) {
+        tdb_err(db, "Error reading fields file");
+        goto error;
     }
 
     free(line);
     fclose(f);
     return 0;
+
+error:
+    free(line);
+    fclose(f);
+    return -1;
 }
 
 static int init_field_stats(tdb *db)
