@@ -34,6 +34,7 @@ static void group_events(FILE *grouped_w,
     tdb_event *buf = NULL;
     uint32_t buf_size = 0;
 
+
     for (i = 0; i < cons->num_cookies; i++){
         /* find the last event belonging to this cookie */
         const tdb_cons_event *ev = &events[cons->cookie_pointers[i]];
@@ -85,6 +86,7 @@ static void group_events(FILE *grouped_w,
                 ++num_invalid;
             }
         }
+
         SAFE_WRITE(buf, num_events * sizeof(tdb_event), path, grouped_w);
     }
 
@@ -155,7 +157,7 @@ static void encode_trails(const tdb_item *items,
     tdb_item *prev_items = NULL;
     uint32_t *encoded = NULL;
     uint32_t encoded_size = 0;
-    uint64_t i = 0;
+    uint64_t i = 1;
     char *buf;
     FILE *out;
     uint64_t file_offs = 0, *toc;
@@ -199,7 +201,7 @@ static void encode_trails(const tdb_item *items,
         toc[cookie_id] = file_offs;
         memset(prev_items, 0, num_fields * sizeof(tdb_item));
 
-        for (; i < num_events && ev.cookie_id == cookie_id; i++){
+        while (ev.cookie_id == cookie_id){
 
             /* 1) produce an edge-encoded set of items for this event */
             uint32_t n = edge_encode_items(items,
@@ -224,7 +226,13 @@ static void encode_trails(const tdb_item *items,
                               &offs,
                               fstats);
 
-            SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
+            if (i < num_events) {
+                SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
+            } else {
+                break;
+            }
+
+            i++;
         }
 
         /* write the length residual */

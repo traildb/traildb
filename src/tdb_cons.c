@@ -416,7 +416,7 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
         return -1;
     }
 
-    if (cons->num_events) {
+    if (cons->num_events && cons->num_ofields) {
         if (tdb_mmap(cons->tempfile, &items_mmapped, NULL)) {
             WARN("Mmapping %s failed", cons->tempfile);
             return -1;
