@@ -36,6 +36,60 @@ static int event_satisfies_filter(const uint32_t *event,
     return 1;
 }
 
+int tdb_get_trail(const tdb *db,
+                  uint64_t cookie_id,
+                  tdb_item **items,
+                  uint32_t *items_buf_len,
+                  uint32_t *num_items,
+                  int edge_encoded)
+{
+    return tdb_get_trail_filtered(db,
+                                  cookie_id,
+                                  items,
+                                  items_buf_len,
+                                  num_items,
+                                  edge_encoded,
+                                  db->filter,
+                                  db->filter_len);
+}
+
+int tdb_get_trail_filtered(const tdb *db,
+                           uint64_t cookie_id,
+                           tdb_item **items,
+                           uint32_t *items_buf_len,
+                           uint32_t *num_items,
+                           int edge_encoded,
+                           const uint32_t *filter,
+                           uint32_t filter_len)
+{
+    static const int INITIAL_ITEMS_BUF_LEN = 1 << 16;
+
+    if (!*items_buf_len){
+        if (!(*items = malloc(INITIAL_ITEMS_BUF_LEN * 4)))
+            return -1;
+        *items_buf_len = INITIAL_ITEMS_BUF_LEN;
+    }
+    while (1){
+        *num_items = tdb_decode_trail_filtered(db,
+                                               cookie_id,
+                                               *items,
+                                               *items_buf_len,
+                                               edge_encoded,
+                                               filter,
+                                               filter_len);
+        if (*num_items < *items_buf_len)
+            return 0;
+        else{
+            *items_buf_len *= 2;
+            free(*items);
+            if (!(*items = malloc(*items_buf_len * 4))){
+                *items_buf_len = 0;
+                return -1;
+            }
+        }
+    }
+}
+
 uint32_t tdb_decode_trail(const tdb *db,
                           uint64_t cookie_id,
                           uint32_t *dst,
@@ -164,6 +218,7 @@ uint32_t tdb_decode_trail_filtered(const tdb *db,
     return i;
 }
 
+#if 0
 void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc) {
     const char *data;
     const struct huff_codebook *codebook = (struct huff_codebook*)db->codebook.data;
@@ -216,3 +271,4 @@ void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc) {
     }
     return acc;
 }
+#endif 
