@@ -236,9 +236,10 @@ tdb_cons *tdb_cons_new(const char *root,
     if (!(cons->items.fd = fopen(cons->tempfile, "wx")))
         goto error;
 
-    if (!(cons->lexicons = calloc(cons->num_ofields,
-                                  sizeof(struct judy_str_map))))
-        goto error;
+    if (cons->num_ofields > 0)
+        if (!(cons->lexicons = calloc(cons->num_ofields,
+                                      sizeof(struct judy_str_map))))
+            goto error;
 
     for (i = 0; i < cons->num_ofields; i++)
         if (jsm_init(&cons->lexicons[i]))
@@ -482,7 +483,11 @@ err:
 
 int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
 {
+<<<<<<< HEAD
     struct tdb_file items_mmapped;
+=======
+    tdb_file items_mmapped = {0};
+>>>>>>> origin/master
 
     cons->num_events = cons->events.next;
 
@@ -493,9 +498,11 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
         return -1;
     }
 
-    if (tdb_mmap(cons->tempfile, &items_mmapped, NULL)) {
-        WARN("Mmapping %s failed", cons->tempfile);
-        return -1;
+    if (cons->num_events && cons->num_ofields) {
+        if (tdb_mmap(cons->tempfile, &items_mmapped, NULL)) {
+            WARN("Mmapping %s failed", cons->tempfile);
+            return -1;
+        }
     }
 
     TDB_TIMER_DEF
@@ -518,11 +525,13 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
     tdb_encode(cons, (tdb_item*)items_mmapped.data);
     TDB_TIMER_END("encoder/encode")
 
-    munmap((void*)items_mmapped.data, items_mmapped.size);
+    if (items_mmapped.data)
+        munmap((void*)items_mmapped.data, items_mmapped.size);
     return 0;
 
  error:
-    munmap((void*)items_mmapped.data, items_mmapped.size);
+    if (items_mmapped.data)
+        munmap((void*)items_mmapped.data, items_mmapped.size);
     tdb_cons_free(cons);
     return -1;
 }

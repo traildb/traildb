@@ -35,6 +35,7 @@ static void group_events(FILE *grouped_w,
     tdb_event *buf = NULL;
     uint32_t buf_size = 0;
 
+
     for (i = 0; i < cons->num_cookies; i++){
         /* find the last event belonging to this cookie */
         const tdb_cons_event *ev = &events[cons->cookie_pointers[i]];
@@ -86,6 +87,7 @@ static void group_events(FILE *grouped_w,
                 ++num_invalid;
             }
         }
+
         SAFE_WRITE(buf, num_events * sizeof(tdb_event), path, grouped_w);
     }
 
@@ -156,7 +158,7 @@ static void encode_trails(const tdb_item *items,
     tdb_item *prev_items = NULL;
     uint32_t *encoded = NULL;
     uint32_t encoded_size = 0;
-    uint64_t i = 0;
+    uint64_t i = 1;
     char *buf;
     FILE *out;
     uint64_t file_offs = 0, *toc;
@@ -183,7 +185,8 @@ static void encode_trails(const tdb_item *items,
         DIE("Could not allocate %"PRIu64" offsets", num_cookies + 1);
 
     rewind(grouped);
-    SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
+    if (num_events)
+        SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
 
     while (i < num_events){
         /* encode trail for one cookie (multiple events) */
@@ -199,7 +202,7 @@ static void encode_trails(const tdb_item *items,
         toc[cookie_id] = file_offs;
         memset(prev_items, 0, num_fields * sizeof(tdb_item));
 
-        for (; i < num_events && ev.cookie_id == cookie_id; i++){
+        while (ev.cookie_id == cookie_id){
 
             /* 1) produce an edge-encoded set of items for this event */
             uint32_t n = edge_encode_items(items,
@@ -224,7 +227,13 @@ static void encode_trails(const tdb_item *items,
                               &offs,
                               fstats);
 
-            SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
+            if (i < num_events) {
+                SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
+            } else {
+                break;
+            }
+
+            i++;
         }
 
         /* write the length residual */
@@ -316,7 +325,8 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     if (!(grouped_w = fopen(grouped_path, "w")))
         DIE("Could not open tmp file at %s", path);
 
-    group_events(grouped_w, grouped_path, (tdb_cons_event*)cons->events.data, cons);
+    if (cons->events.data)
+        group_events(grouped_w, grouped_path, (tdb_cons_event*)cons->events.data, cons);
 
     SAFE_CLOSE(grouped_w, grouped_path);
     if (!(grouped_r = fopen(grouped_path, "r")))
