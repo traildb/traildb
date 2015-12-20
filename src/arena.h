@@ -5,7 +5,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifndef ARENA_INCREMENT
 #define ARENA_INCREMENT 100000000
+#endif
+
 #define ARENA_DISK_BUFFER (1 << 23) /* must be a power of two */
 
 struct arena{
