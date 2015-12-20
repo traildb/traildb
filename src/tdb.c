@@ -53,6 +53,11 @@ int tdb_mmap(const char *path, tdb_file *dst, tdb *db)
 
     if ((dst->size = stats.st_size))
         dst->data = mmap(NULL, dst->size, PROT_READ, MAP_SHARED, fd, 0);
+    else {
+        tdb_err(db, "Could not mmap path: %s", path);
+        close(fd);
+        return -1;
+    }
 
     if (dst->data == MAP_FAILED){
         tdb_err(db, "Could not mmap path: %s", path);
@@ -85,52 +90,60 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
     if (!feof(f)){
         /* we can get here if malloc fails inside getline() */
         tdb_err(db, "getline failed when opening fields");
-        fclose(f);
-        return -1;
+        goto error;
     }
 
     if (!(db->field_names = calloc(db->num_fields, sizeof(char*)))){
         tdb_err(db, "Could not alloc %u field names", db->num_fields);
-        fclose(f);
-        return -1;
+        goto error;
     }
 
-    if (!(db->lexicons = calloc(num_ofields, sizeof(tdb_file)))){
-        tdb_err(db, "Could not alloc %u files", num_ofields);
-        fclose(f);
-        return -1;
+    if (num_ofields) {
+        if (!(db->lexicons = calloc(num_ofields, sizeof(tdb_file)))){
+            tdb_err(db, "Could not alloc %u files", num_ofields);
+            goto error;
+        }
+    } else {
+        db->lexicons = NULL;
     }
 
     if (!(db->previous_items = calloc(db->num_fields, 4))){
         tdb_err(db, "Could not alloc %u values", db->num_fields);
-        fclose(f);
-        return -1;
+        goto error;
     }
 
     rewind(f);
 
     db->field_names[0] = "time";
 
-    for (i = 1; getline(&line, &n, f) != -1; i++){
+    for (i = 1; getline(&line, &n, f) != -1 && i < db->num_fields; i++){
 
         line[strlen(line) - 1] = 0;
 
         if (!(db->field_names[i] = strdup(line))){
             tdb_err(db, "Could not allocate field name %d", i);
-            fclose(f);
-            return -1;
+            goto error;
         }
 
         tdb_path(path, "%s/lexicon.%s", root, line);
         if (tdb_mmap(path, &db->lexicons[i - 1], db)){
-            fclose(f);
-            return -1;
+            goto error;
         }
+    }
+
+    if (i != db->num_fields) {
+        tdb_err(db, "Error reading fields file");
+        goto error;
     }
 
     free(line);
     fclose(f);
     return 0;
+
+error:
+    free(line);
+    fclose(f);
+    return -1;
 }
 
 static int init_field_stats(tdb *db)
@@ -138,8 +151,12 @@ static int init_field_stats(tdb *db)
     tdb_field i;
     uint64_t *field_cardinalities;
 
-    if (!(field_cardinalities = calloc(db->num_fields - 1, 8)))
-        return -1;
+    if (db->num_fields > 1) {
+        if (!(field_cardinalities = calloc(db->num_fields - 1, 8)))
+            return -1;
+    } else {
+        field_cardinalities = NULL;
+    }
 
     for (i = 1; i < db->num_fields; i++){
         const tdb_lexicon *lex;
@@ -199,27 +216,29 @@ tdb *tdb_open(const char *root)
     if (read_info(db, path))
         goto err;
 
-    tdb_path(path, "%s/cookies", root);
-    if (tdb_mmap(path, &db->cookies, db))
-        goto err;
+    if (db->num_cookies) {
+        tdb_path(path, "%s/cookies", root);
+        if (tdb_mmap(path, &db->cookies, db))
+            goto err;
 
-    tdb_path(path, "%s/cookies.index", root);
-    if (tdb_mmap(path, &db->cookie_index, db))
-        db->cookie_index.data = NULL;
+        tdb_path(path, "%s/cookies.index", root);
+        if (tdb_mmap(path, &db->cookie_index, db))
+            db->cookie_index.data = NULL;
 
-    tdb_path(path, "%s/trails.codebook", root);
-    if (tdb_mmap(path, &db->codebook, db))
-        goto err;
+        tdb_path(path, "%s/trails.codebook", root);
+        if (tdb_mmap(path, &db->codebook, db))
+            goto err;
 
-    tdb_path(path, "%s/trails.data", root);
-    if (tdb_mmap(path, &db->trails, db))
-        goto err;
-
-    tdb_path(path, "%s/trails.toc", root);
-    if (access(path, F_OK)) // backwards compat
         tdb_path(path, "%s/trails.data", root);
-    if (tdb_mmap(path, &db->toc, db))
-        goto err;
+        if (tdb_mmap(path, &db->trails, db))
+            goto err;
+
+        tdb_path(path, "%s/trails.toc", root);
+        if (access(path, F_OK)) // backwards compat
+            tdb_path(path, "%s/trails.data", root);
+        if (tdb_mmap(path, &db->toc, db))
+            goto err;
+    }
 
     if (tdb_fields_open(db, root, path))
         goto err;
@@ -563,6 +582,7 @@ int tdb_split_with(const tdb *db,
         if (s.cons[i])
             tdb_cons_free(s.cons[i]);
     free(s.values);
+    free(s.cons);
     free(ofield_names);
     return ret;
 }
