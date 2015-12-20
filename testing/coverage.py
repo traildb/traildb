@@ -28,9 +28,9 @@ def run_coverage_test(coverage):
     has_coverage = has_coverage_tools()
 
     try:
-        cflags = "%s -I%s/include/ -L%s/lib" % (os.getenv('CFLAGS', ''),
-                                                temp_dir_path,
-                                                temp_dir_path)
+        cflags = "%s -I%s/src/ -L%s/.libs" % (os.getenv('CFLAGS', ''),
+                                              upper_path,
+                                              temp_dir_path)
 
         if has_coverage and coverage:
             os.putenv("CFLAGS", cflags + " --coverage")
