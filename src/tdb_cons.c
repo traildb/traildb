@@ -329,9 +329,16 @@ int tdb_cons_add(tdb_cons *cons,
                  const char **values,
                  const uint32_t *value_lengths)
 {
-    tdb_cons_event *event = (tdb_cons_event*)arena_add_item(&cons->events);
-    Word_t *cookie_ptr = lookup_cookie(cons, cookie);
-    int i;
+    tdb_field i;
+    tdb_cons_event *event;
+    Word_t *cookie_ptr;
+
+    for (i = 0; i < cons->num_ofields; i++)
+        if (value_lengths[i] > TDB_MAX_VALUE_SIZE)
+            return 2;
+
+    cookie_ptr = lookup_cookie(cons, cookie);
+    event = (tdb_cons_event*)arena_add_item(&cons->events);
 
     event->item_zero = cons->items.next;
     event->num_items = 0;
