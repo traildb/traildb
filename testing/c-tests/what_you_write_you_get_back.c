@@ -16,7 +16,7 @@ const uint32_t LENGTHS[] = {0, 1, 2, 1000, TDB_MAX_VALUE_SIZE};
 
 int main(int argc, char** argv)
 {
-    char j, i = 0;
+    uint32_t j, i = 0;
     tdb_field field;
     const char *values[] = {buffer1, buffer2, buffer3};
     uint32_t lengths[3];
