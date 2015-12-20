@@ -13,7 +13,7 @@ PYTHON = python
 
 all: libs bins
 
-bins: bin/encode bin/index bin/extractd bin/mix
+#bins: bin/encode bin/index bin/extractd bin/mix
 
 libs: lib/libdiscodb.a lib/libtraildb.a lib/libtraildb.so
 
