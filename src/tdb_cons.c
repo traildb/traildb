@@ -483,11 +483,7 @@ err:
 
 int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
 {
-<<<<<<< HEAD
-    struct tdb_file items_mmapped;
-=======
-    tdb_file items_mmapped = {0};
->>>>>>> origin/master
+    struct tdb_file items_mmapped = {};
 
     cons->num_events = cons->events.next;
 
