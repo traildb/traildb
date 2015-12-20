@@ -430,7 +430,7 @@ inline uint64_t tdb_get_cookie_offs(const tdb *db, uint64_t cookie_id)
     return ((uint64_t*)db->toc.data)[cookie_id];
 }
 
-uint64_t tdb_get_cookie_id(const tdb *db, const uint8_t *cookie)
+int64_t tdb_get_cookie_id(const tdb *db, const uint8_t *cookie)
 {
     uint64_t i;
 #ifdef ENABLE_COOKIE_INDEX

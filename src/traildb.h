@@ -93,8 +93,7 @@ const char *tdb_get_item_value(const tdb *db,
                                uint32_t *value_length);
 
 const uint8_t *tdb_get_cookie(const tdb *db, uint64_t cookie_id);
-uint64_t tdb_get_cookie_offs(const tdb *db, uint64_t cookie_id);
-uint64_t tdb_get_cookie_id(const tdb *db, const uint8_t cookie[16]);
+int64_t tdb_get_cookie_id(const tdb *db, const uint8_t cookie[16]);
 
 int tdb_has_cookie_index(const tdb *db);
 

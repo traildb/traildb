@@ -111,4 +111,6 @@ uint32_t edge_encode_items(const tdb_item *items,
                            tdb_item *prev_items,
                            const tdb_event *ev);
 
+uint64_t tdb_get_cookie_offs(const tdb *db, uint64_t cookie_id);
+
 #endif /* __TDB_INTERNAL_H__ */
