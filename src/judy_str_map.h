@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #include <Judy.h>
-#include <xxhash.h>
+#include "xxhash/xxhash.h"
 
 #define BUFFER_INITIAL_SIZE 65536
 
