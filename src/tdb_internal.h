@@ -41,21 +41,21 @@ struct _tdb_cons {
     uint32_t num_ofields;
     uint64_t *cookie_pointers;
     Pvoid_t cookie_index;
-    Pvoid_t *lexicons;
-    Word_t *lexicon_counters;
-    uint32_t **lexicon_maps;
+    struct judy_str_map *lexicons;
+    //uint32_t **lexicon_maps;
     char tempfile[TDB_MAX_PATH_SIZE];
-    uint8_t overflow_str[TDB_MAX_VALUE_SIZE];
+    //uint8_t overflow_str[TDB_MAX_VALUE_SIZE];
 };
 
-struct _tdb_file {
+struct tdb_file {
     const char *data;
     uint64_t size;
 };
 
-struct _tdb_lexicon {
+struct tdb_lexicon {
     uint32_t size;
-    uint32_t toc;
+    const uint32_t *toc;
+    const char *data;
 };
 
 struct _tdb {
@@ -67,12 +67,12 @@ struct _tdb {
     uint32_t num_fields;
     uint32_t *previous_items;
 
-    tdb_file cookies;
-    tdb_file cookie_index;
-    tdb_file codebook;
-    tdb_file trails;
-    tdb_file toc;
-    tdb_file *lexicons;
+    struct tdb_file cookies;
+    struct tdb_file cookie_index;
+    struct tdb_file codebook;
+    struct tdb_file trails;
+    struct tdb_file toc;
+    struct tdb_file *lexicons;
 
     const char **field_names;
     struct field_stats *field_stats;
@@ -84,16 +84,24 @@ struct _tdb {
     char error[TDB_MAX_ERROR_SIZE];
 };
 
+#if 0
 struct _tdb_split {
     tdb_cons **cons;
     tdb_fold_fn split_fn;
     unsigned int num_parts;
     char *values;
 };
+#endif
+
+void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex);
+
+const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
+                            uint32_t i,
+                            uint32_t *length);
 
 void tdb_err(tdb *db, char *fmt, ...);
 void tdb_path(char path[TDB_MAX_PATH_SIZE], char *fmt, ...);
-int tdb_mmap(const char *path, tdb_file *dst, tdb *db);
+int tdb_mmap(const char *path, struct tdb_file *dst, tdb *db);
 
 void tdb_encode(tdb_cons *cons, tdb_item *items);
 

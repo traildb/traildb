@@ -35,7 +35,7 @@ void tdb_path(char path[TDB_MAX_PATH_SIZE], char *fmt, ...)
     va_end(aptr);
 }
 
-int tdb_mmap(const char *path, tdb_file *dst, tdb *db)
+int tdb_mmap(const char *path, struct tdb_file *dst, tdb *db)
 {
     int fd;
     struct stat stats;
@@ -62,6 +62,22 @@ int tdb_mmap(const char *path, tdb_file *dst, tdb *db)
 
     close(fd);
     return 0;
+}
+
+void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex)
+{
+    const char *base = db->lexicons[field - 1].data;
+    memcpy(&lex->size, base, 4);
+    lex->toc = (const uint32_t*)&base[4];
+    lex->data = &base[(lex->size + 2) * 4];
+}
+
+const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
+                            uint32_t i,
+                            uint32_t *length)
+{
+    *length = lex->toc[i + 1] - lex->toc[i];
+    return &lex->data[lex->toc[i]];
 }
 
 static int tdb_fields_open(tdb *db, const char *root, char *path)
@@ -95,7 +111,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
         return -1;
     }
 
-    if (!(db->lexicons = calloc(num_ofields, sizeof(tdb_file)))){
+    if (!(db->lexicons = calloc(num_ofields, sizeof(struct tdb_file)))){
         tdb_err(db, "Could not alloc %u files", num_ofields);
         fclose(f);
         return -1;
@@ -122,6 +138,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
         }
 
         tdb_path(path, "%s/lexicon.%s", root, line);
+        /* TODO convert old-style lexicons to the new format on the fly */
         if (tdb_mmap(path, &db->lexicons[i - 1], db)){
             fclose(f);
             return -1;
@@ -142,14 +159,9 @@ static int init_field_stats(tdb *db)
         return -1;
 
     for (i = 1; i < db->num_fields; i++){
-        const tdb_lexicon *lex;
-
-        if (tdb_lexicon_read(db, i, &lex)){
-            free(field_cardinalities);
-            return -1;
-        }
-
-        field_cardinalities[i - 1] = lex->size;
+        struct tdb_lexicon lex;
+        tdb_lexicon_read(db, i, &lex);
+        field_cardinalities[i - 1] = lex.size;
     }
 
     if (!(db->field_stats = huff_field_stats(field_cardinalities,
@@ -191,6 +203,9 @@ tdb *tdb_open(const char *root)
 {
     char path[TDB_MAX_PATH_SIZE];
     tdb *db;
+
+    /* TODO create a version file and a version check that prevents older versions of
+       traildb from reading newer files */
 
     if (!(db = calloc(1, sizeof(tdb))))
         return NULL;
@@ -289,26 +304,17 @@ void tdb_close(tdb *db)
     }
 }
 
-int tdb_lexicon_read(tdb *db, tdb_field field, const tdb_lexicon **lex)
+uint32_t tdb_lexicon_size(const tdb *db, tdb_field field)
 {
-    if (field == 0){
-        tdb_err(db, "No lexicon for timestamp");
-        return -1;
-    }
-    if (field >= db->num_fields){
-        tdb_err(db, "Invalid field: %"PRIu8, field);
-        return -1;
-    }
-    *lex = (tdb_lexicon*)db->lexicons[field - 1].data;
-    return 0;
-}
-
-uint32_t tdb_lexicon_size(tdb *db, tdb_field field)
-{
-    const tdb_lexicon *lex;
-    if (tdb_lexicon_read(db, field, &lex))
+    if (field == 0 || field >= db->num_fields)
         return 0;
-    return lex->size + 1;
+    else{
+        /* TODO this used to include overflow value */
+        struct tdb_lexicon lex;
+        tdb_lexicon_read(db, field, &lex);
+        /* +1 refers to the implicit NULL value (empty string) */
+        return lex.size + 1;
+    }
 }
 
 int tdb_get_field(tdb *db, const char *field_name)
@@ -330,43 +336,66 @@ const char *tdb_get_field_name(tdb *db, tdb_field field)
 
 int tdb_field_has_overflow_vals(tdb *db, tdb_field field)
 {
-    return tdb_lexicon_size(db, field) > TDB_MAX_NUM_VALUES + 1;
+    return tdb_lexicon_size(db, field) > TDB_MAX_NUM_VALUES;
 }
 
-tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
+tdb_item tdb_get_item(const tdb *db,
+                      tdb_field field,
+                      const char *value,
+                      uint32_t value_length)
 {
-    const tdb_lexicon *lex;
-    if (!strlen(value))
+    if (!value_length)
+        /* NULL value for this field */
         return field;
-    if (tdb_lexicon_read(db, field, &lex))
+    else if (field == 0 || field >= db->num_fields)
         return 0;
-    if (*value){
+    else{
+        struct tdb_lexicon lex;
         tdb_val i;
-        for (i = 0; i < lex->size; i++)
-            if (!strcmp((char*)lex + (&lex->toc)[i], value))
+        /* TODO handle overflow value */
+
+        tdb_lexicon_read(db, field, &lex);
+
+        for (i = 0; i < lex.size; i++){
+            uint32_t length;
+            const char *token = tdb_lexicon_get(&lex, i, &length);
+            if (length == value_length && !memcmp(&token, value, length))
                 return field | ((i + 1) << 8);
-    }else{
-        return field; /* valid empty value */
+        }
+        return 0;
     }
-    return 0;
 }
 
-const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val)
+const char *tdb_get_value(const tdb *db,
+                          tdb_field field,
+                          tdb_val val,
+                          uint32_t *value_length)
 {
-    const tdb_lexicon *lex;
-    if (!val && field && field < db->num_fields)
-        return "";
-    if (tdb_lexicon_read(db, field, &lex))
+    if (field == 0 || field >= db->num_fields)
         return NULL;
-    if ((val - 1) < lex->size)
-        return (char*)lex + (&lex->toc)[val - 1];
-    tdb_err(db, "Field %"PRIu8" has no val %"PRIu32, field, val);
-    return NULL;
+    else if (!val){
+        /* a valid NULL value for a valid field */
+        *value_length = 0;
+        return "";
+    }else{
+        struct tdb_lexicon lex;
+        tdb_lexicon_read(db, field, &lex);
+        if ((val - 1) < lex.size)
+            /* TODO handle overflow value */
+            return tdb_lexicon_get(&lex, val - 1, value_length);
+        else
+            return NULL;
+    }
 }
 
-const char *tdb_get_item_value(tdb *db, tdb_item item)
+const char *tdb_get_item_value(const tdb *db,
+                               tdb_item item,
+                               uint32_t *value_length)
 {
-    return tdb_get_value(db, tdb_item_field(item), tdb_item_val(item));
+    return tdb_get_value(db,
+                         tdb_item_field(item),
+                         tdb_item_val(item),
+                         value_length);
 }
 
 const uint8_t *tdb_get_cookie(const tdb *db, uint64_t cookie_id)
@@ -470,6 +499,7 @@ const uint32_t *tdb_get_filter(const tdb *db, uint32_t *filter_len)
     return db->filter;
 }
 
+#if 0
 static void *split_fn(const tdb *db,
                       uint64_t cookie_id,
                       const tdb_item *items,
@@ -566,3 +596,4 @@ int tdb_split_with(const tdb *db,
     free(ofield_names);
     return ret;
 }
+#endif

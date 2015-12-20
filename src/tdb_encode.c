@@ -7,6 +7,7 @@
 #include "tdb_encode_model.h"
 #include "huffman.h"
 #include "util.h"
+#include "judy_str_map.h"
 
 #define EDGE_INCREMENT     1000000
 #define GROUPBUF_INCREMENT 10000000
@@ -290,15 +291,22 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     uint64_t num_cookies = cons->num_cookies;
     uint64_t num_events = cons->num_events;
     uint32_t num_fields = cons->num_ofields + 1;
-    uint64_t *field_cardinalities = (uint64_t*)cons->lexicon_counters;
+    uint64_t *field_cardinalities;
+    uint32_t i;
     Pvoid_t unigram_freqs;
     Pvoid_t gram_freqs;
     Pvoid_t codemap;
     Word_t tmp;
     FILE *grouped_w;
     FILE *grouped_r;
-
     TDB_TIMER_DEF
+
+    if (!(field_cardinalities = calloc(cons->num_ofields, 8)))
+        DIE("Couldn't malloc field_cardinalities");
+
+    /* TODO: this wouldn't include OVERFLOW_VALUE */
+    for (i = 0; i < cons->num_ofields; i++)
+        field_cardinalities[i] = jsm_num_keys(&cons->lexicons[i]);
 
     /* 1. group events by cookie, sort events of each cookie by time,
           and delta-encode timestamps */
@@ -381,6 +389,7 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     fclose(grouped_r);
     unlink(grouped_path);
 
+    free(field_cardinalities);
     free(read_buf);
     free(fstats);
 }
