@@ -1,9 +1,9 @@
 
 CFLAGS = -fPIC -O3 -Wall -g
-CINCL  = -Isrc -Ideps/discodb/src
+CINCL  = -Isrc -Ideps/discodb/src -Isrc/xxhash/
 CLIBS  = -Llib $(foreach L,discodb Judy cmph m,-l$(L))
 CHDRS  = $(wildcard src/*.h)
-CSRCS  = $(wildcard src/*.c src/dsfmt/dSFMT.c)
+CSRCS  = $(wildcard src/*.c src/dsfmt/dSFMT.c src/xxhash/*.c)
 COBJS  = $(patsubst %.c,%.o,$(CSRCS))
 
 PYTHON = python
