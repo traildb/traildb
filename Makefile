@@ -22,14 +22,14 @@ clean:
 	rm -f bin/encode bin/index bin/mix
 	rm -f lib/libtraildb.*
 
-bin/extractd: src/bin/extractd/*.c $(COBJS)
-	$(CC) $(CFLAGS) $(CINCL) -I $(<D) -o $@ $^ $(CLIBS)
+#bin/extractd: src/bin/extractd/*.c $(COBJS)
+#	$(CC) $(CFLAGS) $(CINCL) -I $(<D) -o $@ $^ $(CLIBS)
 
-bin/mix: src/bin/mix/*.c src/bin/mix/ops/*.c $(COBJS)
-	$(CC) $(CFLAGS) $(CINCL) -I $(<D) -o $@ $^ $(CLIBS)
+#bin/mix: src/bin/mix/*.c src/bin/mix/ops/*.c $(COBJS)
+#	$(CC) $(CFLAGS) $(CINCL) -I $(<D) -o $@ $^ $(CLIBS)
 
-bin/%: src/bin/%.c $(COBJS)
-	$(CC) $(CFLAGS) $(CINCL) -o $@ $^ $(CLIBS)
+#bin/%: src/bin/%.c $(COBJS)
+#	$(CC) $(CFLAGS) $(CINCL) -o $@ $^ $(CLIBS)
 
 deps/discodb/src:
 	make -C deps/discodb CFLAGS="$(CFLAGS)"
