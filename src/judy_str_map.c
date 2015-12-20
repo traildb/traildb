@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <judy_str_map.h>
+#include "judy_str_map.h"
 
 #define MAX_NUM_RETRIES 16
 
