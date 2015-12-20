@@ -38,4 +38,6 @@ void *jsm_fold(const struct judy_str_map *jsm,
 
 uint64_t jsm_num_keys(const struct judy_str_map *jsm);
 
+uint64_t jsm_values_size(const struct judy_str_map *jsm);
+
 #endif /* __JUDY_STR_MAP_H__ */

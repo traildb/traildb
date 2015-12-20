@@ -203,6 +203,11 @@ uint64_t jsm_num_keys(const struct judy_str_map *jsm)
     return jsm->num_keys;
 }
 
+uint64_t jsm_values_size(const struct judy_str_map *jsm)
+{
+    return jsm->buffer_offset - jsm->num_keys * sizeof(struct jsm_item);
+}
+
 #ifdef JSM_MAIN
 int main(int argc, char **argv)
 {
