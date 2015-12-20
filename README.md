@@ -19,3 +19,8 @@ Build the Python bindings:
 Install the Python bindings:
 
   make python CMD=install
+
+### Tests
+
+Read the `README.md` inside `testing/` subdirectory.
+
