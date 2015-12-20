@@ -71,10 +71,9 @@ int tdb_mmap(const char *path, struct tdb_file *dst, tdb *db)
 
 void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex)
 {
-    const char *base = db->lexicons[field - 1].data;
-    memcpy(&lex->size, base, 4);
-    lex->toc = (const uint32_t*)&base[4];
-    lex->data = &base[(lex->size + 2) * 4];
+    lex->data = db->lexicons[field - 1].data;
+    memcpy(&lex->size, lex->data, 4);
+    lex->toc = (const uint32_t*)&lex->data[4];
 }
 
 const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
@@ -114,12 +113,12 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
         goto error;
     }
 
-    if (num_ofields)
+    if (num_ofields){
         if (!(db->lexicons = calloc(num_ofields, sizeof(struct tdb_file)))){
             tdb_err(db, "Could not alloc %u files", num_ofields);
             goto error;
         }
-    else
+    }else
         db->lexicons = NULL;
 
     if (!(db->previous_items = calloc(db->num_fields, 4))){
