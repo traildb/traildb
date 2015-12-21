@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include <tdb_queue.h>
+#include "tdb_queue.h"
 
 struct tdb_queue{
     void **q;
