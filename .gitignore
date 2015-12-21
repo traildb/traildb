@@ -18,7 +18,6 @@ bin/trail
 *.lo
 autom4te.cache
 aclocal.m4
-configure
 depcomp
 install-sh
 missing
@@ -35,4 +34,5 @@ libtool
 Makefile.in
 ar-lib
 ltmain.sh
+coverage-html/
 
