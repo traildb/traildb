@@ -5,8 +5,18 @@ import tempfile
 import sys
 import os
 
+class CommandFailed(Exception):
+    pass
+
 def has_coverage_tools():
     return bool(distutils.spawn.find_executable("lcov") and distutils.spawn.find_executable("gcov"))
+
+def expect_zero_exit_code(*args, **kwargs):
+    result = os.system(*args, **kwargs)
+    if result != 0:
+        sys.stderr.write("Command %s failed.\n" % str(*args))
+        raise CommandFailed()
+    return 0
 
 def run_coverage_test(coverage):
     # Here's what happens:
@@ -29,18 +39,18 @@ def run_coverage_test(coverage):
 
     try:
         if has_coverage and coverage:
-            os.putenv("CFLAGS", "-I%s/src --coverage" % upper_path)
+            os.putenv("CFLAGS", "-I%s/src -fstack-protector --coverage" % upper_path)
         else:
-            os.putenv("CFLAGS", "-I%s/src" % upper_path)
+            os.putenv("CFLAGS", "-I%s/src -fstack-protector" % upper_path)
 
-        os.system("cd %s && %s --prefix %s && make install" % (temp_dir_path, os.path.join(upper_path, "configure"), temp_dir_path))
+        expect_zero_exit_code("cd %s && %s --prefix %s && make install" % (temp_dir_path, os.path.join(upper_path, "configure"), temp_dir_path))
         ld_lib_path = os.getenv("LD_LIBRARY_PATH") or ""
         os.putenv("LD_LIBRARY_PATH", "%s:%s" % (os.path.join(temp_dir_path, "lib"), ld_lib_path))
         result = os.system("cd %s && ./support/test.py" % script_path)
 
         if has_coverage and coverage:
-            os.system("cd %s && lcov --capture --directory . --output-file gcov.info" % temp_dir_path)
-            os.system("cd %s && genhtml gcov.info --output-directory %s" % (temp_dir_path, os.path.join(old_cwd, "coverage-html")))
+            expect_zero_exit_code("cd %s && lcov --capture --directory . --output-file gcov.info" % temp_dir_path)
+            expect_zero_exit_code("cd %s && genhtml gcov.info --output-directory %s" % (temp_dir_path, os.path.join(old_cwd, "coverage-html")))
             print("Generated coverage information to current working directory in coverage-html. If you don't want to generate coverage information, run with --no-coverage.")
         else:
             if coverage and not has_coverage:
