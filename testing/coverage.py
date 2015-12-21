@@ -2,6 +2,7 @@
 
 import distutils.spawn
 import tempfile
+import shutil
 import sys
 import os
 
@@ -34,6 +35,16 @@ def autoreconf_if_need_to(upper_path):
     finally:
         os.chdir(old_cwd)
 
+def cleanup_gcda_gcno():
+    # gcov can generate quite a few of .gcno and .gcda so clean them up.
+    files = os.listdir(".")
+    for f in files:
+        (base, ext) = os.path.splitext(f)
+        if ext == '.gcda' or ext == '.gcno':
+            os.remove(f)
+    if files:
+        print("Cleaned up some .gcda and .gcno files.")
+
 def run_coverage_test(coverage):
     # Here's what happens:
     # 1. We create a temporary directory
@@ -54,6 +65,7 @@ def run_coverage_test(coverage):
     has_coverage = has_coverage_tools()
 
     autoreconf_if_need_to(upper_path)
+    result = -1
 
     try:
         cflags = "%s -I%s/src/ -L%s/.libs" % (os.getenv('CFLAGS', ''),
@@ -77,13 +89,11 @@ def run_coverage_test(coverage):
         else:
             if coverage and not has_coverage:
                 print("I will not generate coverage information because 'lcov' and/or 'gcov' is missing.")
-        return result
     finally:
-        try:
-            os.chdir(old_cwd)
-            shutil.rmtree(temp_dir_path)
-        except:
-            pass
+        os.chdir(old_cwd)
+        shutil.rmtree(temp_dir_path)
+        cleanup_gcda_gcno()
+    return result
 
 if __name__ == '__main__':
     if '--no-coverage' in sys.argv:
