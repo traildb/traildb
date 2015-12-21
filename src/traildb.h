@@ -4,11 +4,12 @@
 
 #include <stdint.h>
 
-#define TDB_MAX_PATH_SIZE   1024
+#define TDB_MAX_PATH_SIZE   2048
+#define TDB_MAX_FIELDNAME_LENGTH 512
 #define TDB_MAX_ERROR_SIZE  (TDB_MAX_PATH_SIZE + 512)
 #define TDB_MAX_NUM_COOKIES (1LLU << 60)  // Lexicon needs C * 16 space
 #define TDB_MAX_NUM_EVENTS  (1LLU << 54)  // Merge needs E * F * 4 space
-#define TDB_MAX_NUM_FIELDS  (1LLU << 8)
+#define TDB_MAX_NUM_FIELDS ((1LLU << 8) - 2)
 #define TDB_MAX_NUM_VALUES ((1LLU << 24) - 2)
 #define TDB_OVERFLOW_VALUE ((1LLU << 24) - 1)
 #define TDB_MAX_VALUE_SIZE  (1LLU << 10)
@@ -16,6 +17,13 @@
 #define TDB_MAX_TIMEDELTA  ((1LLU << 24) - 2) // ~194 days
 #define TDB_FAR_TIMEDELTA  ((1LLU << 24) - 1)
 #define TDB_FAR_TIMESTAMP    UINT32_MAX
+
+
+/* support a character set that allows easy urlencoding */
+#define TDB_FIELDNAME_CHARS "_-%"\
+                            "abcdefghijklmnopqrstuvwxyz"\
+                            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"\
+                            "0123456789"
 
 #define TDB_OVERFLOW_STR   "OVERFLOW"
 #define TDB_OVERFLOW_LSEP  '['
@@ -51,7 +59,7 @@ typedef void *(*tdb_fold_fn)(const tdb *, uint64_t, const tdb_item *, void *);
 */
 
 tdb_cons *tdb_cons_new(const char *root,
-                       const char *ofield_names,
+                       const char **ofield_names,
                        uint32_t num_ofields);
 void tdb_cons_free(tdb_cons *cons);
 
@@ -150,6 +158,7 @@ int tdb_get_trail(const tdb *db,
                   uint32_t *num_items,
                   int edge_encoded);
 
+/*TODO  change filtered to take a filter struct */
 int tdb_get_trail_filtered(const tdb *db,
                            uint64_t cookie_id,
                            tdb_item **items,

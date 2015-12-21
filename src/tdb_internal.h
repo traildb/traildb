@@ -30,9 +30,9 @@ typedef struct {
 
 struct _tdb_cons {
     char *root;
-    char *ofield_names;
     struct arena events;
     struct arena items;
+    char **ofield_names;
     uint32_t min_timestamp;
     uint32_t max_timestamp;
     uint32_t max_timedelta;

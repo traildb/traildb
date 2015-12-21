@@ -6,7 +6,8 @@
 
 int main(int argc, char** argv)
 {
-    tdb_cons* c = tdb_cons_new(argv[1], "normal\0too_many\0yay\0", 3);
+    const char *fields[] = {"normal", "too_many", "yay"};
+    tdb_cons* c = tdb_cons_new(argv[1], fields, 3);
     if ( !c ) { fprintf(stderr, "tdb_cons_new() failed.\n"); return -1; }
 
     for ( int i1 = 0; i1 < TDB_OVERFLOW_VALUE*2; ++i1 ) {

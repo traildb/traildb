@@ -98,20 +98,17 @@ static void lexicon_store(const struct judy_str_map *lexicon, const char *path)
 
 static int store_lexicons(tdb_cons *cons)
 {
-    int i;
+    tdb_field i;
     FILE *out;
-    const char *field_name = cons->ofield_names;
     char path[TDB_MAX_PATH_SIZE];
 
     tdb_path(path, "%s/fields", cons->root);
     SAFE_OPEN(out, path, "w");
 
     for (i = 0; i < cons->num_ofields; i++){
-        size_t j = strlen(field_name);
-        tdb_path(path, "%s/lexicon.%s", cons->root, field_name);
+        tdb_path(path, "%s/lexicon.%s", cons->root, cons->ofield_names[i]);
         lexicon_store(&cons->lexicons[i], path);
-        fprintf(out, "%s\n", field_name);
-        field_name += j + 1;
+        fprintf(out, "%s\n", cons->ofield_names[i]);
     }
     SAFE_CLOSE(out, path);
 
@@ -190,38 +187,70 @@ static int dump_cookie_pointers(tdb_cons *cons)
     return 0;
 }
 
-static int contains_invalid_field_names(const char* fields, uint32_t num_fields)
+static int is_fieldname_invalid(const char* field)
 {
-    int i, j;
+    uint32_t i;
 
-    j = 0;
-    for (i = 0; i < num_fields; j++) {
-        if (fields[j] == '/')
+    if (!strcmp(field, "time"))
+        return 1;
+
+    for (i = 0; i < TDB_MAX_FIELDNAME_LENGTH && field[i]; i++)
+        if (!index(TDB_FIELDNAME_CHARS, field[i]))
             return 1;
-        if (fields[j] < 32 && fields[j] > 0)
-            return 1;
-        if (fields[j] == 0)
-            i++;
-    }
+
+    if (i == 0 || i == TDB_MAX_FIELDNAME_LENGTH)
+        return 1;
+
     return 0;
 }
 
+static int find_duplicate_fieldnames(const char **ofield_names,
+                                     uint32_t num_ofields)
+{
+    Pvoid_t check = NULL;
+    tdb_field i;
+    Word_t tmp;
+
+    for (i = 0; i < num_ofields; i++){
+        Word_t *ptr;
+        JSLI(ptr, check, ofield_names[i]);
+        if (*ptr){
+            JSLFA(tmp, check);
+            return 1;
+        }
+        *ptr = 1;
+    }
+    JSLFA(tmp, check);
+    return 0;
+}
+
+/* make this const char** */
 tdb_cons *tdb_cons_new(const char *root,
-                       const char *ofield_names,
+                       const char **ofield_names,
                        uint32_t num_ofields)
 {
     tdb_cons *cons;
-    int i;
+    tdb_field i;
 
     if (num_ofields > TDB_MAX_NUM_FIELDS)
         return NULL;
-    if (contains_invalid_field_names(ofield_names, num_ofields))
+
+    if (find_duplicate_fieldnames(ofield_names, num_ofields))
         return NULL;
+
     if ((cons = calloc(1, sizeof(tdb_cons))) == NULL)
         return NULL;
 
+    if (!(cons->ofield_names = calloc(num_ofields, sizeof(char*))))
+        goto error;
+
+    for (i = 0; i < num_ofields; i++){
+        if (is_fieldname_invalid(ofield_names[i]))
+            goto error;
+        cons->ofield_names[i] = strdup(ofield_names[i]);
+    }
+
     cons->root = strdup(root);
-    cons->ofield_names = dupstrs(ofield_names, num_ofields);
     cons->min_timestamp = UINT32_MAX;
     cons->max_timestamp = 0;
     cons->max_timedelta = 0;
@@ -241,9 +270,10 @@ tdb_cons *tdb_cons_new(const char *root,
                                       sizeof(struct judy_str_map))))
             goto error;
 
-    for (i = 0; i < cons->num_ofields; i++)
+    for (i = 0; i < cons->num_ofields; i++){
         if (jsm_init(&cons->lexicons[i]))
             goto error;
+        }
 
     return cons;
  error:
@@ -254,8 +284,10 @@ tdb_cons *tdb_cons_new(const char *root,
 void tdb_cons_free(tdb_cons *cons)
 {
     int i;
-    for (i = 0; i < cons->num_ofields; i++)
+    for (i = 0; i < cons->num_ofields; i++){
+        free(cons->ofield_names[i]);
         jsm_free(&cons->lexicons[i]);
+    }
     free(cons->lexicons);
     if (cons->tempfile)
         unlink(cons->tempfile);

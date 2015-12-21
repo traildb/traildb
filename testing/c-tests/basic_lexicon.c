@@ -8,6 +8,7 @@ static uint8_t cookie[16];
 
 int main(int argc, char** argv)
 {
+    const char *fields[] = {"a", "b"};
     const char *values1[] = {"red", "toy"};
     const uint32_t lengths1[] = {3, 3};
     const char *values2[] = {"blue", "ball"};
@@ -17,7 +18,7 @@ int main(int argc, char** argv)
     const char *p;
     uint32_t len;
 
-    tdb_cons* c = tdb_cons_new(argv[1], "a\0b\0", 2);
+    tdb_cons* c = tdb_cons_new(argv[1], fields, 2);
 
     tdb_cons_add(c, cookie, 0, values1, lengths1);
     tdb_cons_add(c, cookie, 0, values2, lengths2);

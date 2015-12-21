@@ -6,7 +6,8 @@
 
 int main(int argc, char** argv)
 {
-    tdb_cons* c = tdb_cons_new(argv[1], "hello\0world\0what\0is\0this\0", 5);
+    const char *fields[] = {"hello", "world", "what", "is", "this"};
+    tdb_cons* c = tdb_cons_new(argv[1], fields, 5);
     if ( !c ) { fprintf(stderr, "tdb_cons_new() failed.\n"); return -1; }
 
     if ( tdb_cons_finalize(c, 0) ) {

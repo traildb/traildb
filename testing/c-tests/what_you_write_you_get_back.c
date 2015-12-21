@@ -18,12 +18,13 @@ int main(int argc, char** argv)
 {
     uint32_t j, i = 0;
     tdb_field field;
+    const char *fields[] = {"a", "b", "c"};
     const char *values[] = {buffer1, buffer2, buffer3};
     uint32_t lengths[3];
     tdb_item *items;
     uint32_t n, items_len = 0;
 
-    tdb_cons* c = tdb_cons_new(argv[1], "a\0b\0c\0", 3);
+    tdb_cons* c = tdb_cons_new(argv[1], fields, 3);
     assert(c && "Expected tdb_cons_new() to succeed.");
 
     for (i = 0; i < sizeof(LENGTHS) / 4; i++){
