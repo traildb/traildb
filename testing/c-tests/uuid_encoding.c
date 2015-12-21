@@ -1,8 +1,9 @@
-#include <traildb.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
+#include <traildb.h>
 
 int main(int argc, char** argv)
 {
@@ -19,8 +20,8 @@ int main(int argc, char** argv)
         for ( int i2 = 0; i2 < 16; ++i2 ) {
             uuid[i2] = rand();
         }
-        tdb_cookie_hex(uuid, hex_uuid);
-        tdb_cookie_raw(hex_uuid, uuid2);
+        tdb_uuid_hex(uuid, hex_uuid);
+        tdb_uuid_raw(hex_uuid, uuid2);
         assert(!memcmp(uuid, uuid2, 16));
 
         for ( int i2 = 0; i2 < 32; ++i2 ) {
@@ -31,8 +32,8 @@ int main(int argc, char** argv)
                 hex_uuid[i2] += 'a';
             }
         }
-        tdb_cookie_raw(hex_uuid, uuid);
-        tdb_cookie_hex(uuid, hex_uuid2);
+        tdb_uuid_raw(hex_uuid, uuid);
+        tdb_uuid_hex(uuid, hex_uuid2);
         assert(!memcmp(hex_uuid, hex_uuid2, 32));
     }
     return 0;

@@ -4,126 +4,73 @@
 #include <assert.h>
 #include <string.h>
 
+#define NUM_EVENTS 3
+
+static uint8_t uuid[16];
+
+static char buffer1[TDB_MAX_VALUE_SIZE];
+static char buffer2[TDB_MAX_VALUE_SIZE];
+static char buffer3[TDB_MAX_VALUE_SIZE];
+
+const uint32_t LENGTHS[] = {0, 1, 2, 1000, TDB_MAX_VALUE_SIZE};
+
 int main(int argc, char** argv)
 {
-    tdb_cons* c = tdb_cons_new(argv[1], "victim\0murder_weapon\0motive\0", 3);
+    uint32_t j, i = 0;
+    tdb_field field;
+    const char *fields[] = {"a", "b", "c"};
+    const char *values[] = {buffer1, buffer2, buffer3};
+    uint32_t lengths[3];
+    tdb_item *items;
+    uint32_t n, items_len = 0;
+
+    tdb_cons* c = tdb_cons_new(argv[1], fields, 3);
     assert(c && "Expected tdb_cons_new() to succeed.");
 
-    tdb_cons_add(c, (uint8_t*) "aaaaaaaaaaaaaaaa", 1000, "dave\0knife\0money\0");
-    tdb_cons_add(c, (uint8_t*) "aaaaaaaaaaaaaaaa", 1002, "cat\0pistol\0annoyance\0");
-    tdb_cons_add(c, (uint8_t*) "aaaaaaaaaaaaaaaa", 1004, "plant\0water\0sadism\0");
-    tdb_cons_add(c, (uint8_t*) "aaaaaaaaaaaaaaaa", 1011, "neo900\0funding\0none\0");
-
-    tdb_cons_add(c, (uint8_t*) "baaaaaaaaaaaaaaa", 2000, "dave2\0knife2\0money2\0");
-    tdb_cons_add(c, (uint8_t*) "baaaaaaaaaaaaaaa", 2002, "cat2\0pistol2\0annoyance2\0");
-    tdb_cons_add(c, (uint8_t*) "baaaaaaaaaaaaaaa", 2004, "plant2\0water2\0sadism2\0");
-    tdb_cons_add(c, (uint8_t*) "baaaaaaaaaaaaaaa", 2011, "neo9002\0funding2\0none2\0");
-
-    tdb_cons_add(c, (uint8_t*) "baaaaaaaaaaaaaac", 3400, "dave3\0knife3\0money3\0");
-    tdb_cons_add(c, (uint8_t*) "baaaaaaaaaaaaaac", 3402, "cat3\0pistol3\0annoyance3\0");
-    tdb_cons_add(c, (uint8_t*) "baaaaaaaaaaaaaac", 3404, "plant3\0water3\0sadism3\0");
-    tdb_cons_add(c, (uint8_t*) "baaaaaaaaaaaaaac", 3411, "neo900\0funding2\0none3\0");
-
+    for (i = 0; i < sizeof(LENGTHS) / 4; i++){
+        lengths[0] = lengths[1] = lengths[2] = LENGTHS[i];
+        if (LENGTHS[i] > 0)
+            memset(buffer1, i, LENGTHS[i]);
+        memset(buffer2, i + 10, LENGTHS[i]);
+        memset(buffer3, i + 20, LENGTHS[i]);
+        memset(uuid, i, sizeof(uuid));
+        for (j = 0; j < NUM_EVENTS; j++)
+            tdb_cons_add(c, uuid, i, values, lengths);
+    }
     assert( tdb_cons_finalize(c, 0) == 0 );
     tdb_cons_free(c);
 
     tdb* t = tdb_open(argv[1]);
-    if ( !t ) { fprintf(stderr, "tdb_open() failed.\n"); return -1; }
+    if (!t){
+        fprintf(stderr, "tdb_open() failed.\n");
+        return -1;
+    }
 
-    assert(tdb_get_field(t, "victim") == 1);
-    assert(tdb_get_field(t, "murder_weapon") == 2);
-    assert(tdb_get_field(t, "motive") == 3);
+    for (i = 0; i < sizeof(LENGTHS) / 4; i++){
+        memset(uuid, i, sizeof(uuid));
+        uint64_t trail_id = tdb_get_trail_id(t, uuid);
+        int r;
+        assert(trail_id != -1);
+        r = tdb_get_trail(t, trail_id, &items, &items_len, &n, 0);
+        assert(r == 0 && "Expected tdb_get_trail() to succeed.");
+        assert(n / 5 == NUM_EVENTS && "Invalid number of events returned.");
 
-    assert(!strcmp(tdb_get_field_name(t, 1), "victim"));
-    assert(!strcmp(tdb_get_field_name(t, 2), "murder_weapon"));
-    assert(!strcmp(tdb_get_field_name(t, 3), "motive"));
+        if (LENGTHS[i] > 0)
+            memset(buffer1, i, LENGTHS[i]);
+        memset(buffer2, i + 10, LENGTHS[i]);
+        memset(buffer3, i + 20, LENGTHS[i]);
 
-    assert(tdb_num_cookies(t) == 3);
-    assert(tdb_num_fields(t) == 4);
-    assert(tdb_num_events(t) == 12);
-    assert(tdb_min_timestamp(t) == 1000);
-    assert(tdb_max_timestamp(t) == 3411);
-    assert(tdb_field_has_overflow_vals(t, 0) == 0);
-    assert(tdb_field_has_overflow_vals(t, 1) == 0);
-    assert(tdb_field_has_overflow_vals(t, 2) == 0);
-    assert(tdb_field_has_overflow_vals(t, 3) == 0);
-
-    uint64_t i1 = tdb_get_cookie_id(t, (uint8_t*) "aaaaaaaaaaaaaaaa");
-    uint64_t i2 = tdb_get_cookie_id(t, (uint8_t*) "baaaaaaaaaaaaaaa");
-    uint64_t i3 = tdb_get_cookie_id(t, (uint8_t*) "baaaaaaaaaaaaaac");
-
-    assert(i1 != i2);
-    assert(i3 != i2);
-    assert(i3 != i1);
-
-    uint32_t buffer[1000];
-
-    for ( int x = 0; x < 100; ++x ) {
-    assert(tdb_decode_trail(t, i1, buffer, 1000, 0) == (5*4));
-    assert(buffer[0] == 1000);
-    assert(!strcmp(tdb_get_item_value(t, buffer[1]), "dave"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[2]), "knife"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[3]), "money"));
-    assert(buffer[4] == 0);
-    assert(buffer[5] == 1002);
-    assert(!strcmp(tdb_get_item_value(t, buffer[6]), "cat"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[7]), "pistol"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[8]), "annoyance"));
-    assert(buffer[9] == 0);
-    assert(buffer[10] == 1004);
-    assert(!strcmp(tdb_get_item_value(t, buffer[11]), "plant"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[12]), "water"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[13]), "sadism"));
-    assert(buffer[14] == 0);
-    assert(buffer[15] == 1011);
-    assert(!strcmp(tdb_get_item_value(t, buffer[16]), "neo900"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[17]), "funding"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[18]), "none"));
-    assert(buffer[19] == 0);
-
-    assert(tdb_decode_trail(t, i2, buffer, 1000, 0) == (5*4));
-    assert(buffer[0] == 2000);
-    assert(!strcmp(tdb_get_item_value(t, buffer[1]), "dave2"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[2]), "knife2"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[3]), "money2"));
-    assert(buffer[4] == 0);
-    assert(buffer[5] == 2002);
-    assert(!strcmp(tdb_get_item_value(t, buffer[6]), "cat2"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[7]), "pistol2"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[8]), "annoyance2"));
-    assert(buffer[9] == 0);
-    assert(buffer[10] == 2004);
-    assert(!strcmp(tdb_get_item_value(t, buffer[11]), "plant2"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[12]), "water2"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[13]), "sadism2"));
-    assert(buffer[14] == 0);
-    assert(buffer[15] == 2011);
-    assert(!strcmp(tdb_get_item_value(t, buffer[16]), "neo9002"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[17]), "funding2"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[18]), "none2"));
-    assert(buffer[19] == 0);
-
-    assert(tdb_decode_trail(t, i3, buffer, 1000, 0) == (5*4));
-    assert(buffer[0] == 3400);
-    assert(!strcmp(tdb_get_item_value(t, buffer[1]), "dave3"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[2]), "knife3"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[3]), "money3"));
-    assert(buffer[4] == 0);
-    assert(buffer[5] == 3402);
-    assert(!strcmp(tdb_get_item_value(t, buffer[6]), "cat3"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[7]), "pistol3"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[8]), "annoyance3"));
-    assert(buffer[9] == 0);
-    assert(buffer[10] == 3404);
-    assert(!strcmp(tdb_get_item_value(t, buffer[11]), "plant3"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[12]), "water3"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[13]), "sadism3"));
-    assert(buffer[14] == 0);
-    assert(buffer[15] == 3411);
-    assert(!strcmp(tdb_get_item_value(t, buffer[16]), "neo900"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[17]), "funding2"));
-    assert(!strcmp(tdb_get_item_value(t, buffer[18]), "none3"));
-    assert(buffer[19] == 0);
+        for (j = 0; j < n;){
+            assert(items[j++] == i && "Unexpected timestamp.");
+            for (field = 0; field < 3; field++){
+                uint32_t len;
+                const char *p = tdb_get_item_value(t, items[j++], &len);
+                assert(p != NULL);
+                assert(len == LENGTHS[i]);
+                assert(memcmp(values[field], p, len) == 0);
+            }
+            ++j;
+        }
     }
 
     tdb_close(t);

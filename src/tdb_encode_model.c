@@ -43,10 +43,13 @@ static void event_fold(event_op op,
     tdb_item *prev_items = NULL;
     uint32_t *encoded = NULL;
     uint32_t encoded_size = 0;
-    uint64_t i = 0;
+    uint64_t i = 1;
     unsigned int rand_state = RANDOM_SEED;
     const uint32_t sample_size = get_sample_size();
     tdb_event ev;
+
+    if (num_events == 0)
+        return;
 
     if (!(prev_items = malloc(num_fields * sizeof(tdb_item))))
         DIE("Couldn't allocate %u items", num_fields);
@@ -56,23 +59,23 @@ static void event_fold(event_op op,
 
 
     /* this function scans through *all* unencoded data, takes a sample
-       of cookies, edge-encodes events for a cookie, and calls the
+       of trails, edge-encodes events for a trail, and calls the
        given function (op) for each event */
 
     while (i < num_events){
-        /* NB: We sample cookies, not events, below.
+        /* NB: We sample trails, not events, below.
            We can't encode *and* sample events efficiently at the same time.
 
-           If data is very unevenly distributed over cookies,
-           sampling cookies will produce suboptimal results.
+           If data is very unevenly distributed over trails,
+           sampling trails will produce suboptimal results.
         */
-        uint64_t cookie_id = ev.cookie_id;
+        uint64_t trail_id = ev.trail_id;
 
-        /* Always include the first cookie so we don't end up empty */
-        if (i == 0 || rand_r(&rand_state) < sample_size){
+        /* Always include the first trail so we don't end up empty */
+        if (i == 1 || rand_r(&rand_state) < sample_size){
             memset(prev_items, 0, num_fields * sizeof(tdb_item));
 
-            for (;i < num_events && ev.cookie_id == cookie_id; i++){
+            while (ev.trail_id == trail_id){
                 /* consider only valid timestamps (first byte == 0)
                    XXX: use invalid timestamps again when we add
                         the flag in finalize to skip OOD data */
@@ -85,12 +88,19 @@ static void event_fold(event_op op,
 
                     op(encoded, n, &ev, state);
                 }
-                SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
+
+                if (i < num_events) {
+                    SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
+                } else {
+                    break;
+                }
+
+                i++;
             }
         }else{
-            /* given that we are sampling cookies, we need to skip all events
-               related to a cookie not included in the sample */
-            for (;i < num_events && ev.cookie_id == cookie_id; i++)
+            /* given that we are sampling trails, we need to skip all events
+               related to a trail not included in the sample */
+            for (;i < num_events && ev.trail_id == trail_id; i++)
                 SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
         }
     }
@@ -353,6 +363,7 @@ Pvoid_t collect_unigrams(FILE *grouped,
 
     /* calculate frequencies of all items */
     event_fold(all_freqs, grouped, num_events, items, num_fields, (void *)&g);
+
     return g.ngram_freqs;
 }
 

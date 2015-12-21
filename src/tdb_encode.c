@@ -7,6 +7,7 @@
 #include "tdb_encode_model.h"
 #include "huffman.h"
 #include "util.h"
+#include "judy_str_map.h"
 
 #define EDGE_INCREMENT     1000000
 #define GROUPBUF_INCREMENT 10000000
@@ -34,13 +35,14 @@ static void group_events(FILE *grouped_w,
     tdb_event *buf = NULL;
     uint32_t buf_size = 0;
 
-    for (i = 0; i < cons->num_cookies; i++){
-        /* find the last event belonging to this cookie */
-        const tdb_cons_event *ev = &events[cons->cookie_pointers[i]];
+
+    for (i = 0; i < cons->num_trails; i++){
+        /* find the last event belonging to this trail */
+        const tdb_cons_event *ev = &events[cons->trail_pointers[i]];
         uint32_t j = 0;
         uint32_t num_events = 0;
 
-        /* loop through all events belonging to this cookie,
+        /* loop through all events belonging to this trail,
            following back-links */
         while (1){
             if (j >= buf_size){
@@ -49,7 +51,7 @@ static void group_events(FILE *grouped_w,
                     DIE("Couldn't realloc group buffer of %u items",
                         buf_size);
             }
-            buf[j].cookie_id = i;
+            buf[j].trail_id = i;
             buf[j].item_zero = ev->item_zero;
             buf[j].num_items = ev->num_items;
             buf[j].timestamp = ev->timestamp;
@@ -61,7 +63,8 @@ static void group_events(FILE *grouped_w,
         }
         num_events = j;
 
-        /* sort events of this cookie by time */
+        /* sort events of this trail by time */
+        /* TODO make this stable sort */
         qsort(buf, num_events, sizeof(tdb_event), compare);
 
         /* delta-encode timestamps */
@@ -85,6 +88,7 @@ static void group_events(FILE *grouped_w,
                 ++num_invalid;
             }
         }
+
         SAFE_WRITE(buf, num_events * sizeof(tdb_event), path, grouped_w);
     }
 
@@ -131,7 +135,7 @@ static void store_info(tdb_cons *cons, const char *path)
     SAFE_FPRINTF(out,
                  path,
                  "%"PRIu64" %"PRIu64" %"PRIu32" %"PRIu32" %"PRIu32"\n",
-                 cons->num_cookies,
+                 cons->num_trails,
                  cons->num_events,
                  cons->min_timestamp,
                  cons->max_timestamp,
@@ -143,7 +147,7 @@ static void store_info(tdb_cons *cons, const char *path)
 static void encode_trails(const tdb_item *items,
                           FILE *grouped,
                           uint64_t num_events,
-                          uint64_t num_cookies,
+                          uint64_t num_trails,
                           uint32_t num_fields,
                           const Pvoid_t codemap,
                           const Pvoid_t gram_freqs,
@@ -155,7 +159,7 @@ static void encode_trails(const tdb_item *items,
     tdb_item *prev_items = NULL;
     uint32_t *encoded = NULL;
     uint32_t encoded_size = 0;
-    uint64_t i = 0;
+    uint64_t i = 1;
     char *buf;
     FILE *out;
     uint64_t file_offs = 0, *toc;
@@ -178,27 +182,28 @@ static void encode_trails(const tdb_item *items,
     if (!(grams = malloc(num_fields * 8)))
         DIE("Could not allocate %u grams", num_fields);
 
-    if (!(toc = malloc((num_cookies + 1) * 8)))
-        DIE("Could not allocate %"PRIu64" offsets", num_cookies + 1);
+    if (!(toc = malloc((num_trails + 1) * 8)))
+        DIE("Could not allocate %"PRIu64" offsets", num_trails + 1);
 
     rewind(grouped);
-    SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
+    if (num_events)
+        SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
 
     while (i < num_events){
-        /* encode trail for one cookie (multiple events) */
+        /* encode trail for one UUID (multiple events) */
 
         /* reserve 3 bits in the head of the trail for a length residual:
            Length of a trail is measured in bytes but the last byte may
            be short. The residual indicates how many bits in the end we
            should ignore. */
         uint64_t offs = 3;
-        uint64_t cookie_id = ev.cookie_id;
+        uint64_t trail_id = ev.trail_id;
         uint64_t trail_size;
 
-        toc[cookie_id] = file_offs;
+        toc[trail_id] = file_offs;
         memset(prev_items, 0, num_fields * sizeof(tdb_item));
 
-        for (; i < num_events && ev.cookie_id == cookie_id; i++){
+        while (ev.trail_id == trail_id){
 
             /* 1) produce an edge-encoded set of items for this event */
             uint32_t n = edge_encode_items(items,
@@ -223,7 +228,13 @@ static void encode_trails(const tdb_item *items,
                               &offs,
                               fstats);
 
-            SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
+            if (i < num_events) {
+                SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
+            } else {
+                break;
+            }
+
+            i++;
         }
 
         /* write the length residual */
@@ -243,7 +254,7 @@ static void encode_trails(const tdb_item *items,
     }
     /* keep the redundant last offset in the TOC, so we can determine
        trail length with toc[i + 1] - toc[i]. */
-    toc[num_cookies] = file_offs;
+    toc[num_trails] = file_offs;
 
     /* write an extra 8 null bytes: huffman may require up to 7 when reading */
     uint64_t zero = 0;
@@ -253,7 +264,7 @@ static void encode_trails(const tdb_item *items,
     if (!(out = fopen(toc_path, "w")))
         DIE("Could not create trail TOC: %s", toc_path);
     size_t offs_size = file_offs < UINT32_MAX ? 4 : 8;
-    for (i = 0; i < num_cookies + 1; i++)
+    for (i = 0; i < num_trails + 1; i++)
         SAFE_WRITE(&toc[i], offs_size, toc_path, out);
     SAFE_CLOSE(out, toc_path);
 
@@ -287,20 +298,27 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     char grouped_path[TDB_MAX_PATH_SIZE];
     char toc_path[TDB_MAX_PATH_SIZE];
     struct field_stats *fstats;
-    uint64_t num_cookies = cons->num_cookies;
+    uint64_t num_trails = cons->num_trails;
     uint64_t num_events = cons->num_events;
     uint32_t num_fields = cons->num_ofields + 1;
-    uint64_t *field_cardinalities = (uint64_t*)cons->lexicon_counters;
+    uint64_t *field_cardinalities;
+    uint32_t i;
     Pvoid_t unigram_freqs;
     Pvoid_t gram_freqs;
     Pvoid_t codemap;
     Word_t tmp;
     FILE *grouped_w;
     FILE *grouped_r;
-
     TDB_TIMER_DEF
 
-    /* 1. group events by cookie, sort events of each cookie by time,
+    if (!(field_cardinalities = calloc(cons->num_ofields, 8)))
+        DIE("Couldn't malloc field_cardinalities");
+
+    /* TODO: this wouldn't include OVERFLOW_VALUE */
+    for (i = 0; i < cons->num_ofields; i++)
+        field_cardinalities[i] = jsm_num_keys(&cons->lexicons[i]);
+
+    /* 1. group events by trail, sort events of each trail by time,
           and delta-encode timestamps */
     TDB_TIMER_START
 
@@ -308,7 +326,8 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     if (!(grouped_w = fopen(grouped_path, "w")))
         DIE("Could not open tmp file at %s", path);
 
-    group_events(grouped_w, grouped_path, (tdb_cons_event*)cons->events.data, cons);
+    if (cons->events.data)
+        group_events(grouped_w, grouped_path, (tdb_cons_event*)cons->events.data, cons);
 
     SAFE_CLOSE(grouped_w, grouped_path);
     if (!(grouped_r = fopen(grouped_path, "r")))
@@ -359,7 +378,7 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     encode_trails(items,
                   grouped_r,
                   num_events,
-                  num_cookies,
+                  num_trails,
                   num_fields,
                   codemap,
                   gram_freqs,
@@ -381,6 +400,7 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     fclose(grouped_r);
     unlink(grouped_path);
 
+    free(field_cardinalities);
     free(read_buf);
     free(fstats);
 }

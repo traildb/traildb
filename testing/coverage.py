@@ -38,13 +38,17 @@ def run_coverage_test(coverage):
     has_coverage = has_coverage_tools()
 
     try:
+        cflags = "%s -I%s/src/ -L%s/.libs" % (os.getenv('CFLAGS', ''),
+                                              upper_path,
+                                              temp_dir_path)
+
         if has_coverage and coverage:
-            os.putenv("CFLAGS", "-I%s/src -fstack-protector --coverage" % upper_path)
+            os.putenv("CFLAGS", cflags + " --coverage")
         else:
-            os.putenv("CFLAGS", "-I%s/src -fstack-protector" % upper_path)
+            os.putenv("CFLAGS", cflags)
 
         expect_zero_exit_code("cd %s && %s --prefix %s && make install" % (temp_dir_path, os.path.join(upper_path, "configure"), temp_dir_path))
-        ld_lib_path = os.getenv("LD_LIBRARY_PATH") or ""
+        ld_lib_path = os.getenv("LD_LIBRARY_PATH", '')
         os.putenv("LD_LIBRARY_PATH", "%s:%s" % (os.path.join(temp_dir_path, "lib"), ld_lib_path))
         result = os.system("cd %s && ./support/test.py" % script_path)
 
