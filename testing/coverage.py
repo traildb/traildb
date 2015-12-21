@@ -92,7 +92,9 @@ def run_coverage_test(coverage):
     finally:
         os.chdir(old_cwd)
         shutil.rmtree(temp_dir_path)
+        os.chdir(script_path)
         cleanup_gcda_gcno()
+        os.chdir(old_cwd)
     return result
 
 if __name__ == '__main__':
