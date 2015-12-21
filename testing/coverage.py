@@ -18,6 +18,22 @@ def expect_zero_exit_code(*args, **kwargs):
         raise CommandFailed()
     return 0
 
+def autoreconf_if_need_to(upper_path):
+    # If there is configure script, we should be okay
+    if os.path.isfile(os.path.join(upper_path, "configure")):
+        return
+
+    # ...but if not then we have to run autoreconf
+    print("You don't have 'configure' script in source directory.")
+    print("Running autoreconf -i for you...")
+
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(upper_path)
+        expect_zero_exit_code("autoreconf -i")
+    finally:
+        os.chdir(old_cwd)
+
 def run_coverage_test(coverage):
     # Here's what happens:
     # 1. We create a temporary directory
@@ -36,6 +52,8 @@ def run_coverage_test(coverage):
     old_cwd = os.getcwd()
     upper_path = os.path.abspath(os.path.join(script_path, ".."))
     has_coverage = has_coverage_tools()
+
+    autoreconf_if_need_to(upper_path)
 
     try:
         cflags = "%s -I%s/src/ -L%s/.libs" % (os.getenv('CFLAGS', ''),
@@ -62,7 +80,7 @@ def run_coverage_test(coverage):
         return result
     finally:
         try:
-            os.system("cd %s" % old_cwd)
+            os.chdir(old_cwd)
             shutil.rmtree(temp_dir_path)
         except:
             pass
