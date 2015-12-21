@@ -5,7 +5,7 @@ libtraildb_la_SOURCES = \
   src/huffman.c \
   src/tdb.c \
   src/tdb_cons.c \
-  src/tdb_cookie.c \
+  src/tdb_uuid.c \
   src/tdb_decode.c \
   src/tdb_encode.c \
   src/tdb_encode_model.c \

@@ -47,26 +47,26 @@ static const char HEXCHARS[] =
     "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
     "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff";
 
-int tdb_cookie_raw(const uint8_t hexcookie[32], uint8_t cookie[16])
+int tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16])
 {
     int i;
     for (i = 0; i < 32; i += 2){
-        uint8_t c1 = HEXBYTES[hexcookie[i]];
-        uint8_t c2 = HEXBYTES[hexcookie[i + 1]];
+        uint8_t c1 = HEXBYTES[hexuuid[i]];
+        uint8_t c2 = HEXBYTES[hexuuid[i + 1]];
         if (c1 && c2)
-            cookie[i / 2] = ((c1 - 1) << 4) | (c2 - 1);
+            uuid[i / 2] = ((c1 - 1) << 4) | (c2 - 1);
         else
             return 1;
     }
     return 0;
 }
 
-int tdb_cookie_hex(const uint8_t cookie[16], uint8_t hexcookie[32])
+int tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32])
 {
     int i;
     for (i = 0; i < 16; i++){
-        hexcookie[i * 2] = HEXCHARS[cookie[i] * 2];
-        hexcookie[i * 2 + 1] = HEXCHARS[cookie[i] * 2 + 1];
+        hexuuid[i * 2] = HEXCHARS[uuid[i] * 2];
+        hexuuid[i * 2 + 1] = HEXCHARS[uuid[i] * 2 + 1];
     }
     return 0;
 }

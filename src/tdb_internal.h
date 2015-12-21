@@ -25,7 +25,7 @@ typedef struct {
     uint64_t item_zero;
     uint32_t num_items;
     uint32_t timestamp;
-    uint64_t cookie_id;
+    uint64_t trail_id;
 } tdb_event;
 
 struct _tdb_cons {
@@ -36,11 +36,11 @@ struct _tdb_cons {
     uint32_t min_timestamp;
     uint32_t max_timestamp;
     uint32_t max_timedelta;
-    uint64_t num_cookies;
+    uint64_t num_trails;
     uint64_t num_events;
     uint32_t num_ofields;
-    uint64_t *cookie_pointers;
-    Pvoid_t cookie_index;
+    uint64_t *trail_pointers;
+    Pvoid_t uuid_index;
     struct judy_str_map *lexicons;
     //uint32_t **lexicon_maps;
     char tempfile[TDB_MAX_PATH_SIZE];
@@ -62,13 +62,13 @@ struct _tdb {
     uint32_t min_timestamp;
     uint32_t max_timestamp;
     uint32_t max_timestamp_delta;
-    uint64_t num_cookies;
+    uint64_t num_trails;
     uint64_t num_events;
     uint32_t num_fields;
     uint32_t *previous_items;
 
-    struct tdb_file cookies;
-    struct tdb_file cookie_index;
+    struct tdb_file uuids;
+    struct tdb_file uuid_index;
     struct tdb_file codebook;
     struct tdb_file trails;
     struct tdb_file toc;
@@ -111,6 +111,6 @@ uint32_t edge_encode_items(const tdb_item *items,
                            tdb_item *prev_items,
                            const tdb_event *ev);
 
-uint64_t tdb_get_cookie_offs(const tdb *db, uint64_t cookie_id);
+uint64_t tdb_get_trail_offs(const tdb *db, uint64_t trail_id);
 
 #endif /* __TDB_INTERNAL_H__ */

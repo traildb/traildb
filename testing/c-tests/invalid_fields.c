@@ -1,6 +1,7 @@
 /* DESCRIPTION: Tests that invalid field names are rejected. */
 
 #include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include <assert.h>
 

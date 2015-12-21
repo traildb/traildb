@@ -14,27 +14,27 @@ struct lexicon_store{
     uint64_t offset;
 };
 
-static Word_t *lookup_cookie(tdb_cons *cons, const void *cookie)
+static Word_t *lookup_uuid(tdb_cons *cons, const void *uuid)
 {
-    const Word_t *cookie_words = (const Word_t*)cookie;
-    Word_t *cookie_ptr_hi, *cookie_ptr_lo;
-    Pvoid_t cookie_index_lo;
+    const Word_t *uuid_words = (const Word_t*)uuid;
+    Word_t *uuid_ptr_hi, *uuid_ptr_lo;
+    Pvoid_t uuid_index_lo;
 
     /*
-    Cookie index, which maps 16-byte cookies to event indices,
+    UUID index, which maps 16-byte UUIDs to event indices,
     has the following structure:
 
     JudyL -> JudyL -> Word_t
     */
-    JLI(cookie_ptr_hi, cons->cookie_index, cookie_words[0]);
-    cookie_index_lo = (Pvoid_t)*cookie_ptr_hi;
-    JLI(cookie_ptr_lo, cookie_index_lo, cookie_words[1]);
-    *cookie_ptr_hi = (Word_t)cookie_index_lo;
+    JLI(uuid_ptr_hi, cons->uuid_index, uuid_words[0]);
+    uuid_index_lo = (Pvoid_t)*uuid_ptr_hi;
+    JLI(uuid_ptr_lo, uuid_index_lo, uuid_words[1]);
+    *uuid_ptr_hi = (Word_t)uuid_index_lo;
 
-    if (!*cookie_ptr_lo)
-        ++cons->num_cookies;
+    if (!*uuid_ptr_lo)
+        ++cons->num_trails;
 
-    return cookie_ptr_lo;
+    return uuid_ptr_lo;
 }
 
 static void *lexicon_store_fun(uint64_t id,
@@ -115,75 +115,76 @@ static int store_lexicons(tdb_cons *cons)
     return 0;
 }
 
-static int store_cookies(tdb_cons *cons)
+static int store_uuids(tdb_cons *cons)
 {
-    Word_t cookie_words[2]; // NB: word must be 64-bit
+    Word_t uuid_words[2]; // NB: word must be 64-bit
     Word_t *ptr;
     FILE *out;
     char path[TDB_MAX_PATH_SIZE];
 
-    tdb_path(path, "%s/cookies", cons->root);
+    tdb_path(path, "%s/uuids", cons->root);
     SAFE_OPEN(out, path, "w");
 
-    if (cons->num_cookies > TDB_MAX_NUM_COOKIES) {
-        WARN("Too many cookies (%"PRIu64")", cons->num_cookies);
+    if (cons->num_trails > TDB_MAX_NUM_TRAILS) {
+        WARN("Too many trails (%"PRIu64")", cons->num_trails);
         return 1;
     }
 
-    if (ftruncate(fileno(out), cons->num_cookies * 16LLU)) {
-        WARN("Could not init (%"PRIu64" cookies): %s", cons->num_cookies, path);
+    if (ftruncate(fileno(out), cons->num_trails * 16LLU)) {
+        WARN("Could not init (%"PRIu64" trails): %s", cons->num_trails, path);
         return -1;
     }
 
-    cookie_words[0] = 0;
-    JLF(ptr, cons->cookie_index, cookie_words[0]);
+    /* TODO reverse words here */
+    uuid_words[0] = 0;
+    JLF(ptr, cons->uuid_index, uuid_words[0]);
     while (ptr){
-        const Pvoid_t cookie_index_lo = (Pvoid_t)*ptr;
-        cookie_words[1] = 0;
-        JLF(ptr, cookie_index_lo, cookie_words[1]);
+        const Pvoid_t uuid_index_lo = (Pvoid_t)*ptr;
+        uuid_words[1] = 0;
+        JLF(ptr, uuid_index_lo, uuid_words[1]);
         while (ptr){
-            SAFE_WRITE(cookie_words, 16, path, out);
-            JLN(ptr, cookie_index_lo, cookie_words[1]);
+            SAFE_WRITE(uuid_words, 16, path, out);
+            JLN(ptr, uuid_index_lo, uuid_words[1]);
         }
-        JLN(ptr, cons->cookie_index, cookie_words[0]);
+        JLN(ptr, cons->uuid_index, uuid_words[0]);
     }
 
     SAFE_CLOSE(out, path);
     return 0;
 }
 
-static int dump_cookie_pointers(tdb_cons *cons)
+static int dump_trail_pointers(tdb_cons *cons)
 {
-    Word_t cookie_words[2]; // NB: word must be 64-bit
+    Word_t uuid_words[2]; // NB: word must be 64-bit
     Word_t *ptr;
     Word_t tmp;
     uint64_t idx = 0;
 
-    /* serialize cookie pointers, freeing cookie_index */
+    /* serialize trail pointers, freeing uuid_index */
 
-    if ((cons->cookie_pointers = malloc(cons->num_cookies * 8)) == NULL) {
-        WARN("Could not allocate cookie array");
+    if ((cons->trail_pointers = malloc(cons->num_trails * 8)) == NULL) {
+        WARN("Could not allocate trail pointers");
         return -1;
     }
 
-    /* NOTE: The code below must populate cookie_pointers
-       in the same order as what gets stored by store_cookies() */
-    cookie_words[0] = 0;
-    JLF(ptr, cons->cookie_index, cookie_words[0]);
+    /* NOTE: The code below must populate trail_pointers
+       in the same order as what gets stored by store_uuids() */
+    uuid_words[0] = 0;
+    JLF(ptr, cons->uuid_index, uuid_words[0]);
     while (ptr){
-        Pvoid_t cookie_index_lo = (Pvoid_t)*ptr;
+        Pvoid_t uuid_index_lo = (Pvoid_t)*ptr;
 
-        cookie_words[1] = 0;
-        JLF(ptr, cookie_index_lo, cookie_words[1]);
+        uuid_words[1] = 0;
+        JLF(ptr, uuid_index_lo, uuid_words[1]);
         while (ptr){
-            cons->cookie_pointers[idx++] = *ptr - 1;
-            JLN(ptr, cookie_index_lo, cookie_words[1]);
+            cons->trail_pointers[idx++] = *ptr - 1;
+            JLN(ptr, uuid_index_lo, uuid_words[1]);
         }
 
-        JLFA(tmp, cookie_index_lo);
-        JLN(ptr, cons->cookie_index, cookie_words[0]);
+        JLFA(tmp, uuid_index_lo);
+        JLN(ptr, cons->uuid_index, uuid_words[0]);
     }
-    JLFA(tmp, cons->cookie_index);
+    JLFA(tmp, cons->uuid_index);
     return 0;
 }
 
@@ -295,7 +296,7 @@ void tdb_cons_free(tdb_cons *cons)
         free(cons->events.data);
     if (cons->items.data)
         free(cons->items.data);
-    free(cons->cookie_pointers);
+    free(cons->trail_pointers);
     free(cons->ofield_names);
     free(cons->root);
     free(cons);
@@ -356,27 +357,27 @@ static tdb_val insert_to_lexicon(struct judy_str_map *jsm,
 Append an event in this cons.
 */
 int tdb_cons_add(tdb_cons *cons,
-                 const uint8_t cookie[16],
+                 const uint8_t uuid[16],
                  const uint32_t timestamp,
                  const char **values,
                  const uint32_t *value_lengths)
 {
     tdb_field i;
     tdb_cons_event *event;
-    Word_t *cookie_ptr;
+    Word_t *uuid_ptr;
 
     for (i = 0; i < cons->num_ofields; i++)
         if (value_lengths[i] > TDB_MAX_VALUE_SIZE)
             return 2;
 
-    cookie_ptr = lookup_cookie(cons, cookie);
+    uuid_ptr = lookup_uuid(cons, uuid);
     event = (tdb_cons_event*)arena_add_item(&cons->events);
 
     event->item_zero = cons->items.next;
     event->num_items = 0;
     event->timestamp = timestamp;
-    event->prev_event_idx = *cookie_ptr;
-    *cookie_ptr = cons->events.next;
+    event->prev_event_idx = *uuid_ptr;
+    *uuid_ptr = cons->events.next;
 
     if (timestamp < cons->min_timestamp)
         cons->min_timestamp = timestamp;
@@ -409,17 +410,17 @@ of (remapped) items. Used by tdb_cons_append().
 */
 static void append_event(const tdb *db,
                          tdb_cons *cons,
-                         uint64_t cookie_id,
+                         uint64_t trail_id,
                          const uint32_t *items,
-                         Word_t *cookie_ptr)
+                         Word_t *uuid_ptr)
 {
     tdb_cons_event *event = (tdb_cons_event*)arena_add_item(&cons->events);
 
     event->item_zero = cons->items.next;
     event->num_items = 0;
     event->timestamp = items[0];
-    event->prev_event_idx = *cookie_ptr;
-    *cookie_ptr = cons->events.next;
+    event->prev_event_idx = *uuid_ptr;
+    *uuid_ptr = cons->events.next;
 
     tdb_field field;
     for (field = 1; field < cons->num_ofields + 1; field++){
@@ -478,7 +479,7 @@ remaps them to match with this cons.
 int tdb_cons_append(tdb_cons *cons, const tdb *db)
 {
     uint32_t **lexicon_maps;
-    uint64_t cookie_id;
+    uint64_t trail_id;
     tdb_item *items;
     uint32_t i, e, n, items_len = 0;
     int ret;
@@ -493,13 +494,13 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
 
     lexicon_maps = append_lexicons(cons, db);
 
-    for (cookie_id = 0; cookie_id < db->num_cookies; cookie_id++){
-        const uint8_t *cookie = tdb_get_cookie(db, cookie_id);
-        Word_t *cookie_ptr = lookup_cookie(cons, cookie);
+    for (trail_id = 0; trail_id < db->num_trails; trail_id++){
+        const uint8_t *uuid = tdb_get_uuid(db, trail_id);
+        Word_t *uuid_ptr = lookup_uuid(cons, uuid);
         tdb_field field;
 
         /* TODO this could use an iterator of the trail */
-        if (tdb_get_trail(db, cookie_id, &items, &items_len, &n, 0)){
+        if (tdb_get_trail(db, trail_id, &items, &items_len, &n, 0)){
             ret = -1;
             goto err;
         }
@@ -510,7 +511,7 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
                 if (val && val != TDB_OVERFLOW_VALUE)
                     items[idx] = field | lexicon_maps[field - 1][val];
             }
-            append_event(db, cons, cookie_id, &items[e], cookie_ptr);
+            append_event(db, cons, trail_id, &items[e], uuid_ptr);
         }
     }
 err:
@@ -549,11 +550,11 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
     TDB_TIMER_END("encoder/store_lexicons")
 
     TDB_TIMER_START
-    if (store_cookies(cons))
+    if (store_uuids(cons))
         goto error;
-    TDB_TIMER_END("encoder/store_cookies")
+    TDB_TIMER_END("encoder/store_uuids")
 
-    if (dump_cookie_pointers(cons))
+    if (dump_trail_pointers(cons))
         goto error;
 
     TDB_TIMER_START

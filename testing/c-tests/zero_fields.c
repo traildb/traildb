@@ -7,7 +7,7 @@
 
 int main(int argc, char** argv)
 {
-    uint8_t cookie[16];
+    uint8_t uuid[16];
     const char *fields[] = {};
     tdb_cons* c = tdb_cons_new(argv[1], fields, 0);
     assert(c && "Expected tdb_cons_new() to succeed for zero fields.");
@@ -16,12 +16,13 @@ int main(int argc, char** argv)
     uint32_t *items;
     uint32_t items_len = 0;
 
+    memset(uuid, 0, 16);
+
     for (i = 0; i < 1000; i++){
-        memset(cookie, 0, 16);
-        memcpy(cookie, &i, 4);
+        memcpy(uuid, &i, 4);
         for (j = 0; j < 10 + i; j++){
             sum += j;
-            assert(tdb_cons_add(c, cookie, j, fields, &zero) == 0);
+            assert(tdb_cons_add(c, uuid, j, fields, &zero) == 0);
         }
     }
 
@@ -42,7 +43,7 @@ int main(int argc, char** argv)
     assert(tdb_get_field(t, "blah") == -1);
     assert(tdb_get_field(t, "bloh") == -1);
 
-    for (i = 0; i < tdb_num_cookies(t); i++){
+    for (i = 0; i < tdb_num_trails(t); i++){
         assert(tdb_get_trail(t, i, &items, &items_len, &j, 0) == 0);
         while (j--)
             cmp += items[j];

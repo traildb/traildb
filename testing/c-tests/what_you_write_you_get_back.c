@@ -6,7 +6,7 @@
 
 #define NUM_EVENTS 3
 
-static uint8_t cookie[16];
+static uint8_t uuid[16];
 
 static char buffer1[TDB_MAX_VALUE_SIZE];
 static char buffer2[TDB_MAX_VALUE_SIZE];
@@ -33,9 +33,9 @@ int main(int argc, char** argv)
             memset(buffer1, i, LENGTHS[i]);
         memset(buffer2, i + 10, LENGTHS[i]);
         memset(buffer3, i + 20, LENGTHS[i]);
-        memset(cookie, i, sizeof(cookie));
+        memset(uuid, i, sizeof(uuid));
         for (j = 0; j < NUM_EVENTS; j++)
-            tdb_cons_add(c, cookie, i, values, lengths);
+            tdb_cons_add(c, uuid, i, values, lengths);
     }
     assert( tdb_cons_finalize(c, 0) == 0 );
     tdb_cons_free(c);
@@ -47,11 +47,11 @@ int main(int argc, char** argv)
     }
 
     for (i = 0; i < sizeof(LENGTHS) / 4; i++){
-        memset(cookie, i, sizeof(cookie));
-        uint64_t cookie_id = tdb_get_cookie_id(t, cookie);
+        memset(uuid, i, sizeof(uuid));
+        uint64_t trail_id = tdb_get_trail_id(t, uuid);
         int r;
-        assert(cookie_id != -1);
-        r = tdb_get_trail(t, cookie_id, &items, &items_len, &n, 0);
+        assert(trail_id != -1);
+        r = tdb_get_trail(t, trail_id, &items, &items_len, &n, 0);
         assert(r == 0 && "Expected tdb_get_trail() to succeed.");
         assert(n / 5 == NUM_EVENTS && "Invalid number of events returned.");
 

@@ -10,7 +10,7 @@ int main(int argc, char** argv)
 {
     char* fields = malloc((TDB_MAX_NUM_FIELDS + 2) * 11);
     const char **fields_ptr = malloc((TDB_MAX_NUM_FIELDS + 2) * sizeof(char*));
-    int i, j;
+    int i;
     for (i = 0; i < TDB_MAX_NUM_FIELDS + 2; i++ ){
         fields_ptr[i] = &fields[i * 11];
         sprintf(&fields[i * 11], "%u", i);

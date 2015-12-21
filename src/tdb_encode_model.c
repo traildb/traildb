@@ -59,23 +59,23 @@ static void event_fold(event_op op,
 
 
     /* this function scans through *all* unencoded data, takes a sample
-       of cookies, edge-encodes events for a cookie, and calls the
+       of trails, edge-encodes events for a trail, and calls the
        given function (op) for each event */
 
     while (i < num_events){
-        /* NB: We sample cookies, not events, below.
+        /* NB: We sample trails, not events, below.
            We can't encode *and* sample events efficiently at the same time.
 
-           If data is very unevenly distributed over cookies,
-           sampling cookies will produce suboptimal results.
+           If data is very unevenly distributed over trails,
+           sampling trails will produce suboptimal results.
         */
-        uint64_t cookie_id = ev.cookie_id;
+        uint64_t trail_id = ev.trail_id;
 
-        /* Always include the first cookie so we don't end up empty */
+        /* Always include the first trail so we don't end up empty */
         if (i == 1 || rand_r(&rand_state) < sample_size){
             memset(prev_items, 0, num_fields * sizeof(tdb_item));
 
-            while (ev.cookie_id == cookie_id){
+            while (ev.trail_id == trail_id){
                 /* consider only valid timestamps (first byte == 0)
                    XXX: use invalid timestamps again when we add
                         the flag in finalize to skip OOD data */
@@ -98,9 +98,9 @@ static void event_fold(event_op op,
                 i++;
             }
         }else{
-            /* given that we are sampling cookies, we need to skip all events
-               related to a cookie not included in the sample */
-            for (;i < num_events && ev.cookie_id == cookie_id; i++)
+            /* given that we are sampling trails, we need to skip all events
+               related to a trail not included in the sample */
+            for (;i < num_events && ev.trail_id == trail_id; i++)
                 SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
         }
     }

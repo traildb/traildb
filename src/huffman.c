@@ -251,8 +251,7 @@ void huff_encode_grams(const Pvoid_t codemap,
     uint32_t i = 0;
     uint64_t worstcase_bits = *offs + num_grams * 2 * 33 + 64;
     if (worstcase_bits >= UINT32_MAX)
-        DIE("Cookie trail too long: %llu bits",
-            (unsigned long long)worstcase_bits);
+        DIE("Trail too long: %llu bits", (unsigned long long)worstcase_bits);
 
     for (i = 0; i < num_grams; i++)
         encode_gram(codemap, grams[i], buf, offs, fstats);

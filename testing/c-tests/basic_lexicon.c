@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <string.h>
 
-static uint8_t cookie[16];
+static uint8_t uuid[16];
 
 int main(int argc, char** argv)
 {
@@ -20,9 +20,9 @@ int main(int argc, char** argv)
 
     tdb_cons* c = tdb_cons_new(argv[1], fields, 2);
 
-    tdb_cons_add(c, cookie, 0, values1, lengths1);
-    tdb_cons_add(c, cookie, 0, values2, lengths2);
-    tdb_cons_add(c, cookie, 0, values3, lengths3);
+    tdb_cons_add(c, uuid, 0, values1, lengths1);
+    tdb_cons_add(c, uuid, 0, values2, lengths2);
+    tdb_cons_add(c, uuid, 0, values3, lengths3);
 
     assert( tdb_cons_finalize(c, 0) == 0 );
     tdb_cons_free(c);

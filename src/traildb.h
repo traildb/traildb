@@ -7,7 +7,7 @@
 #define TDB_MAX_PATH_SIZE   2048
 #define TDB_MAX_FIELDNAME_LENGTH 512
 #define TDB_MAX_ERROR_SIZE  (TDB_MAX_PATH_SIZE + 512)
-#define TDB_MAX_NUM_COOKIES (1LLU << 60)  // Lexicon needs C * 16 space
+#define TDB_MAX_NUM_TRAILS  (1LLU << 60)  // Lexicon needs C * 16 space
 #define TDB_MAX_NUM_EVENTS  (1LLU << 54)  // Merge needs E * F * 4 space
 #define TDB_MAX_NUM_FIELDS ((1LLU << 8) - 2)
 #define TDB_MAX_NUM_VALUES ((1LLU << 24) - 2)
@@ -31,14 +31,14 @@
 
 /*
    Internally we deal with ids:
-    (id) cookie_id -> (bytes) cookie
+    (id) trail_id  -> (bytes) uuid
     (id) field     -> (bytes) field_name
     (id) val       -> (bytes) value
 
    The complete picture looks like:
 
-    cookie    -> cookie_id
-    cookie_id -> [event, ...]
+    uuid      -> trail_id
+    trail_id  -> [event, ...]
     event     := [timestamp, item, ...]
     item      := (field, val)
     field     -> field_name
@@ -60,7 +60,7 @@ tdb_cons *tdb_cons_new(const char *root,
 void tdb_cons_free(tdb_cons *cons);
 
 int tdb_cons_add(tdb_cons *cons,
-                 const uint8_t cookie[16],
+                 const uint8_t uuid[16],
                  const uint32_t timestamp,
                  const char **values,
                  const uint32_t *value_lengths);
@@ -68,8 +68,8 @@ int tdb_cons_add(tdb_cons *cons,
 int tdb_cons_append(tdb_cons *cons, const tdb *db);
 int tdb_cons_finalize(tdb_cons *cons, uint64_t flags);
 
-int tdb_cookie_raw(const uint8_t hexcookie[32], uint8_t cookie[16]);
-int tdb_cookie_hex(const uint8_t cookie[16], uint8_t hexcookie[32]);
+int tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16]);
+int tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32]);
 
 tdb *tdb_open(const char *root);
 void tdb_close(tdb *db);
@@ -96,23 +96,23 @@ const char *tdb_get_item_value(const tdb *db,
                                tdb_item item,
                                uint32_t *value_length);
 
-const uint8_t *tdb_get_cookie(const tdb *db, uint64_t cookie_id);
-int64_t tdb_get_cookie_id(const tdb *db, const uint8_t cookie[16]);
+const uint8_t *tdb_get_uuid(const tdb *db, uint64_t trail_id);
+int64_t tdb_get_trail_id(const tdb *db, const uint8_t uuid[16]);
 
-int tdb_has_cookie_index(const tdb *db);
+int tdb_has_uuid_index(const tdb *db);
 
 int tdb_set_filter(tdb *db, const uint32_t *filter, uint32_t filter_len);
 const uint32_t *tdb_get_filter(const tdb *db, uint32_t *filter_len);
 
 const char *tdb_error(const tdb *db);
 
-uint64_t tdb_num_cookies(const tdb *db);
+uint64_t tdb_num_trails(const tdb *db);
 uint64_t tdb_num_events(const tdb *db);
 uint32_t tdb_num_fields(const tdb *db);
 uint32_t tdb_min_timestamp(const tdb *db);
 uint32_t tdb_max_timestamp(const tdb *db);
 
-/* part of public api, to find cookies in partitions */
+/* part of public api, to find uuids in partitions */
 static inline unsigned int tdb_djb2(const uint8_t *str) {
   unsigned int hash = 5381, c;
   while ((c = *str++))
@@ -121,13 +121,13 @@ static inline unsigned int tdb_djb2(const uint8_t *str) {
 }
 
 uint32_t tdb_decode_trail(const tdb *db,
-                          uint64_t cookie_id,
+                          uint64_t trail_id,
                           uint32_t *dst,
                           uint32_t dst_size,
                           int edge_encoded);
 
 uint32_t tdb_decode_trail_filtered(const tdb *db,
-                                   uint64_t cookie_id,
+                                   uint64_t trail_id,
                                    uint32_t *dst,
                                    uint32_t dst_size,
                                    int edge_encoded,
@@ -135,7 +135,7 @@ uint32_t tdb_decode_trail_filtered(const tdb *db,
                                    uint32_t filter_len);
 
 int tdb_get_trail(const tdb *db,
-                  uint64_t cookie_id,
+                  uint64_t trail_id,
                   tdb_item **items,
                   uint32_t *items_buf_len,
                   uint32_t *num_items,
@@ -143,7 +143,7 @@ int tdb_get_trail(const tdb *db,
 
 /*TODO  change filtered to take a filter struct */
 int tdb_get_trail_filtered(const tdb *db,
-                           uint64_t cookie_id,
+                           uint64_t trail_id,
                            tdb_item **items,
                            uint32_t *items_buf_len,
                            uint32_t *num_items,

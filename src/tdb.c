@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#ifdef ENABLE_COOKIE_INDEX
+#ifdef ENABLE_UUID_INDEX
 #include <cmph.h>
 #endif
 
@@ -201,7 +201,7 @@ static int read_info(tdb *db, const char *path)
 
     if (fscanf(f,
                "%"PRIu64" %"PRIu64" %u %u %u",
-               &db->num_cookies,
+               &db->num_trails,
                &db->num_events,
                &db->min_timestamp,
                &db->max_timestamp,
@@ -229,14 +229,21 @@ tdb *tdb_open(const char *root)
     if (read_info(db, path))
         goto err;
 
-    if (db->num_cookies) {
+    if (db->num_trails) {
+        /* backwards compatibility: UUIDs used to be called cookies */
         tdb_path(path, "%s/cookies", root);
-        if (tdb_mmap(path, &db->cookies, db))
+        if (access(path, F_OK))
+            tdb_path(path, "%s/uuids", root);
+        if (tdb_mmap(path, &db->uuids, db)){
+            printf("FUU %s\n", path);
             goto err;
+        }
 
         tdb_path(path, "%s/cookies.index", root);
-        if (tdb_mmap(path, &db->cookie_index, db))
-            db->cookie_index.data = NULL;
+        if (access(path, F_OK))
+            tdb_path(path, "%s/uuids.index", root);
+        if (tdb_mmap(path, &db->uuid_index, db))
+            db->uuid_index.data = NULL;
 
         tdb_path(path, "%s/trails.codebook", root);
         if (tdb_mmap(path, &db->codebook, db))
@@ -275,7 +282,7 @@ void tdb_willneed(tdb *db)
                     db->lexicons[i].size,
                     MADV_WILLNEED);
 
-        madvise((void*)db->cookies.data, db->cookies.size, MADV_WILLNEED);
+        madvise((void*)db->uuids.data, db->uuids.size, MADV_WILLNEED);
         madvise((void*)db->codebook.data, db->codebook.size, MADV_WILLNEED);
         madvise((void*)db->trails.data, db->trails.size, MADV_WILLNEED);
         madvise((void*)db->toc.data, db->toc.size, MADV_WILLNEED);
@@ -291,7 +298,7 @@ void tdb_dontneed(tdb *db)
                     db->lexicons[i].size,
                     MADV_DONTNEED);
 
-        madvise((void*)db->cookies.data, db->cookies.size, MADV_DONTNEED);
+        madvise((void*)db->uuids.data, db->uuids.size, MADV_DONTNEED);
         madvise((void*)db->codebook.data, db->codebook.size, MADV_DONTNEED);
         madvise((void*)db->trails.data, db->trails.size, MADV_DONTNEED);
         madvise((void*)db->toc.data, db->toc.size, MADV_DONTNEED);
@@ -307,7 +314,7 @@ void tdb_close(tdb *db)
             munmap((void*)db->lexicons[i].data, db->lexicons[i].size);
         }
 
-        munmap((void*)db->cookies.data, db->cookies.size);
+        munmap((void*)db->uuids.data, db->uuids.size);
         munmap((void*)db->codebook.data, db->codebook.size);
         munmap((void*)db->trails.data, db->trails.size);
         munmap((void*)db->toc.data, db->toc.size);
@@ -415,49 +422,49 @@ const char *tdb_get_item_value(const tdb *db,
                          value_length);
 }
 
-const uint8_t *tdb_get_cookie(const tdb *db, uint64_t cookie_id)
+const uint8_t *tdb_get_uuid(const tdb *db, uint64_t trail_id)
 {
-    if (cookie_id < db->num_cookies)
-        return (const uint8_t *)&db->cookies.data[cookie_id * 16];
+    if (trail_id < db->num_trails)
+        return (const uint8_t *)&db->uuids.data[trail_id * 16];
     return NULL;
 }
 
-inline uint64_t tdb_get_cookie_offs(const tdb *db, uint64_t cookie_id)
+inline uint64_t tdb_get_trail_offs(const tdb *db, uint64_t trail_id)
 {
     if (db->trails.size < UINT32_MAX)
-        return ((uint32_t*)db->toc.data)[cookie_id];
-    return ((uint64_t*)db->toc.data)[cookie_id];
+        return ((uint32_t*)db->toc.data)[trail_id];
+    return ((uint64_t*)db->toc.data)[trail_id];
 }
 
-int64_t tdb_get_cookie_id(const tdb *db, const uint8_t *cookie)
+int64_t tdb_get_trail_id(const tdb *db, const uint8_t *uuid)
 {
     uint64_t i;
-#ifdef ENABLE_COOKIE_INDEX
+#ifdef ENABLE_UUID_INDEX
     /* (void*) cast is horrible below. I don't know why cmph_search_packed
        can't have a const modifier. This will segfault loudly if cmph tries to
-       modify the read-only mmap'ed cookie_index. */
-    if (db->cookie_index.data){
-        i = cmph_search_packed((void*)db->cookie_index.data,
-                               (const char*)cookie,
+       modify the read-only mmap'ed uuid_index. */
+    if (db->uuid_index.data){
+        i = cmph_search_packed((void*)db->uuid_index.data,
+                               (const char*)uuid,
                                16);
 
-        if (i < db->num_cookies){
-            if (!memcmp(tdb_get_cookie(db, i), cookie, 16))
+        if (i < db->num_trails){
+            if (!memcmp(tdb_get_uuid(db, i), uuid, 16))
                 return i;
         }
         return -1;
     }
 #endif
-    for (i = 0; i < db->num_cookies; i++)
-        if (!memcmp(tdb_get_cookie(db, i), cookie, 16))
+    for (i = 0; i < db->num_trails; i++)
+        if (!memcmp(tdb_get_uuid(db, i), uuid, 16))
             return i;
     return -1;
 }
 
-int tdb_has_cookie_index(const tdb *db)
+int tdb_has_uuid_index(const tdb *db)
 {
-#ifdef ENABLE_COOKIE_INDEX
-    return db->cookie_index.data ? 1 : 0;
+#ifdef ENABLE_UUID_INDEX
+    return db->uuid_index.data ? 1 : 0;
 #else
     return 0;
 #endif
@@ -468,9 +475,9 @@ const char *tdb_error(const tdb *db)
     return db->error;
 }
 
-uint64_t tdb_num_cookies(const tdb *db)
+uint64_t tdb_num_trails(const tdb *db)
 {
-    return db->num_cookies;
+    return db->num_trails;
 }
 
 uint64_t tdb_num_events(const tdb *db)
