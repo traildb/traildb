@@ -20,5 +20,12 @@ AC_CHECK_HEADERS([Judy.h], [], [
   AC_MSG_ERROR([unable to find Judy.h, from Judy library])
 ])
 
+AC_CHECK_LIB(cmph, cmph_config_new, [], [
+  AC_MSG_ERROR([unable to find cmph libraries])
+], [])
+AC_CHECK_HEADERS([cmph.h], [], [
+  AC_MSG_ERROR([unable to find cmph.h])
+], [])
+
 AC_OUTPUT
 
