@@ -16,9 +16,10 @@ Invoking
     $ ./coverage.py
 
 This command compiles TrailDB from parent directory with profiling and coverage
-turned on and installs it to a temporary directory. The tests are run with full
-coverage information. Returns 0 if all tests succeeded and -1 if one or more
-tests failed.
+turned on and installs it to a temporary directory. If `gcov` and `lcov` can be
+found in `PATH`, the tests are run with full coverage information and a
+directory called `coverage-html` is created in the current working directory.
+Returns 0 if all tests succeeded and -1 if one or more tests failed.
 
 Test installed TrailDB
 ----------------------
