@@ -54,10 +54,6 @@ typedef struct _tdb tdb;
 #define tdb_item_field(item) (item & 255)
 #define tdb_item_val(item)   (item >> 8)
 
-/* TODO remove this
-typedef void *(*tdb_fold_fn)(const tdb *, uint64_t, const tdb_item *, void *);
-*/
-
 tdb_cons *tdb_cons_new(const char *root,
                        const char **ofield_names,
                        uint32_t num_ofields);
@@ -124,19 +120,6 @@ static inline unsigned int tdb_djb2(const uint8_t *str) {
   return hash;
 }
 
-#if 0
-int tdb_split(const tdb *db,
-              unsigned int num_parts,
-              const char *fmt,
-              uint64_t flags);
-
-int tdb_split_with(const tdb *db,
-                   unsigned int num_parts,
-                   const char *fmt,
-                   uint64_t flags,
-                   tdb_fold_fn split_fn);
-#endif
-
 uint32_t tdb_decode_trail(const tdb *db,
                           uint64_t cookie_id,
                           uint32_t *dst,
@@ -167,7 +150,5 @@ int tdb_get_trail_filtered(const tdb *db,
                            int edge_encoded,
                            const uint32_t *filter,
                            uint32_t filter_len);
-
-//void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc);
 
 #endif /* __TRAILDB_H__ */
