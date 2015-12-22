@@ -34,5 +34,7 @@ libtool
 Makefile.in
 ar-lib
 ltmain.sh
+configure
 coverage-html/
+m4/
 

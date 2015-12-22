@@ -9,10 +9,7 @@
 #include "traildb.h"
 #include "arena.h"
 
-#include "ddb_profile.h"
-#define TDB_TIMER_DEF   DDB_TIMER_DEF
-#define TDB_TIMER_START DDB_TIMER_START
-#define TDB_TIMER_END   DDB_TIMER_END
+#include "tdb_profile.h"
 
 typedef struct {
     uint64_t item_zero;
