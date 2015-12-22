@@ -1,4 +1,3 @@
-
 #include "tdb_internal.h"
 #include "huffman.h"
 #include "util.h"
@@ -21,6 +20,11 @@ static int event_satisfies_filter(const uint32_t *event,
             uint32_t field = tdb_item_field(filter_item);
             if (field){
                 if ((event[field] == filter_item) != is_negative){
+                    match = 1;
+                    break;
+                }
+            } else {
+                if (is_negative) {
                     match = 1;
                     break;
                 }
