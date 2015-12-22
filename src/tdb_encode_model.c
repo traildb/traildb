@@ -62,7 +62,7 @@ static void event_fold(event_op op,
        of trails, edge-encodes events for a trail, and calls the
        given function (op) for each event */
 
-    while (i < num_events){
+    while (i <= num_events){
         /* NB: We sample trails, not events, below.
            We can't encode *and* sample events efficiently at the same time.
 
@@ -89,13 +89,11 @@ static void event_fold(event_op op,
                     op(encoded, n, &ev, state);
                 }
 
-                if (i < num_events) {
+                if (i++ < num_events) {
                     SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
                 } else {
                     break;
                 }
-
-                i++;
             }
         }else{
             /* given that we are sampling trails, we need to skip all events

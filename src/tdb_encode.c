@@ -189,7 +189,7 @@ static void encode_trails(const tdb_item *items,
     if (num_events)
         SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
 
-    while (i < num_events){
+    while (i <= num_events){
         /* encode trail for one UUID (multiple events) */
 
         /* reserve 3 bits in the head of the trail for a length residual:
@@ -228,13 +228,12 @@ static void encode_trails(const tdb_item *items,
                               &offs,
                               fstats);
 
-            if (i < num_events) {
+            if (i++ < num_events) {
                 SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
             } else {
                 break;
             }
 
-            i++;
         }
 
         /* write the length residual */
