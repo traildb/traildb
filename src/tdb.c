@@ -531,6 +531,11 @@ uint32_t tdb_max_timestamp(const tdb *db)
     return db->max_timestamp;
 }
 
+uint64_t tdb_version(const tdb *db)
+{
+    return db->version;
+}
+
 int tdb_set_filter(tdb *db, const uint32_t *filter, uint32_t filter_len)
 {
     free(db->filter);

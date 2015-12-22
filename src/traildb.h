@@ -122,6 +122,8 @@ uint32_t tdb_num_fields(const tdb *db);
 uint32_t tdb_min_timestamp(const tdb *db);
 uint32_t tdb_max_timestamp(const tdb *db);
 
+uint64_t tdb_version(const tdb *db);
+
 /* part of public api, to find uuids in partitions */
 /* TODO deprecate this? */
 static inline unsigned int tdb_djb2(const uint8_t *str) {
