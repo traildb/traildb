@@ -71,6 +71,7 @@ int tdb_mmap(const char *path, struct tdb_file *dst, tdb *db)
 
 void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex)
 {
+    lex->version = db->version;
     lex->data = db->lexicons[field - 1].data;
     memcpy(&lex->size, lex->data, 4);
     lex->toc = (const uint32_t*)&lex->data[4];
@@ -80,7 +81,11 @@ const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
                             uint32_t i,
                             uint32_t *length)
 {
-    *length = lex->toc[i + 1] - lex->toc[i];
+    if (lex->version == TDB_VERSION_V0){
+        /* backwards compatibility with 0-terminated strings in v0 */
+        *length = strlen(&lex->data[lex->toc[i]]);
+    }else
+        *length = lex->toc[i + 1] - lex->toc[i];
     return &lex->data[lex->toc[i]];
 }
 
