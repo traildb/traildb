@@ -57,3 +57,6 @@ src/bin/mix/ops.h: src/bin/mix/generate-ops.sh Makefile
 python: CMD = build
 python: lib/libtraildb.so
 	(cd lib/python && $(PYTHON) setup.py $(CMD))
+
+test: python test/*.py
+	LD_LIBRARY_PATH=lib PYTHONPATH=lib/python python test/test_filters.py
