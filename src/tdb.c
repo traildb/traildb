@@ -190,6 +190,24 @@ static int init_field_stats(tdb *db)
     return 0;
 }
 
+static int read_version(tdb *db, const char *path)
+{
+    FILE *f;
+
+    if (!(f = fopen(path, "r"))){
+        tdb_err(db, "Could not open path: %s", path);
+        return -1;
+    }
+
+    if (fscanf(f, "%llu", &db->version) != 1){
+        tdb_err(db, "Invalid version file");
+        return -1;
+    }
+    fclose(f);
+
+    return 0;
+}
+
 static int read_info(tdb *db, const char *path)
 {
     FILE *f;
@@ -228,6 +246,14 @@ tdb *tdb_open(const char *root)
     tdb_path(path, "%s/info", root);
     if (read_info(db, path))
         goto err;
+
+    tdb_path(path, "%s/version", root);
+    if (access(path, F_OK))
+        db->version = TDB_VERSION_V0;
+    else{
+        if (read_version(db, path))
+            goto err;
+    }
 
     if (db->num_trails) {
         /* backwards compatibility: UUIDs used to be called cookies */

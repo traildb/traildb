@@ -115,6 +115,18 @@ static int store_lexicons(tdb_cons *cons)
     return 0;
 }
 
+static int store_version(tdb_cons *cons)
+{
+    FILE *out;
+    char path[TDB_MAX_PATH_SIZE];
+
+    tdb_path(path, "%s/version", cons->root);
+    SAFE_OPEN(out, path, "w");
+    SAFE_FPRINTF(out, path, "%llu", TDB_VERSION_LATEST);
+    SAFE_CLOSE(out, path);
+    return 0;
+}
+
 static int store_uuids(tdb_cons *cons)
 {
     Word_t uuid_words[2]; // NB: word must be 64-bit
@@ -553,6 +565,11 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
     if (store_uuids(cons))
         goto error;
     TDB_TIMER_END("encoder/store_uuids")
+
+    TDB_TIMER_START
+    if (store_version(cons))
+        goto error;
+    TDB_TIMER_END("encoder/store_version")
 
     if (dump_trail_pointers(cons))
         goto error;

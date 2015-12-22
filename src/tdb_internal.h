@@ -50,6 +50,7 @@ struct tdb_file {
 };
 
 struct tdb_lexicon {
+    uint64_t version;
     uint32_t size;
     const uint32_t *toc;
     const char *data;
@@ -79,6 +80,8 @@ struct _tdb {
 
     int error_code;
     char error[TDB_MAX_ERROR_SIZE];
+
+    uint64_t version;
 };
 
 #if 0
