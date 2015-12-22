@@ -208,7 +208,7 @@ void tdb_cons_free(tdb_cons *cons)
     free(cons->lexicons);
     free(cons->lexicon_counters);
     free(cons->lexicon_maps);
-    if (cons->tempfile)
+    if (strcmp(cons->tempfile, ""))
         unlink(cons->tempfile);
     if (cons->events.data)
         free(cons->events.data);
