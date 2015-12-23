@@ -3,6 +3,7 @@
 *.o
 *.so
 *.swp
+testing/coverage-html
 lib/haskell/.stack-work
 lib/haskell/dist
 lib/python/build
@@ -11,3 +12,29 @@ bin/extractd
 bin/index
 bin/mix
 bin/trail
+
+# Autotools and build artifacts
+*.la
+*.lo
+autom4te.cache
+aclocal.m4
+depcomp
+install-sh
+missing
+stamp-h1
+compile
+.deps/
+.dirstamp
+.libs/
+config.guess
+config.log
+config.status
+config.sub
+libtool
+Makefile.in
+ar-lib
+ltmain.sh
+configure
+coverage-html/
+m4/
+

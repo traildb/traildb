@@ -2,8 +2,6 @@
 #include "huffman.h"
 #include "util.h"
 
-#define toc(cookie_id) tdb_get_cookie_offs(db, cookie_id)
-
 static int event_satisfies_filter(const uint32_t *event,
                                   const uint32_t *filter,
                                   uint32_t filter_len)
@@ -40,14 +38,68 @@ static int event_satisfies_filter(const uint32_t *event,
     return 1;
 }
 
+int tdb_get_trail(const tdb *db,
+                  uint64_t trail_id,
+                  tdb_item **items,
+                  uint32_t *items_buf_len,
+                  uint32_t *num_items,
+                  int edge_encoded)
+{
+    return tdb_get_trail_filtered(db,
+                                  trail_id,
+                                  items,
+                                  items_buf_len,
+                                  num_items,
+                                  edge_encoded,
+                                  db->filter,
+                                  db->filter_len);
+}
+
+int tdb_get_trail_filtered(const tdb *db,
+                           uint64_t trail_id,
+                           tdb_item **items,
+                           uint32_t *items_buf_len,
+                           uint32_t *num_items,
+                           int edge_encoded,
+                           const uint32_t *filter,
+                           uint32_t filter_len)
+{
+    static const int INITIAL_ITEMS_BUF_LEN = 1 << 16;
+
+    if (!*items_buf_len){
+        if (!(*items = malloc(INITIAL_ITEMS_BUF_LEN * 4)))
+            return -1;
+        *items_buf_len = INITIAL_ITEMS_BUF_LEN;
+    }
+    while (1){
+        *num_items = tdb_decode_trail_filtered(db,
+                                               trail_id,
+                                               *items,
+                                               *items_buf_len,
+                                               edge_encoded,
+                                               filter,
+                                               filter_len);
+        if (*num_items < *items_buf_len)
+            return 0;
+        else{
+            *items_buf_len *= 2;
+            free(*items);
+            if (!(*items = malloc(*items_buf_len * 4))){
+                *items_buf_len = 0;
+                return -1;
+            }
+        }
+    }
+}
+
 uint32_t tdb_decode_trail(const tdb *db,
-                          uint64_t cookie_id,
+                          uint64_t trail_id,
                           uint32_t *dst,
                           uint32_t dst_size,
                           int edge_encoded)
 {
     return tdb_decode_trail_filtered(db,
-                                     cookie_id,
+                                     trail_id,
                                      dst,
                                      dst_size,
                                      edge_encoded,
@@ -56,7 +108,7 @@ uint32_t tdb_decode_trail(const tdb *db,
 }
 
 uint32_t tdb_decode_trail_filtered(const tdb *db,
-                                   uint64_t cookie_id,
+                                   uint64_t trail_id,
                                    uint32_t *dst,
                                    uint32_t dst_size,
                                    int edge_encoded,
@@ -68,15 +120,17 @@ uint32_t tdb_decode_trail_filtered(const tdb *db,
     const struct field_stats *fstats = db->field_stats;
     uint32_t k, j, orig_i, i = 0;
     uint32_t tstamp = db->min_timestamp;
-    uint64_t delta, prev_offs, offs, size, item;
+    uint64_t delta, prev_offs, offs, trail_size, size, item;
     int first_satisfying = 1;
     tdb_field field;
 
-    if (cookie_id >= db->num_cookies)
+    if (trail_id >= db->num_trails)
         return 0;
 
-    data = &db->trails.data[toc(cookie_id)];
-    size = 8 * (toc(cookie_id + 1) - toc(cookie_id)) - read_bits(data, 0, 3);
+    data = &db->trails.data[tdb_get_trail_offs(db, trail_id)];
+    trail_size = tdb_get_trail_offs(db, trail_id + 1) -
+                 tdb_get_trail_offs(db, trail_id);
+    size = 8 * trail_size - read_bits(data, 0, 3);
     offs = 3;
 
     /* edge encoding: some fields may be inherited from previous events. Keep
@@ -161,57 +215,4 @@ uint32_t tdb_decode_trail_filtered(const tdb *db,
     }
 
     return i;
-}
-
-void *tdb_fold(const tdb *db, tdb_fold_fn fun, void *acc) {
-    const char *data;
-    const struct huff_codebook *codebook = (struct huff_codebook*)db->codebook.data;
-    const struct field_stats *fstats = db->field_stats;
-    tdb_field field;
-    uint32_t k, tstamp;
-    uint64_t cookie_id, delta, prev_offs, item, size, offs;
-
-    for (cookie_id = 0; cookie_id < db->num_cookies; cookie_id++){
-        tstamp = db->min_timestamp;
-        data = &db->trails.data[toc(cookie_id)];
-        size = 8 * (toc(cookie_id + 1) - toc(cookie_id)) - read_bits(data, 0, 3);
-        offs = 3;
-
-        for (k = 1; k < db->num_fields; k++)
-            db->previous_items[k] = k;
-
-        while (offs < size){
-            item = huff_decode_value(codebook, data, &offs, fstats);
-            delta = (item & UINT32_MAX) >> 8;
-            if (delta == TDB_FAR_TIMEDELTA){
-                db->previous_items[0] = TDB_FAR_TIMESTAMP;
-            }else{
-                tstamp += delta;
-                db->previous_items[0] = tstamp;
-            }
-            item >>= 32;
-            field = tdb_item_field(item);
-
-            if (field)
-                db->previous_items[field] = item;
-
-            while (offs < size){
-                prev_offs = offs;
-                item = huff_decode_value(codebook, data, &offs, fstats);
-                field = tdb_item_field(item);
-                if (field){
-                    do{
-                        db->previous_items[field] = item & UINT32_MAX;
-                        item >>= 32;
-                    }while ((field = tdb_item_field(item)));
-                }else{
-                    offs = prev_offs;
-                    break;
-                }
-            }
-
-            acc = fun(db, cookie_id, db->previous_items, acc);
-        }
-    }
-    return acc;
 }

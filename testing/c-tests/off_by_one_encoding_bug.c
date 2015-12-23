@@ -1,0 +1,71 @@
+
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
+
+#include <traildb.h>
+
+struct event{
+    uint32_t time;
+    char value[2];
+};
+
+struct event EVENTS[] = {
+    {0,   "a1"},
+    {10,  "a1"},
+    {100, "a1"},
+    {200, "a2"},
+    {300, "a2"},
+    {400, "a3"},
+    {500, "a2"},
+    {600, "a3"},
+    {700, "a2"}
+};
+
+int main(int argc, char** argv)
+{
+    static uint8_t uuid[16];
+    const char *fields[] = {"a", "b"};
+    uint32_t lengths[] = {3, 2};
+    tdb_item *items;
+    uint32_t n, items_len = 0;
+    uint32_t i;
+
+    tdb_cons* c = tdb_cons_new(argv[1], fields, 2);
+    assert(c != NULL);
+
+    for (i = 0; i < sizeof(EVENTS) / sizeof(struct event); i++){
+        const char *values[] = {"cli", EVENTS[i].value};
+        memcpy(uuid, &i, 4);
+        assert(tdb_cons_add(c, uuid, EVENTS[i].time, values, lengths) == 0);
+    }
+
+    assert(tdb_cons_finalize(c, 0) == 0);
+    tdb_cons_free(c);
+
+    tdb* t = tdb_open(argv[1]);
+    assert(t != NULL);
+
+    for (i = 0; i < sizeof(EVENTS) / sizeof(struct event); i++){
+        uint64_t trail_id;
+        uint32_t len;
+        const char *val;
+
+        memcpy(uuid, &i, 4);
+        trail_id = tdb_get_trail_id(t, uuid);
+
+        assert(tdb_get_trail(t, trail_id, &items, &items_len, &n, 0) == 0);
+        assert(n == 4);
+
+        val = tdb_get_item_value(t, items[2], &len);
+        assert(len == 2);
+
+        assert(items[0] == EVENTS[i].time);
+        assert(memcmp(EVENTS[i].value, val, len) == 0);
+    }
+
+    return 0;
+}
+

@@ -1,6 +1,5 @@
-
-#include "ddb_queue.h"
-#include "ddb_profile.h"
+#include "tdb_queue.h"
+#include "tdb_profile.h"
 #include "huffman.h"
 #include "util.h"
 
@@ -29,11 +28,11 @@ static void allocate_codewords(struct hnode *node, uint32_t code, int depth)
 }
 
 static struct hnode *pop_min_weight(struct hnode *symbols,
-        int *num_symbols, struct ddb_queue *nodes)
+        int *num_symbols, struct tdb_queue *nodes)
 {
-    const struct hnode *n = (const struct hnode*)ddb_queue_peek(nodes);
+    const struct hnode *n = (const struct hnode*)tdb_queue_peek(nodes);
     if (!*num_symbols || (n && n->weight < symbols[*num_symbols - 1].weight))
-        return ddb_queue_pop(nodes);
+        return tdb_queue_pop(nodes);
     else if (*num_symbols)
         return &symbols[--*num_symbols];
     return NULL;
@@ -41,32 +40,32 @@ static struct hnode *pop_min_weight(struct hnode *symbols,
 
 static int huffman_code(struct hnode *symbols, int num)
 {
-    struct ddb_queue *nodes = NULL;
+    struct tdb_queue *nodes = NULL;
     struct hnode *newnodes = NULL;
     int new_i = 0;
 
     if (!num)
         return 0;
-    if (!(nodes = ddb_queue_new(num * 2)))
+    if (!(nodes = tdb_queue_new(num * 2)))
         return -1;
     if (!(newnodes = malloc(num * sizeof(struct hnode)))){
-        ddb_queue_free(nodes);
+        tdb_queue_free(nodes);
         return -1;
     }
 
     /* construct the huffman tree bottom up */
-    while (num || ddb_queue_length(nodes) > 1){
+    while (num || tdb_queue_length(nodes) > 1){
         struct hnode *new = &newnodes[new_i++];
         new->left = pop_min_weight(symbols, &num, nodes);
         new->right = pop_min_weight(symbols, &num, nodes);
         new->weight = (new->left ? new->left->weight: 0) +
                       (new->right ? new->right->weight: 0);
-        ddb_queue_push(nodes, new);
+        tdb_queue_push(nodes, new);
     }
     /* allocate codewords top down (depth-first) */
-    allocate_codewords(ddb_queue_pop(nodes), 0, 0);
+    allocate_codewords(tdb_queue_pop(nodes), 0, 0);
     free(newnodes);
-    ddb_queue_free(nodes);
+    tdb_queue_free(nodes);
     return 0;
 }
 
@@ -176,25 +175,25 @@ Pvoid_t huff_create_codemap(const Pvoid_t key_freqs)
     Pvoid_t codemap;
     uint64_t total_freq;
     uint32_t num_symbols;
-    DDB_TIMER_DEF
+    TDB_TIMER_DEF
 
     if (!(nodes = calloc(HUFF_CODEBOOK_SIZE, sizeof(struct hnode))))
         DIE("Could not allocate huffman codebook");
 
-    DDB_TIMER_START
+    TDB_TIMER_START
     num_symbols = sort_symbols(key_freqs, &total_freq, nodes);
-    DDB_TIMER_END("huffman/sort_symbols")
+    TDB_TIMER_END("huffman/sort_symbols")
 
-    DDB_TIMER_START
+    TDB_TIMER_START
     huffman_code(nodes, num_symbols);
-    DDB_TIMER_END("huffman/huffman_code")
+    TDB_TIMER_END("huffman/huffman_code")
 
     if (getenv("DEBUG_HUFFMAN"))
         output_stats(nodes, num_symbols, total_freq);
 
-    DDB_TIMER_START
+    TDB_TIMER_START
     codemap = make_codemap(nodes, num_symbols);
-    DDB_TIMER_END("huffman/make_codemap")
+    TDB_TIMER_END("huffman/make_codemap")
 
     free(nodes);
     return codemap;
@@ -251,8 +250,7 @@ void huff_encode_grams(const Pvoid_t codemap,
     uint32_t i = 0;
     uint64_t worstcase_bits = *offs + num_grams * 2 * 33 + 64;
     if (worstcase_bits >= UINT32_MAX)
-        DIE("Cookie trail too long: %llu bits",
-            (unsigned long long)worstcase_bits);
+        DIE("Trail too long: %llu bits", (unsigned long long)worstcase_bits);
 
     for (i = 0; i < num_grams; i++)
         encode_gram(codemap, grams[i], buf, offs, fstats);
