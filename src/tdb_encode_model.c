@@ -8,6 +8,9 @@
 #include "tdb_encode_model.h"
 #include "util.h"
 
+#define DSFMT_MEXP 521
+#include "dsfmt/dSFMT.h"
+
 #define SAMPLE_SIZE (0.1 * RAND_MAX)
 #define RANDOM_SEED 238713
 #define UNIGRAM_SUPPORT 0.00001
@@ -16,21 +19,20 @@
 #define FIELD_IDX_2(x) ((x >> 32) & 255)
 
 typedef void (*event_op)(const uint32_t *encoded,
-                         int n,
+                         uint64_t n,
                          const tdb_event *ev,
                          void *state);
 
-static uint32_t get_sample_size()
+static double get_sample_size()
 {
+    double d = 0.1;
     if (getenv("TDB_SAMPLE_SIZE")){
         char *endptr;
-        double d = strtod(getenv("TDB_SAMPLE_SIZE"), &endptr);
+        d = strtod(getenv("TDB_SAMPLE_SIZE"), &endptr);
         if (*endptr || d < 0.01 || d > 1.0)
             DIE("Invalid TDB_SAMPLE_SIZE");
-        else
-            return d * RAND_MAX;
     }
-    return SAMPLE_SIZE;
+    return d;
 }
 
 static void event_fold(event_op op,
@@ -44,9 +46,11 @@ static void event_fold(event_op op,
     uint32_t *encoded = NULL;
     uint32_t encoded_size = 0;
     uint64_t i = 1;
-    unsigned int rand_state = RANDOM_SEED;
-    const uint32_t sample_size = get_sample_size();
+    const double sample_size = get_sample_size();
     tdb_event ev;
+
+    dsfmt_t rand_state;
+    dsfmt_init_gen_rand(&rand_state, RANDOM_SEED);
 
     if (num_events == 0)
         return;
@@ -62,7 +66,7 @@ static void event_fold(event_op op,
        of trails, edge-encodes events for a trail, and calls the
        given function (op) for each event */
 
-    while (i < num_events){
+    while (i <= num_events){
         /* NB: We sample trails, not events, below.
            We can't encode *and* sample events efficiently at the same time.
 
@@ -72,7 +76,7 @@ static void event_fold(event_op op,
         uint64_t trail_id = ev.trail_id;
 
         /* Always include the first trail so we don't end up empty */
-        if (i == 1 || rand_r(&rand_state) < sample_size){
+        if (i == 1 || dsfmt_genrand_close_open(&rand_state) < sample_size){
             memset(prev_items, 0, num_fields * sizeof(tdb_item));
 
             while (ev.trail_id == trail_id){
@@ -89,13 +93,11 @@ static void event_fold(event_op op,
                     op(encoded, n, &ev, state);
                 }
 
-                if (i < num_events) {
+                if (i++ < num_events) {
                     SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
                 } else {
                     break;
                 }
-
-                i++;
             }
         }else{
             /* given that we are sampling trails, we need to skip all events
@@ -133,28 +135,28 @@ void free_gram_bufs(struct gram_bufs *b)
 /* given a set of edge-encoded values (encoded), choose a set of unigrams
    and bigrams that cover the original set. In essence, this tries to
    solve Weigted Exact Cover Problem for the universe of 'encoded'. */
-uint32_t choose_grams(const uint32_t *encoded,
-                      int num_encoded,
+uint64_t choose_grams(const uint32_t *encoded,
+                      uint64_t num_encoded,
                       const Pvoid_t gram_freqs,
                       struct gram_bufs *g,
                       uint64_t *grams,
                       const tdb_event *ev)
 {
-    uint32_t j, k, n = 0;
-    int i;
+    uint64_t i, j, k, n = 0;
     Word_t *ptr;
+    uint64_t unigram1 = ev->timestamp;
 
     memset(g->covered, 0, g->num_fields);
 
     /* First, produce all candidate bigrams for this set. */
-    for (k = 0, i = -1; i < num_encoded; i++){
-        uint64_t unigram1;
-        if (i == -1)
-            unigram1 = ev->timestamp;
-        else
+    for (k = 0, i = 0; i < num_encoded; i++){
+        if (i > 0){
             unigram1 = encoded[i];
+            j = i + 1;
+        }else
+            j = 0;
 
-        for (j = i + 1; j < num_encoded; j++){
+        for (;j < num_encoded; j++){
             uint64_t bigram = unigram1 | (((uint64_t)encoded[j]) << 32);
             JLG(ptr, gram_freqs, bigram);
             if (ptr){
@@ -172,7 +174,7 @@ uint32_t choose_grams(const uint32_t *encoded,
        As we go, mark fields covered (consumed) in the set. */
     while (1){
         uint32_t max_idx = 0;
-        uint32_t max_score = 0;
+        uint64_t max_score = 0;
 
         for (i = 0; i < k; i++)
             /* consider only bigrams whose both unigrams are non-covered */
@@ -181,7 +183,7 @@ uint32_t choose_grams(const uint32_t *encoded,
                   g->scores[i] > max_score){
 
                 max_score = g->scores[i];
-                max_idx = i;
+                max_idx = (uint32_t)i;
             }
 
         if (max_score){
@@ -225,7 +227,7 @@ static Pvoid_t find_candidates(const Pvoid_t unigram_freqs)
         JLN(ptr, unigram_freqs, idx);
     }
 
-    support = num_values * UNIGRAM_SUPPORT;
+    support = num_values / (uint64_t)(1.0 / UNIGRAM_SUPPORT);
     idx = 0;
 
     JLF(ptr, unigram_freqs, idx);
@@ -249,45 +251,47 @@ struct ngram_state{
 };
 
 void all_bigrams(const uint32_t *encoded,
-                 int n,
+                 uint64_t n,
                  const tdb_event *ev,
                  void *state){
 
-  struct ngram_state *g = (struct ngram_state *)state;
-  Word_t *ptr;
-  int set, i, j;
+    struct ngram_state *g = (struct ngram_state *)state;
+    Word_t *ptr;
+    int set;
+    uint64_t i, j;
+    uint64_t unigram1 = ev->timestamp;
 
-  for (i = -1; i < n; i++){
-    uint64_t unigram1;
-    if (i == -1)
-      unigram1 = ev->timestamp;
-    else
-      unigram1 = encoded[i];
+    for (i = 0; i < n; i++){
+        if (i > 0){
+            unigram1 = encoded[i];
+            j = i + 1;
+        }else
+            j = 0;
 
-    J1T(set, g->candidates, unigram1);
-    if (set){
-      for (j = i + 1; j < n; j++){
-        uint64_t unigram2 = encoded[j];
-        J1T(set, g->candidates, unigram2);
+        J1T(set, g->candidates, unigram1);
         if (set){
-          Word_t bigram = unigram1 | (unigram2 << 32);
-          JLI(ptr, g->ngram_freqs, bigram);
-          ++*ptr;
+            for (; j < n; j++){
+                uint64_t unigram2 = encoded[j];
+                J1T(set, g->candidates, unigram2);
+                if (set){
+                    Word_t bigram = unigram1 | (unigram2 << 32);
+                    JLI(ptr, g->ngram_freqs, bigram);
+                    ++*ptr;
+                }
+            }
         }
-      }
     }
-  }
 }
 
 void choose_bigrams(const uint32_t *encoded,
-                    int num_encoded,
+                    uint64_t num_encoded,
                     const tdb_event *ev,
                     void *state){
 
   struct ngram_state *g = (struct ngram_state *)state;
   Word_t *ptr;
 
-  uint32_t n = choose_grams(encoded,
+  uint64_t n = choose_grams(encoded,
                             num_encoded,
                             g->ngram_freqs,
                             &g->gbufs,
@@ -337,7 +341,7 @@ Pvoid_t make_grams(FILE *grouped,
 }
 
 void all_freqs(const uint32_t *encoded,
-               int n,
+               uint64_t n,
                const tdb_event *ev,
                void *state){
 

@@ -17,11 +17,11 @@ static uint64_t jsm_get_small(const struct judy_str_map *jsm,
                               const char *buf,
                               uint64_t length)
 {
-    char keybuf[8] = {};
+    uint8_t keybuf[8] = {};
     Word_t *ptr;
     Word_t key;
 
-    keybuf[0] = length;
+    keybuf[0] = (uint8_t)length;
     memcpy(&keybuf[1], buf, length);
     memcpy(&key, keybuf, 8);
 
@@ -35,7 +35,7 @@ static uint64_t jsm_get_small(const struct judy_str_map *jsm,
 static uint64_t jsm_get_large(struct judy_str_map *jsm,
                               const char *buf,
                               uint64_t length,
-                              int num_retries)
+                              uint32_t num_retries)
 {
 
     Word_t *ptr;
@@ -62,11 +62,11 @@ static uint64_t jsm_insert_small(struct judy_str_map *jsm,
                                  const char *buf,
                                  uint64_t length)
 {
-    char keybuf[8] = {};
+    uint8_t keybuf[8] = {};
     Word_t *ptr;
     Word_t key;
 
-    keybuf[0] = length;
+    keybuf[0] = (uint8_t)length;
     memcpy(&keybuf[1], buf, length);
     memcpy(&key, keybuf, 8);
 
@@ -80,7 +80,7 @@ static uint64_t jsm_insert_small(struct judy_str_map *jsm,
 static uint64_t jsm_insert_large(struct judy_str_map *jsm,
                                  const char *buf,
                                  uint64_t length,
-                                 int num_retries)
+                                 uint32_t num_retries)
 {
     Word_t *ptr;
     Word_t key;
@@ -131,7 +131,7 @@ void *jsm_fold(const struct judy_str_map *jsm,
                judy_str_fold_fn fun,
                void *state)
 {
-    char buf[8];
+    uint8_t buf[8];
     Word_t *ptr;
     Word_t key = 0;
 
@@ -140,7 +140,7 @@ void *jsm_fold(const struct judy_str_map *jsm,
     JLF(ptr, jsm->small_map, key);
     while (ptr){
         memcpy(buf, &key, 8);
-        state = fun(*ptr, &buf[1], buf[0], state);
+        state = fun(*ptr, (const char*)&buf[1], buf[0], state);
         JLN(ptr, jsm->small_map, key);
     }
 

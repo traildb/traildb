@@ -43,7 +43,7 @@
     }
 
 #define SAFE_SEEK(f, offset, path)\
-    if (fseek(f, offset, SEEK_SET) == -1){\
+    if (offset > LONG_MAX || fseek(f, (long)(offset), SEEK_SET) == -1){\
         DIE("Seeking to %llu in %s failed", (unsigned long long)offset, path);\
     }
 
@@ -74,7 +74,7 @@ struct sortpair{
 
 struct sortpair *sort_judyl(const Pvoid_t judy, Word_t *num_items);
 
-uint32_t bits_needed(uint32_t max);
+uint8_t bits_needed(uint64_t max);
 
 uint64_t parse_uint64(const char *str, const char *ctx);
 

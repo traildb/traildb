@@ -1,3 +1,4 @@
+#define _GNU_SOURCE /* for getline() */
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -51,7 +52,7 @@ int tdb_mmap(const char *path, struct tdb_file *dst, tdb *db)
         return -1;
     }
 
-    if ((dst->size = stats.st_size))
+    if ((dst->size = (uint64_t)stats.st_size))
         dst->data = mmap(NULL, dst->size, PROT_READ, MAP_SHARED, fd, 0);
     else {
         tdb_err(db, "Could not mmap path: %s", path);
@@ -71,6 +72,7 @@ int tdb_mmap(const char *path, struct tdb_file *dst, tdb *db)
 
 void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex)
 {
+    lex->version = db->version;
     lex->data = db->lexicons[field - 1].data;
     memcpy(&lex->size, lex->data, 4);
     lex->toc = (const uint32_t*)&lex->data[4];
@@ -80,7 +82,11 @@ const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
                             uint32_t i,
                             uint32_t *length)
 {
-    *length = lex->toc[i + 1] - lex->toc[i];
+    if (lex->version == TDB_VERSION_V0){
+        /* backwards compatibility with 0-terminated strings in v0 */
+        *length = (uint32_t)strlen(&lex->data[lex->toc[i]]);
+    }else
+        *length = lex->toc[i + 1] - lex->toc[i];
     return &lex->data[lex->toc[i]];
 }
 
@@ -89,7 +95,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
     FILE *f;
     char *line = NULL;
     size_t n = 0;
-    int i = 0;
+    uint32_t i = 0;
     tdb_field num_ofields = 0;
 
     tdb_path(path, "%s/fields", root);
@@ -100,7 +106,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
 
     while (getline(&line, &n, f) != -1)
         ++num_ofields;
-    db->num_fields = num_ofields + 1;
+    db->num_fields = num_ofields + 1U;
 
     if (!feof(f)){
         /* we can get here if malloc fails inside getline() */
@@ -190,6 +196,24 @@ static int init_field_stats(tdb *db)
     return 0;
 }
 
+static int read_version(tdb *db, const char *path)
+{
+    FILE *f;
+
+    if (!(f = fopen(path, "r"))){
+        tdb_err(db, "Could not open path: %s", path);
+        return -1;
+    }
+
+    if (fscanf(f, "%"PRIu64, &db->version) != 1){
+        tdb_err(db, "Invalid version file");
+        return -1;
+    }
+    fclose(f);
+
+    return 0;
+}
+
 static int read_info(tdb *db, const char *path)
 {
     FILE *f;
@@ -228,6 +252,14 @@ tdb *tdb_open(const char *root)
     tdb_path(path, "%s/info", root);
     if (read_info(db, path))
         goto err;
+
+    tdb_path(path, "%s/version", root);
+    if (access(path, F_OK))
+        db->version = TDB_VERSION_V0;
+    else{
+        if (read_version(db, path))
+            goto err;
+    }
 
     if (db->num_trails) {
         /* backwards compatibility: UUIDs used to be called cookies */
@@ -278,7 +310,7 @@ void tdb_willneed(tdb *db)
     if (db){
         tdb_field i;
         for (i = 0; i < db->num_fields - 1; i++)
-            madvise((void*)db->lexicons[i].data,
+            madvise(db->lexicons[i].data,
                     db->lexicons[i].size,
                     MADV_WILLNEED);
 
@@ -450,18 +482,18 @@ int64_t tdb_get_trail_id(const tdb *db, const uint8_t *uuid)
 
         if (i < db->num_trails){
             if (!memcmp(tdb_get_uuid(db, i), uuid, 16))
-                return i;
+                return (int64_t)i;
         }
         return -1;
     }
 #endif
     for (i = 0; i < db->num_trails; i++)
         if (!memcmp(tdb_get_uuid(db, i), uuid, 16))
-            return i;
+            return (int64_t)i;
     return -1;
 }
 
-int tdb_has_uuid_index(const tdb *db)
+int tdb_has_uuid_index(const tdb *db __attribute__((unused)))
 {
 #ifdef ENABLE_UUID_INDEX
     return db->uuid_index.data ? 1 : 0;
@@ -498,6 +530,11 @@ uint32_t tdb_min_timestamp(const tdb *db)
 uint32_t tdb_max_timestamp(const tdb *db)
 {
     return db->max_timestamp;
+}
+
+uint64_t tdb_version(const tdb *db)
+{
+    return db->version;
 }
 
 int tdb_set_filter(tdb *db, const uint32_t *filter, uint32_t filter_len)

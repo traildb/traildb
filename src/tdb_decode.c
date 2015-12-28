@@ -1,4 +1,3 @@
-
 #include "tdb_internal.h"
 #include "huffman.h"
 #include "util.h"
@@ -21,6 +20,11 @@ static int event_satisfies_filter(const uint32_t *event,
             uint32_t field = tdb_item_field(filter_item);
             if (field){
                 if ((event[field] == filter_item) != is_negative){
+                    match = 1;
+                    break;
+                }
+            } else {
+                if (is_negative) {
                     match = 1;
                     break;
                 }
@@ -60,7 +64,7 @@ int tdb_get_trail_filtered(const tdb *db,
                            const uint32_t *filter,
                            uint32_t filter_len)
 {
-    static const int INITIAL_ITEMS_BUF_LEN = 1 << 16;
+    static const uint32_t INITIAL_ITEMS_BUF_LEN = 1U << 16;
 
     if (!*items_buf_len){
         if (!(*items = malloc(INITIAL_ITEMS_BUF_LEN * 4)))
@@ -144,7 +148,7 @@ uint32_t tdb_decode_trail_filtered(const tdb *db,
         if (delta == TDB_FAR_TIMEDELTA){
             dst[i++] = TDB_FAR_TIMESTAMP;
         }else{
-            tstamp += delta;
+            tstamp += (uint32_t)delta;
             dst[i++] = tstamp;
         }
         item >>= 32;
@@ -152,9 +156,9 @@ uint32_t tdb_decode_trail_filtered(const tdb *db,
         /* handle a possible latter part of the first bigram */
         if (item){
             field = tdb_item_field(item);
-            db->previous_items[field] = item;
+            db->previous_items[field] = (uint32_t)item;
             if (edge_encoded && i < dst_size)
-                dst[i++] = item;
+                dst[i++] = (uint32_t)item;
         }
 
         /* decode one event: timestamp is followed by at most num_ofields

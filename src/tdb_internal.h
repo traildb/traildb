@@ -45,11 +45,12 @@ struct _tdb_cons {
 };
 
 struct tdb_file {
-    const char *data;
+    char *data;
     uint64_t size;
 };
 
 struct tdb_lexicon {
+    uint64_t version;
     uint32_t size;
     const uint32_t *toc;
     const char *data;
@@ -71,7 +72,7 @@ struct _tdb {
     struct tdb_file toc;
     struct tdb_file *lexicons;
 
-    const char **field_names;
+    char **field_names;
     struct field_stats *field_stats;
 
     uint32_t *filter;
@@ -79,6 +80,8 @@ struct _tdb {
 
     int error_code;
     char error[TDB_MAX_ERROR_SIZE];
+
+    uint64_t version;
 };
 
 #if 0
@@ -100,7 +103,7 @@ void tdb_err(tdb *db, char *fmt, ...);
 void tdb_path(char path[TDB_MAX_PATH_SIZE], char *fmt, ...);
 int tdb_mmap(const char *path, struct tdb_file *dst, tdb *db);
 
-void tdb_encode(tdb_cons *cons, tdb_item *items);
+int tdb_encode(tdb_cons *cons, tdb_item *items);
 
 uint32_t edge_encode_items(const tdb_item *items,
                            uint32_t **encoded,

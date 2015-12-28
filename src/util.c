@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <float.h>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -32,7 +33,7 @@ struct sortpair *sort_judyl(const Pvoid_t judy, Word_t *num_items)
     Word_t key;
     Word_t *val;
 
-    JLC(*num_items, judy, 0, -1);
+    JLC(*num_items, judy, 0, (Word_t)-1);
 
     if (*num_items == 0)
         return NULL;
@@ -52,10 +53,10 @@ struct sortpair *sort_judyl(const Pvoid_t judy, Word_t *num_items)
     return pairs;
 }
 
-uint32_t bits_needed(uint32_t max)
+uint8_t bits_needed(uint64_t max)
 {
-    uint32_t x = max;
-    uint32_t bits = x ? 0: 1;
+    uint64_t x = max;
+    uint8_t bits = x ? 0: 1;
     while (x){
         x >>= 1;
         ++bits;
@@ -82,11 +83,14 @@ void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed)
     uint64_t i;
     dsfmt_t state;
 
+    if (len >= (uint64_t)DBL_MAX)
+        DIE("Too many items to shuffle!");
+
     if (len > 1){
         dsfmt_init_gen_rand(&state, seed);
 
         for (i = 0; i < len - 1; i++){
-            uint32_t j = i + (len - i) * dsfmt_genrand_close_open(&state);
+            uint64_t j = i + (uint64_t)((double)(len - i) * dsfmt_genrand_close_open(&state));
             uint64_t t = arr[j];
             arr[j] = arr[i];
             arr[i] = t;
@@ -94,6 +98,8 @@ void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed)
     }
 }
 
+/* TODO delete this */
+#if 0
 char *dupstrs(const char *strs, size_t num)
 {
     if (num == 0)
@@ -109,6 +115,7 @@ char *dupstrs(const char *strs, size_t num)
         return NULL;
     return memcpy((void *)dup, strs, n);
 }
+#endif
 
 const char *mmap_file(const char *path, uint64_t *size)
 {
@@ -122,8 +129,8 @@ const char *mmap_file(const char *path, uint64_t *size)
     if (fstat(fd, &stats))
         DIE("Could not stat path: %s", path);
 
-    data = mmap(NULL, stats.st_size, PROT_READ, MAP_SHARED, fd, 0);
-    *size = stats.st_size;
+    data = mmap(NULL, (size_t)stats.st_size, PROT_READ, MAP_SHARED, fd, 0);
+    *size = (uint64_t)stats.st_size;
 
     if (data == MAP_FAILED)
         DIE("Could not mmap path: %s", path);

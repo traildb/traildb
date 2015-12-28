@@ -37,7 +37,7 @@ static const uint8_t HEXBYTES[] =
      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00  // ........
    };
 
-static const char HEXCHARS[] =
+static const uint8_t HEXCHARS[] =
     "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
     "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
     "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
@@ -54,7 +54,7 @@ int tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16])
         uint8_t c1 = HEXBYTES[hexuuid[i]];
         uint8_t c2 = HEXBYTES[hexuuid[i + 1]];
         if (c1 && c2)
-            uuid[i / 2] = ((c1 - 1) << 4) | (c2 - 1);
+            uuid[i / 2] = (uint8_t)(((c1 - 1) << 4) | (c2 - 1));
         else
             return 1;
     }

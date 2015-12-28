@@ -50,7 +50,7 @@ void *tdb_queue_pop(struct tdb_queue *q)
     return q->q[q->tail++ % q->max];
 }
 
-int tdb_queue_length(const struct tdb_queue *q)
+uint32_t tdb_queue_length(const struct tdb_queue *q)
 {
     return q->count;
 }

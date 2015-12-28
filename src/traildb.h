@@ -7,11 +7,21 @@
 #define TDB_MAX_PATH_SIZE   2048
 #define TDB_MAX_FIELDNAME_LENGTH 512
 #define TDB_MAX_ERROR_SIZE  (TDB_MAX_PATH_SIZE + 512)
-#define TDB_MAX_NUM_TRAILS  (1LLU << 60)  // Lexicon needs C * 16 space
-#define TDB_MAX_NUM_EVENTS  (1LLU << 54)  // Merge needs E * F * 4 space
+
+/* MAX_NUM_TRAILS * 16 must fit in off_t (long) type */
+#define TDB_MAX_NUM_TRAILS  ((1LLU << 60) - 1)
+
+/* num_events is uint32_t in tdb_decode_trail() and elsewhere */
+#define TDB_MAX_TRAIL_LENGTH ((1LLU << 32) - 1)
+
+/* TODO this should be (1 << 7) - 2 */
 #define TDB_MAX_NUM_FIELDS ((1LLU << 8) - 2)
+
+/* 3 bytes are reserved for item value, with 0 value always denoting NULL */
 #define TDB_MAX_NUM_VALUES ((1LLU << 24) - 2)
 #define TDB_OVERFLOW_VALUE ((1LLU << 24) - 1)
+
+/* This is an arbitary value as long as it fits into stack comfortably */
 #define TDB_MAX_VALUE_SIZE  (1LLU << 10)
 #define TDB_MAX_LEXICON_SIZE UINT32_MAX
 #define TDB_MAX_TIMEDELTA  ((1LLU << 24) - 2) // ~194 days
@@ -28,6 +38,10 @@
 #define TDB_OVERFLOW_STR   "OVERFLOW"
 #define TDB_OVERFLOW_LSEP  '['
 #define TDB_OVERFLOW_RSEP  ']'
+
+#define TDB_VERSION_V0 0LLU
+#define TDB_VERSION_V0_1 1LLU
+#define TDB_VERSION_LATEST TDB_VERSION_V0_1
 
 /*
    Internally we deal with ids:
@@ -54,6 +68,7 @@ typedef struct _tdb tdb;
 #define tdb_item_field(item) (item & 255)
 #define tdb_item_val(item)   (item >> 8)
 
+/* TODO: move flags from finalize() to new() */
 tdb_cons *tdb_cons_new(const char *root,
                        const char **ofield_names,
                        uint32_t num_ofields);
@@ -65,12 +80,15 @@ int tdb_cons_add(tdb_cons *cons,
                  const char **values,
                  const uint32_t *value_lengths);
 
+/* TODO: rename to tdb_cons_merge() */
 int tdb_cons_append(tdb_cons *cons, const tdb *db);
 int tdb_cons_finalize(tdb_cons *cons, uint64_t flags);
 
 int tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16]);
 int tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32]);
 
+/* TODO: separate tdb_new() from tdb_open() */
+/* TODO: add uint64_t flags to tdb_new() */
 tdb *tdb_open(const char *root);
 void tdb_close(tdb *db);
 void tdb_dontneed(tdb *db);
@@ -80,6 +98,8 @@ uint32_t tdb_lexicon_size(const tdb *db, tdb_field field);
 
 int tdb_get_field(tdb *db, const char *field_name);
 const char *tdb_get_field_name(tdb *db, tdb_field field);
+
+/* TODO deprecate this after wide fields */
 int tdb_field_has_overflow_vals(tdb *db, tdb_field field);
 
 tdb_item tdb_get_item(const tdb *db,
@@ -112,7 +132,10 @@ uint32_t tdb_num_fields(const tdb *db);
 uint32_t tdb_min_timestamp(const tdb *db);
 uint32_t tdb_max_timestamp(const tdb *db);
 
+uint64_t tdb_version(const tdb *db);
+
 /* part of public api, to find uuids in partitions */
+/* TODO deprecate this? */
 static inline unsigned int tdb_djb2(const uint8_t *str) {
   unsigned int hash = 5381, c;
   while ((c = *str++))
@@ -120,6 +143,7 @@ static inline unsigned int tdb_djb2(const uint8_t *str) {
   return hash;
 }
 
+/* TODO replace edge_encoded with uint64_t flags */
 uint32_t tdb_decode_trail(const tdb *db,
                           uint64_t trail_id,
                           uint32_t *dst,
