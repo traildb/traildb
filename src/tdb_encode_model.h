@@ -12,8 +12,8 @@ struct gram_bufs{
 void init_gram_bufs(struct gram_bufs *b, uint32_t num_fields);
 void free_gram_bufs(struct gram_bufs *b);
 
-uint32_t choose_grams(const uint32_t *encoded,
-                      int num_encoded,
+uint64_t choose_grams(const uint32_t *encoded,
+                      uint64_t num_encoded,
                       const Pvoid_t gram_freqs,
                       struct gram_bufs *g,
                       uint64_t *grams,

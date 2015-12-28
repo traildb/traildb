@@ -7,8 +7,8 @@
 #include <Judy.h>
 
 #define HUFF_CODEBOOK_SIZE 65536
-#define HUFF_CODE(x) ((x) & 65535)
-#define HUFF_BITS(x) (((x) & (65535 << 16)) >> 16)
+#define HUFF_CODE(x) ((uint32_t)((x) & 65535LU))
+#define HUFF_BITS(x) ((uint32_t)(((x) & (65535LU << 16LU)) >> 16LU))
 
 struct huff_codebook{
     uint64_t symbol;
@@ -22,8 +22,8 @@ struct field_stats{
 
 static inline uint32_t read_bits(const char *src, uint64_t offs, uint32_t bits)
 {
-    uint64_t *src_w = (uint64_t*)&src[offs >> 3];
-    return (*src_w >> (offs & 7)) & ((((uint64_t)1) << bits) - 1);
+    const uint64_t *src_w = (const uint64_t*)&src[offs >> 3];
+    return (uint32_t)((*src_w >> (offs & 7)) & ((((uint64_t)1) << bits) - 1));
 }
 
 static inline void write_bits(char *dst, uint64_t offs, uint32_t val)

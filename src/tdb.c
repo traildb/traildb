@@ -1,3 +1,4 @@
+#define _GNU_SOURCE /* for getline() */
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -51,7 +52,7 @@ int tdb_mmap(const char *path, struct tdb_file *dst, tdb *db)
         return -1;
     }
 
-    if ((dst->size = stats.st_size))
+    if ((dst->size = (uint64_t)stats.st_size))
         dst->data = mmap(NULL, dst->size, PROT_READ, MAP_SHARED, fd, 0);
     else {
         tdb_err(db, "Could not mmap path: %s", path);
@@ -83,7 +84,7 @@ const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
 {
     if (lex->version == TDB_VERSION_V0){
         /* backwards compatibility with 0-terminated strings in v0 */
-        *length = strlen(&lex->data[lex->toc[i]]);
+        *length = (uint32_t)strlen(&lex->data[lex->toc[i]]);
     }else
         *length = lex->toc[i + 1] - lex->toc[i];
     return &lex->data[lex->toc[i]];
@@ -94,7 +95,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
     FILE *f;
     char *line = NULL;
     size_t n = 0;
-    int i = 0;
+    uint32_t i = 0;
     tdb_field num_ofields = 0;
 
     tdb_path(path, "%s/fields", root);
@@ -105,7 +106,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
 
     while (getline(&line, &n, f) != -1)
         ++num_ofields;
-    db->num_fields = num_ofields + 1;
+    db->num_fields = num_ofields + 1U;
 
     if (!feof(f)){
         /* we can get here if malloc fails inside getline() */
@@ -204,7 +205,7 @@ static int read_version(tdb *db, const char *path)
         return -1;
     }
 
-    if (fscanf(f, "%llu", &db->version) != 1){
+    if (fscanf(f, "%"PRIu64, &db->version) != 1){
         tdb_err(db, "Invalid version file");
         return -1;
     }
@@ -309,7 +310,7 @@ void tdb_willneed(tdb *db)
     if (db){
         tdb_field i;
         for (i = 0; i < db->num_fields - 1; i++)
-            madvise((void*)db->lexicons[i].data,
+            madvise(db->lexicons[i].data,
                     db->lexicons[i].size,
                     MADV_WILLNEED);
 
@@ -481,18 +482,18 @@ int64_t tdb_get_trail_id(const tdb *db, const uint8_t *uuid)
 
         if (i < db->num_trails){
             if (!memcmp(tdb_get_uuid(db, i), uuid, 16))
-                return i;
+                return (int64_t)i;
         }
         return -1;
     }
 #endif
     for (i = 0; i < db->num_trails; i++)
         if (!memcmp(tdb_get_uuid(db, i), uuid, 16))
-            return i;
+            return (int64_t)i;
     return -1;
 }
 
-int tdb_has_uuid_index(const tdb *db)
+int tdb_has_uuid_index(const tdb *db __attribute__((unused)))
 {
 #ifdef ENABLE_UUID_INDEX
     return db->uuid_index.data ? 1 : 0;

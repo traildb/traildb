@@ -14,13 +14,15 @@ struct hnode{
     struct hnode *right;
 };
 
-static void allocate_codewords(struct hnode *node, uint32_t code, int depth)
+static void allocate_codewords(struct hnode *node,
+                               uint32_t code,
+                               uint32_t depth)
 {
     if (node == NULL)
         return;
     if (depth < 16 && (node->right || node->left)){
         allocate_codewords(node->left, code, depth + 1);
-        allocate_codewords(node->right, code | (1 << depth), depth + 1);
+        allocate_codewords(node->right, code | (1U << depth), depth + 1);
     }else{
         node->code = code;
         node->num_bits = depth;
@@ -28,7 +30,8 @@ static void allocate_codewords(struct hnode *node, uint32_t code, int depth)
 }
 
 static struct hnode *pop_min_weight(struct hnode *symbols,
-        int *num_symbols, struct tdb_queue *nodes)
+                                    uint32_t *num_symbols,
+                                    struct tdb_queue *nodes)
 {
     const struct hnode *n = (const struct hnode*)tdb_queue_peek(nodes);
     if (!*num_symbols || (n && n->weight < symbols[*num_symbols - 1].weight))
@@ -38,11 +41,11 @@ static struct hnode *pop_min_weight(struct hnode *symbols,
     return NULL;
 }
 
-static int huffman_code(struct hnode *symbols, int num)
+static int huffman_code(struct hnode *symbols, uint32_t num)
 {
     struct tdb_queue *nodes = NULL;
     struct hnode *newnodes = NULL;
-    int new_i = 0;
+    uint32_t new_i = 0;
 
     if (!num)
         return 0;
@@ -94,9 +97,9 @@ static uint32_t sort_symbols(const Pvoid_t freqs,
 
 static void print_codeword(const struct hnode *node)
 {
-    int j;
+    uint32_t j;
     for (j = 0; j < node->num_bits; j++)
-        fprintf(stderr, "%d", (node->code & (1 << j) ? 1: 0));
+        fprintf(stderr, "%u", (node->code & (1U << j) ? 1: 0));
 }
 
 static void output_stats(const struct hnode *book,
@@ -112,7 +115,7 @@ static void output_stats(const struct hnode *book,
 
         long long unsigned int sym = book[i].symbol;
         long long unsigned int sym2 = sym >> 32;
-        uint32_t f = book[i].weight;
+        uint64_t f = book[i].weight;
         cum += f;
 
         fprintf(stderr, "%u) ", i);
@@ -126,10 +129,10 @@ static void output_stats(const struct hnode *book,
         }else
             fprintf(stderr, "uni [%llu %llu] ", sym & 255, sym >> 8);
 
-        fprintf(stderr, "%u %2.3f %2.3f | ",
+        fprintf(stderr, "%lu %2.3f %2.3f | ",
                 f,
-                100. * f / tot,
-                100. * cum / tot);
+                100. * (double)f / (double)tot,
+                100. * (double)cum / (double)tot);
         print_codeword(&book[i]);
         fprintf(stderr, "\n");
     }
@@ -206,7 +209,7 @@ static inline void encode_gram(const Pvoid_t codemap,
                                const struct field_stats *fstats)
 {
     const uint32_t field_id = gram & 255;
-    const uint32_t value = gram >> 8;
+    const uint32_t value = (uint32_t)(gram >> 8);
     const uint32_t is_bigram = (gram >> 32) & 255;
     const uint32_t literal_bits = 1 + fstats->field_id_bits +
                                   fstats->field_bits[field_id];
@@ -270,10 +273,10 @@ struct huff_codebook *huff_create_codebook(const Pvoid_t codemap,
     JLF(ptr, codemap, symbol);
     while (ptr){
         uint32_t code = HUFF_CODE(*ptr);
-        int n = HUFF_BITS(*ptr);
-        int j = 1 << (16 - n);
+        uint32_t n = HUFF_BITS(*ptr);
+        uint32_t j = 1U << (16 - n);
         while (j--){
-            int k = code | (j << n);
+            uint32_t k = code | (j << n);
             book[k].symbol = symbol;
             book[k].bits = n;
         }

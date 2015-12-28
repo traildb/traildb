@@ -1,6 +1,8 @@
+#define _DEFAULT_SOURCE /* ftruncate() */
 
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "judy_str_map.h"
@@ -81,7 +83,7 @@ static void lexicon_store(const struct judy_str_map *lexicon, const char *path)
 
     SAFE_OPEN(state.out, path, "w");
 
-    if (ftruncate(fileno(state.out), size))
+    if (ftruncate(fileno(state.out), (off_t)size))
         DIE("Could not initialize lexicon file (%"PRIu64" bytes): %s",
             size,
             path);
@@ -142,7 +144,7 @@ static int store_uuids(tdb_cons *cons)
         return 1;
     }
 
-    if (ftruncate(fileno(out), cons->num_trails * 16LLU)) {
+    if (ftruncate(fileno(out), (off_t)(cons->num_trails * 16))) {
         WARN("Could not init (%"PRIu64" trails): %s", cons->num_trails, path);
         return -1;
     }
@@ -226,7 +228,7 @@ static int find_duplicate_fieldnames(const char **ofield_names,
 
     for (i = 0; i < num_ofields; i++){
         Word_t *ptr;
-        JSLI(ptr, check, ofield_names[i]);
+        JSLI(ptr, check, (const uint8_t*)ofield_names[i]);
         if (*ptr){
             JSLFA(tmp, check);
             return 1;
@@ -237,7 +239,6 @@ static int find_duplicate_fieldnames(const char **ofield_names,
     return 0;
 }
 
-/* make this const char** */
 tdb_cons *tdb_cons_new(const char *root,
                        const char **ofield_names,
                        uint32_t num_ofields)
@@ -296,7 +297,7 @@ tdb_cons *tdb_cons_new(const char *root,
 
 void tdb_cons_free(tdb_cons *cons)
 {
-    int i;
+    uint32_t i;
     for (i = 0; i < cons->num_ofields; i++){
         free(cons->ofield_names[i]);
         jsm_free(&cons->lexicons[i]);
@@ -353,12 +354,12 @@ static tdb_val insert_to_lexicon(struct judy_str_map *jsm,
     tdb_val val;
 
     if (jsm_num_keys(jsm) < TDB_MAX_NUM_VALUES){
-        if ((val = jsm_insert(jsm, value, value_length)))
+        if ((val = (tdb_val)jsm_insert(jsm, value, value_length)))
             return val;
         else
             return 0;
     }else{
-        if ((val = jsm_get(jsm, value, value_length)))
+        if ((val = (tdb_val)jsm_get(jsm, value, value_length)))
             return val;
         else
             return TDB_OVERFLOW_VALUE;
@@ -395,7 +396,7 @@ int tdb_cons_add(tdb_cons *cons,
         cons->min_timestamp = timestamp;
 
     for (i = 0; i < cons->num_ofields; i++){
-        tdb_field field = i + 1;
+        tdb_field field = (tdb_field)(i + 1);
         tdb_item item = field;
         tdb_val val;
 
@@ -420,9 +421,7 @@ int tdb_cons_add(tdb_cons *cons,
 Append a single event to this cons. The event is a usual srequence
 of (remapped) items. Used by tdb_cons_append().
 */
-static void append_event(const tdb *db,
-                         tdb_cons *cons,
-                         uint64_t trail_id,
+static void append_event(tdb_cons *cons,
                          const uint32_t *items,
                          Word_t *uuid_ptr)
 {
@@ -448,7 +447,8 @@ tdb_cons_append().
 static uint32_t **append_lexicons(tdb_cons *cons, const tdb *db)
 {
     uint32_t **lexicon_maps;
-    uint32_t i, field;
+    uint32_t i;
+    tdb_field field;
 
     if (!(lexicon_maps = calloc(cons->num_ofields, sizeof(uint32_t*))))
         return NULL;
@@ -523,7 +523,7 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
                 if (val && val != TDB_OVERFLOW_VALUE)
                     items[idx] = field | lexicon_maps[field - 1][val];
             }
-            append_event(db, cons, trail_id, &items[e], uuid_ptr);
+            append_event(cons, &items[e], uuid_ptr);
         }
     }
 err:
@@ -533,7 +533,7 @@ err:
     return ret;
 }
 
-int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
+int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
 {
     struct tdb_file items_mmapped = {};
 
@@ -575,7 +575,8 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
         goto error;
 
     TDB_TIMER_START
-    tdb_encode(cons, (tdb_item*)items_mmapped.data);
+    if (tdb_encode(cons, (tdb_item*)items_mmapped.data))
+        goto error;
     TDB_TIMER_END("encoder/encode")
 
     if (items_mmapped.data)

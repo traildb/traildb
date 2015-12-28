@@ -15,8 +15,8 @@
 
 static int compare(const void *p1, const void *p2)
 {
-    const tdb_event *x = (tdb_event*)p1;
-    const tdb_event *y = (tdb_event*)p2;
+    const tdb_event *x = (const tdb_event*)p1;
+    const tdb_event *y = (const tdb_event*)p2;
 
     if (x->timestamp > y->timestamp)
         return 1;
@@ -25,16 +25,15 @@ static int compare(const void *p1, const void *p2)
     return 0;
 }
 
-static void group_events(FILE *grouped_w,
-                         const char *path,
-                         const tdb_cons_event *events,
-                         tdb_cons *cons)
+static int group_events(FILE *grouped_w,
+                        const char *path,
+                        const tdb_cons_event *events,
+                        tdb_cons *cons)
 {
     uint64_t i;
     uint64_t num_invalid = 0;
     tdb_event *buf = NULL;
     uint32_t buf_size = 0;
-
 
     for (i = 0; i < cons->num_trails; i++){
         /* find the last event belonging to this trail */
@@ -55,7 +54,10 @@ static void group_events(FILE *grouped_w,
             buf[j].item_zero = ev->item_zero;
             buf[j].num_items = ev->num_items;
             buf[j].timestamp = ev->timestamp;
-            ++j;
+
+            if (++j == TDB_MAX_TRAIL_LENGTH)
+                return -1;
+
             if (ev->prev_event_idx)
                 ev = &events[ev->prev_event_idx - 1];
             else
@@ -65,6 +67,8 @@ static void group_events(FILE *grouped_w,
 
         /* sort events of this trail by time */
         /* TODO make this stable sort */
+        /* TODO this could really benefit from Timsort since raw data
+           is often partially sorted */
         qsort(buf, num_events, sizeof(tdb_event), compare);
 
         /* delta-encode timestamps */
@@ -74,13 +78,13 @@ static void group_events(FILE *grouped_w,
             uint64_t delta = timestamp - prev_timestamp;
             if (delta < TDB_MAX_TIMEDELTA){
                 if (timestamp > cons->max_timestamp)
-                    cons->max_timestamp = timestamp;
+                    cons->max_timestamp = (uint32_t)timestamp;
                 if (delta > cons->max_timedelta)
-                    cons->max_timedelta = delta;
+                    cons->max_timedelta = (uint32_t)delta;
 
                 /* Convert to the delta value index */
                 prev_timestamp = timestamp;
-                buf[j].timestamp = delta << 8;
+                buf[j].timestamp = (uint32_t)(delta << 8);
             }else{
                 /* Use the out of range delta, perhaps a corrupted timestamp */
                 cons->max_timedelta = TDB_FAR_TIMEDELTA;
@@ -93,6 +97,7 @@ static void group_events(FILE *grouped_w,
     }
 
     free(buf);
+    return 0;
 }
 
 uint32_t edge_encode_items(const tdb_item *items,
@@ -213,12 +218,12 @@ static void encode_trails(const tdb_item *items,
                                            &ev);
 
             /* 2) cover the encoded set with a set of unigrams and bigrams */
-            uint32_t m = choose_grams(encoded,
-                                      n,
-                                      gram_freqs,
-                                      &gbufs,
-                                      grams,
-                                      &ev);
+            uint32_t m = (uint32_t)choose_grams(encoded,
+                                                n,
+                                                gram_freqs,
+                                                &gbufs,
+                                                grams,
+                                                &ev);
 
             /* 3) huffman-encode grams */
             huff_encode_grams(codemap,
@@ -239,7 +244,7 @@ static void encode_trails(const tdb_item *items,
         /* write the length residual */
         if (offs & 7){
             trail_size = offs / 8 + 1;
-            write_bits(buf, 0, 8 - (offs & 7));
+            write_bits(buf, 0, 8 - (uint32_t)(offs & 7LLU));
         }else{
             trail_size = offs / 8;
         }
@@ -290,24 +295,26 @@ static void store_codebook(const Pvoid_t codemap, const char *path)
     SAFE_CLOSE(out, path);
 }
 
-void tdb_encode(tdb_cons *cons, tdb_item *items)
+int tdb_encode(tdb_cons *cons, tdb_item *items)
 {
-    char *root = cons->root, *read_buf;
     char path[TDB_MAX_PATH_SIZE];
     char grouped_path[TDB_MAX_PATH_SIZE];
     char toc_path[TDB_MAX_PATH_SIZE];
-    struct field_stats *fstats;
+    char *root = cons->root;
+    char *read_buf = NULL;
+    struct field_stats *fstats = NULL;
     uint64_t num_trails = cons->num_trails;
     uint64_t num_events = cons->num_events;
     uint32_t num_fields = cons->num_ofields + 1;
-    uint64_t *field_cardinalities;
+    uint64_t *field_cardinalities = NULL;
     uint32_t i;
-    Pvoid_t unigram_freqs;
-    Pvoid_t gram_freqs;
-    Pvoid_t codemap;
+    Pvoid_t unigram_freqs = NULL;
+    Pvoid_t gram_freqs = NULL;
+    Pvoid_t codemap = NULL;
     Word_t tmp;
-    FILE *grouped_w;
-    FILE *grouped_r;
+    FILE *grouped_w = NULL;
+    FILE *grouped_r = NULL;
+    int ret = 0;
     TDB_TIMER_DEF
 
     if (!(field_cardinalities = calloc(cons->num_ofields, 8)))
@@ -326,7 +333,11 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
         DIE("Could not open tmp file at %s", path);
 
     if (cons->events.data)
-        group_events(grouped_w, grouped_path, (tdb_cons_event*)cons->events.data, cons);
+        if ((ret = group_events(grouped_w,
+                                grouped_path,
+                                (tdb_cons_event*)cons->events.data,
+                                cons)))
+            goto error;
 
     SAFE_CLOSE(grouped_w, grouped_path);
     if (!(grouped_r = fopen(grouped_path, "r")))
@@ -392,14 +403,18 @@ void tdb_encode(tdb_cons *cons, tdb_item *items)
     store_codebook(codemap, path);
     TDB_TIMER_END("trail/store_codebook");
 
+error:
     JLFA(tmp, unigram_freqs);
     JLFA(tmp, gram_freqs);
     JLFA(tmp, codemap);
 
-    fclose(grouped_r);
+    if (grouped_r)
+        fclose(grouped_r);
     unlink(grouped_path);
 
     free(field_cardinalities);
     free(read_buf);
     free(fstats);
+
+    return ret;
 }
