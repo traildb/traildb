@@ -71,6 +71,10 @@ int main(int argc, char **argv)
         assert(ptr != NULL);
         assert(*ptr == i + 1);
     }
+    for (;i < NUM_ITER * 2; i++){
+        Word_t *ptr = j128m_get(&jm, gen_key(i, &state));
+        assert(ptr == NULL);
+    }
 
     /* test fold */
 
