@@ -4,7 +4,7 @@
 
 If you want to install locally:
 
-    $ autoreconf -i
+    $ ./autogen.sh
     $ ./configure
     $ make
     $ sudo make install
