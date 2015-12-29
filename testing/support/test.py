@@ -14,7 +14,7 @@ class Testing:
         temp_dir_path = tempfile.mkdtemp()
         try:
             os.close(handle)
-            cmd = "cc %s -Wall --std=c99 -g3 %s -ltraildb -o %s" %\
+            cmd = "cc %s -Wall --std=c99 -g3 %s -ltraildb -lJudy -o %s" %\
                   (os.getenv('CFLAGS', ''), cfile, path)
             if os.system(cmd) != 0:
                 print("FAILED: %s" % cfile)

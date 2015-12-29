@@ -25,79 +25,120 @@ static int compare(const void *p1, const void *p2)
     return 0;
 }
 
-static int group_events(FILE *grouped_w,
-                        const char *path,
-                        const tdb_cons_event *events,
-                        tdb_cons *cons)
+struct jm_fold_state{
+    FILE *grouped_w;
+    const char *path;
+
+    tdb_event *buf;
+    uint64_t buf_size;
+
+    uint64_t trail_id;
+    const tdb_cons_event *events;
+    const uint32_t min_timestamp;
+    uint32_t max_timestamp;
+    uint32_t max_timedelta;
+
+    uint64_t num_invalid;
+    int ret;
+};
+
+static void *groupby_uuid_handle_one_trail(
+    __uint128_t uuid __attribute__((unused)),
+    Word_t *value,
+    void *state)
 {
-    uint64_t i;
-    uint64_t num_invalid = 0;
-    tdb_event *buf = NULL;
-    uint32_t buf_size = 0;
+    struct jm_fold_state *s = (struct jm_fold_state*)state;
+    /* find the last event belonging to this trail */
+    const tdb_cons_event *ev = &s->events[*value - 1];
+    uint32_t j = 0;
+    uint32_t num_events = 0;
 
-    for (i = 0; i < cons->num_trails; i++){
-        /* find the last event belonging to this trail */
-        const tdb_cons_event *ev = &events[cons->trail_pointers[i]];
-        uint32_t j = 0;
-        uint32_t num_events = 0;
+    /* if any of the trails fail, all fail, so it is pointless to continue */
+    if (s->ret)
+        return state;
 
-        /* loop through all events belonging to this trail,
-           following back-links */
-        while (1){
-            if (j >= buf_size){
-                buf_size += GROUPBUF_INCREMENT;
-                if (!(buf = realloc(buf, buf_size * sizeof(tdb_event))))
-                    DIE("Couldn't realloc group buffer of %u items",
-                        buf_size);
-            }
-            buf[j].trail_id = i;
-            buf[j].item_zero = ev->item_zero;
-            buf[j].num_items = ev->num_items;
-            buf[j].timestamp = ev->timestamp;
-
-            if (++j == TDB_MAX_TRAIL_LENGTH)
-                return -1;
-
-            if (ev->prev_event_idx)
-                ev = &events[ev->prev_event_idx - 1];
-            else
-                break;
+    /* loop through all events belonging to this trail,
+       following back-links */
+    while (1){
+        if (j >= s->buf_size){
+            s->buf_size += GROUPBUF_INCREMENT;
+            if (!(s->buf = realloc(s->buf, s->buf_size * sizeof(tdb_event))))
+                DIE("Couldn't realloc group buffer of %"PRIu64" items",
+                    s->buf_size);
         }
-        num_events = j;
+        s->buf[j].trail_id = s->trail_id;
+        s->buf[j].item_zero = ev->item_zero;
+        s->buf[j].num_items = ev->num_items;
+        s->buf[j].timestamp = ev->timestamp;
 
-        /* sort events of this trail by time */
-        /* TODO make this stable sort */
-        /* TODO this could really benefit from Timsort since raw data
-           is often partially sorted */
-        qsort(buf, num_events, sizeof(tdb_event), compare);
-
-        /* delta-encode timestamps */
-        uint64_t prev_timestamp = cons->min_timestamp;
-        for (j = 0; j < num_events; j++){
-            uint64_t timestamp = buf[j].timestamp;
-            uint64_t delta = timestamp - prev_timestamp;
-            if (delta < TDB_MAX_TIMEDELTA){
-                if (timestamp > cons->max_timestamp)
-                    cons->max_timestamp = (uint32_t)timestamp;
-                if (delta > cons->max_timedelta)
-                    cons->max_timedelta = (uint32_t)delta;
-
-                /* Convert to the delta value index */
-                prev_timestamp = timestamp;
-                buf[j].timestamp = (uint32_t)(delta << 8);
-            }else{
-                /* Use the out of range delta, perhaps a corrupted timestamp */
-                cons->max_timedelta = TDB_FAR_TIMEDELTA;
-                buf[j].timestamp = TDB_FAR_TIMEDELTA << 8;
-                ++num_invalid;
-            }
+        if (++j == TDB_MAX_TRAIL_LENGTH){
+            s->ret = -1;
+            return state;
         }
 
-        SAFE_WRITE(buf, num_events * sizeof(tdb_event), path, grouped_w);
+        if (ev->prev_event_idx)
+            ev = &s->events[ev->prev_event_idx - 1];
+        else
+            break;
+    }
+    num_events = j;
+
+    /* sort events of this trail by time */
+    /* TODO make this stable sort */
+    /* TODO this could really benefit from Timsort since raw data
+       is often partially sorted */
+    qsort(s->buf, num_events, sizeof(tdb_event), compare);
+
+    /* delta-encode timestamps */
+    uint64_t prev_timestamp = s->min_timestamp;
+    for (j = 0; j < num_events; j++){
+        uint64_t timestamp = s->buf[j].timestamp;
+        uint64_t delta = timestamp - prev_timestamp;
+        if (delta < TDB_MAX_TIMEDELTA){
+            if (timestamp > s->max_timestamp)
+                s->max_timestamp = (uint32_t)timestamp;
+            if (delta > s->max_timedelta)
+                s->max_timedelta = (uint32_t)delta;
+
+            /* Convert to the delta value index */
+            prev_timestamp = timestamp;
+            s->buf[j].timestamp = (uint32_t)(delta << 8);
+        }else{
+            /* Use the out of range delta, perhaps a corrupted timestamp */
+            s->max_timedelta = TDB_FAR_TIMEDELTA;
+            s->buf[j].timestamp = TDB_FAR_TIMEDELTA << 8;
+            ++s->num_invalid;
+        }
     }
 
-    free(buf);
-    return 0;
+    SAFE_WRITE(s->buf, num_events * sizeof(tdb_event), s->path, s->grouped_w);
+    ++s->trail_id;
+    return state;
+}
+
+static int groupby_uuid(FILE *grouped_w,
+                        const char *path,
+                        const tdb_cons_event *events,
+                        tdb_cons *cons,
+                        uint64_t *num_trails,
+                        uint32_t *max_timestamp,
+                        uint32_t *max_timedelta)
+{
+    struct jm_fold_state state = {
+        .grouped_w = grouped_w,
+        .events = events,
+        .path = path,
+        .min_timestamp = cons->min_timestamp
+    };
+
+    j128m_fold(&cons->trails, groupby_uuid_handle_one_trail, &state);
+
+    *num_trails = state.trail_id;
+    *max_timestamp = state.max_timestamp;
+    *max_timedelta = state.max_timedelta;
+
+    free(state.buf);
+    return state.ret;
 }
 
 uint32_t edge_encode_items(const tdb_item *items,
@@ -130,7 +171,12 @@ uint32_t edge_encode_items(const tdb_item *items,
     return n;
 }
 
-static void store_info(tdb_cons *cons, const char *path)
+static void store_info(const char *path,
+                       uint64_t num_trails,
+                       uint64_t num_events,
+                       uint32_t min_timestamp,
+                       uint32_t max_timestamp,
+                       uint32_t max_timedelta)
 {
     FILE *out;
 
@@ -140,11 +186,11 @@ static void store_info(tdb_cons *cons, const char *path)
     SAFE_FPRINTF(out,
                  path,
                  "%"PRIu64" %"PRIu64" %"PRIu32" %"PRIu32" %"PRIu32"\n",
-                 cons->num_trails,
-                 cons->num_events,
-                 cons->min_timestamp,
-                 cons->max_timestamp,
-                 cons->max_timedelta);
+                 num_trails,
+                 num_events,
+                 min_timestamp,
+                 max_timestamp,
+                 max_timedelta);
 
     SAFE_CLOSE(out, path);
 }
@@ -303,9 +349,11 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
     char *root = cons->root;
     char *read_buf = NULL;
     struct field_stats *fstats = NULL;
-    uint64_t num_trails = cons->num_trails;
-    uint64_t num_events = cons->num_events;
+    uint64_t num_trails = 0;
+    uint64_t num_events = cons->events.next;
     uint32_t num_fields = cons->num_ofields + 1;
+    uint32_t max_timestamp = 0;
+    uint32_t max_timedelta = 0;
     uint64_t *field_cardinalities = NULL;
     uint32_t i;
     Pvoid_t unigram_freqs = NULL;
@@ -333,11 +381,22 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
         DIE("Could not open tmp file at %s", path);
 
     if (cons->events.data)
-        if ((ret = group_events(grouped_w,
+        if ((ret = groupby_uuid(grouped_w,
                                 grouped_path,
                                 (tdb_cons_event*)cons->events.data,
-                                cons)))
+                                cons,
+                                &num_trails,
+                                &max_timestamp,
+                                &max_timedelta)))
             goto error;
+
+    /*
+    not the most clean separation of ownership here, but these objects
+    can be huge so keeping them around unecessarily is expensive
+    */
+    free(cons->events.data);
+    cons->events.data = NULL;
+    j128m_free(&cons->trails);
 
     SAFE_CLOSE(grouped_w, grouped_path);
     if (!(grouped_r = fopen(grouped_path, "r")))
@@ -345,18 +404,17 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
     if (!(read_buf = malloc(READ_BUFFER_SIZE)))
         DIE("Could not allocate read buffer of %lu bytes", READ_BUFFER_SIZE);
     setvbuf(grouped_r, read_buf, _IOFBF, READ_BUFFER_SIZE);
-
-    TDB_TIMER_END("trail/group_events");
-
-    /* not the most clean separation of ownership here, but events is huge
-       so keeping it around unecessarily is expensive */
-    free(cons->events.data);
-    cons->events.data = NULL;
+    TDB_TIMER_END("trail/groupby_uuid");
 
     /* 2. store metatadata */
     TDB_TIMER_START
     tdb_path(path, "%s/info", root);
-    store_info(cons, path);
+    store_info(path,
+               num_trails,
+               num_events,
+               cons->min_timestamp,
+               max_timestamp,
+               max_timedelta);
     TDB_TIMER_END("trail/info");
 
     /* 3. collect value (unigram) freqs, including delta-encoded timestamps */
@@ -378,7 +436,7 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
     codemap = huff_create_codemap(gram_freqs);
     fstats = huff_field_stats(field_cardinalities,
                               num_fields,
-                              cons->max_timedelta);
+                              max_timedelta);
     TDB_TIMER_END("trail/huff_create_codemap");
 
     /* 6. encode and write trails to disk */

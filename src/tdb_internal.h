@@ -8,7 +8,8 @@
 
 #include "traildb.h"
 #include "arena.h"
-
+#include "judy_str_map.h"
+#include "judy_128_map.h"
 #include "tdb_profile.h"
 
 typedef struct {
@@ -29,19 +30,16 @@ struct _tdb_cons {
     char *root;
     struct arena events;
     struct arena items;
+
     char **ofield_names;
+
     uint32_t min_timestamp;
-    uint32_t max_timestamp;
-    uint32_t max_timedelta;
-    uint64_t num_trails;
-    uint64_t num_events;
     uint32_t num_ofields;
-    uint64_t *trail_pointers;
-    Pvoid_t uuid_index;
+
+    struct judy_128_map trails;
     struct judy_str_map *lexicons;
-    //uint32_t **lexicon_maps;
+
     char tempfile[TDB_MAX_PATH_SIZE];
-    //uint8_t overflow_str[TDB_MAX_VALUE_SIZE];
 };
 
 struct tdb_file {

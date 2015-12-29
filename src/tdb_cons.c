@@ -10,41 +10,18 @@
 #include "arena.h"
 #include "util.h"
 
-struct lexicon_store{
+struct jm_fold_state{
     const char *path;
     FILE *out;
     uint64_t offset;
 };
-
-static Word_t *lookup_uuid(tdb_cons *cons, const void *uuid)
-{
-    const Word_t *uuid_words = (const Word_t*)uuid;
-    Word_t *uuid_ptr_hi, *uuid_ptr_lo;
-    Pvoid_t uuid_index_lo;
-
-    /*
-    UUID index, which maps 16-byte UUIDs to event indices,
-    has the following structure:
-
-    JudyL -> JudyL -> Word_t
-    */
-    JLI(uuid_ptr_hi, cons->uuid_index, uuid_words[0]);
-    uuid_index_lo = (Pvoid_t)*uuid_ptr_hi;
-    JLI(uuid_ptr_lo, uuid_index_lo, uuid_words[1]);
-    *uuid_ptr_hi = (Word_t)uuid_index_lo;
-
-    if (!*uuid_ptr_lo)
-        ++cons->num_trails;
-
-    return uuid_ptr_lo;
-}
 
 static void *lexicon_store_fun(uint64_t id,
                                const char *value,
                                uint64_t len,
                                void *state)
 {
-    struct lexicon_store *s = (struct lexicon_store*)state;
+    struct jm_fold_state *s = (struct jm_fold_state*)state;
 
     /* NOTE: vals start at 1, otherwise we would need to +1 */
     SAFE_SEEK(s->out, id * 4, s->path);
@@ -67,7 +44,7 @@ static void lexicon_store(const struct judy_str_map *lexicon, const char *path)
     [ values ...         ] X bytes
     */
 
-    struct lexicon_store state;
+    struct jm_fold_state state;
     uint64_t count = jsm_num_keys(lexicon);
     uint64_t size = (count + 2) * 4;
 
@@ -129,44 +106,43 @@ static int store_version(tdb_cons *cons)
     return 0;
 }
 
+static void *store_uuids_fun(__uint128_t key,
+                             Word_t *value __attribute__((unused)),
+                             void *state)
+{
+    struct jm_fold_state *s = (struct jm_fold_state*)state;
+    SAFE_WRITE(&key, 16, s->path, s->out);
+    return s;
+}
+
 static int store_uuids(tdb_cons *cons)
 {
-    Word_t uuid_words[2]; // NB: word must be 64-bit
-    Word_t *ptr;
-    FILE *out;
     char path[TDB_MAX_PATH_SIZE];
+    struct jm_fold_state state = {.path = path};
+    uint64_t num_trails = j128m_num_keys(&cons->trails);
 
-    tdb_path(path, "%s/uuids", cons->root);
-    SAFE_OPEN(out, path, "w");
-
-    if (cons->num_trails > TDB_MAX_NUM_TRAILS) {
-        WARN("Too many trails (%"PRIu64")", cons->num_trails);
+    /* this is why num_trails < TDB_MAX)NUM_TRAILS < 2^59:
+       (2^59 - 1) * 16 < LONG_MAX (off_t) */
+    if (num_trails > TDB_MAX_NUM_TRAILS) {
+        WARN("Too many trails (%"PRIu64")", num_trails);
         return 1;
     }
 
-    if (ftruncate(fileno(out), (off_t)(cons->num_trails * 16))) {
-        WARN("Could not init (%"PRIu64" trails): %s", cons->num_trails, path);
+    tdb_path(path, "%s/uuids", cons->root);
+    SAFE_OPEN(state.out, path, "w");
+
+    if (ftruncate(fileno(state.out), (off_t)(num_trails * 16))) {
+        WARN("Could not init (%"PRIu64" trails): %s", num_trails, path);
         return -1;
     }
 
-    /* TODO reverse words here */
-    uuid_words[0] = 0;
-    JLF(ptr, cons->uuid_index, uuid_words[0]);
-    while (ptr){
-        const Pvoid_t uuid_index_lo = (Pvoid_t)*ptr;
-        uuid_words[1] = 0;
-        JLF(ptr, uuid_index_lo, uuid_words[1]);
-        while (ptr){
-            SAFE_WRITE(uuid_words, 16, path, out);
-            JLN(ptr, uuid_index_lo, uuid_words[1]);
-        }
-        JLN(ptr, cons->uuid_index, uuid_words[0]);
-    }
+    j128m_fold(&cons->trails, store_uuids_fun, &state);
 
-    SAFE_CLOSE(out, path);
+    SAFE_CLOSE(state.out, path);
     return 0;
 }
 
+#if 0
 static int dump_trail_pointers(tdb_cons *cons)
 {
     Word_t uuid_words[2]; // NB: word must be 64-bit
@@ -201,6 +177,7 @@ static int dump_trail_pointers(tdb_cons *cons)
     JLFA(tmp, cons->uuid_index);
     return 0;
 }
+#endif
 
 static int is_fieldname_invalid(const char* field)
 {
@@ -264,10 +241,11 @@ tdb_cons *tdb_cons_new(const char *root,
         cons->ofield_names[i] = strdup(ofield_names[i]);
     }
 
+    j128m_init(&cons->trails);
+
     cons->root = strdup(root);
+
     cons->min_timestamp = UINT32_MAX;
-    cons->max_timestamp = 0;
-    cons->max_timedelta = 0;
     cons->num_ofields = num_ofields;
     cons->events.item_size = sizeof(tdb_cons_event);
     cons->items.item_size = sizeof(tdb_item);
@@ -309,7 +287,8 @@ void tdb_cons_free(tdb_cons *cons)
         free(cons->events.data);
     if (cons->items.data)
         free(cons->items.data);
-    free(cons->trail_pointers);
+
+    j128m_free(&cons->trails);
     free(cons->ofield_names);
     free(cons->root);
     free(cons);
@@ -378,12 +357,15 @@ int tdb_cons_add(tdb_cons *cons,
     tdb_field i;
     tdb_cons_event *event;
     Word_t *uuid_ptr;
+    __uint128_t uuid_key;
 
     for (i = 0; i < cons->num_ofields; i++)
         if (value_lengths[i] > TDB_MAX_VALUE_SIZE)
             return 2;
 
-    uuid_ptr = lookup_uuid(cons, uuid);
+    memcpy(&uuid_key, uuid, 16);
+    uuid_ptr = j128m_insert(&cons->trails, uuid_key);
+
     event = (tdb_cons_event*)arena_add_item(&cons->events);
 
     event->item_zero = cons->items.next;
@@ -498,6 +480,10 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
     /* event_width includes the event delimiter, 0 byte */
     const uint32_t event_width = db->num_fields + 1;
 
+    /* TODO: we could be much more permissive with what can be joined:
+    we could support "full outer join" and replace all missing fields
+    with NULLs automatically.
+    */
     if (cons->num_ofields != db->num_fields - 1)
         return -1;
 
@@ -506,10 +492,13 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
 
     lexicon_maps = append_lexicons(cons, db);
 
-    for (trail_id = 0; trail_id < db->num_trails; trail_id++){
-        const uint8_t *uuid = tdb_get_uuid(db, trail_id);
-        Word_t *uuid_ptr = lookup_uuid(cons, uuid);
+    for (trail_id = 0; trail_id < tdb_num_trails(db); trail_id++){
+        __uint128_t uuid_key;
+        Word_t *uuid_ptr;
         tdb_field field;
+
+        memcpy(&uuid_key, tdb_get_uuid(db, trail_id), 16);
+        uuid_ptr = j128m_insert(&cons->trails, uuid_key);
 
         /* TODO this could use an iterator of the trail */
         if (tdb_get_trail(db, trail_id, &items, &items_len, &n, 0)){
@@ -536,8 +525,7 @@ err:
 int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
 {
     struct tdb_file items_mmapped = {};
-
-    cons->num_events = cons->events.next;
+    uint64_t num_events = cons->events.next;
 
     /* finalize event items */
     arena_flush(&cons->items);
@@ -546,7 +534,7 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
         return -1;
     }
 
-    if (cons->num_events && cons->num_ofields) {
+    if (num_events && cons->num_ofields) {
         if (tdb_mmap(cons->tempfile, &items_mmapped, NULL)) {
             WARN("Mmapping %s failed", cons->tempfile);
             return -1;
@@ -570,9 +558,6 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
     if (store_version(cons))
         goto error;
     TDB_TIMER_END("encoder/store_version")
-
-    if (dump_trail_pointers(cons))
-        goto error;
 
     TDB_TIMER_START
     if (tdb_encode(cons, (tdb_item*)items_mmapped.data))

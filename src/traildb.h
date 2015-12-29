@@ -9,7 +9,7 @@
 #define TDB_MAX_ERROR_SIZE  (TDB_MAX_PATH_SIZE + 512)
 
 /* MAX_NUM_TRAILS * 16 must fit in off_t (long) type */
-#define TDB_MAX_NUM_TRAILS  ((1LLU << 60) - 1)
+#define TDB_MAX_NUM_TRAILS  ((1LLU << 59) - 1)
 
 /* num_events is uint32_t in tdb_decode_trail() and elsewhere */
 #define TDB_MAX_TRAIL_LENGTH ((1LLU << 32) - 1)
@@ -117,6 +117,7 @@ const char *tdb_get_item_value(const tdb *db,
                                uint32_t *value_length);
 
 const uint8_t *tdb_get_uuid(const tdb *db, uint64_t trail_id);
+
 int64_t tdb_get_trail_id(const tdb *db, const uint8_t uuid[16]);
 
 int tdb_has_uuid_index(const tdb *db);
