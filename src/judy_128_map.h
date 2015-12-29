@@ -21,6 +21,8 @@ void *j128m_fold(const struct judy_128_map *j128m,
                  judy_128_fold_fn fun,
                  void *state);
 
+uint64_t j128m_num_keys(const struct judy_128_map *j128m);
+
 void j128m_free(struct judy_128_map *j128m);
 
 #endif /* __JUDY_128_MAP_H__ */

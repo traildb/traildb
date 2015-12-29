@@ -62,6 +62,10 @@ int main(int argc, char **argv)
         *ptr = i + 1;
     }
 
+    /* test num_keys */
+
+    assert(j128m_num_keys(&jm) == NUM_ITER);
+
     /* test get */
 
     dsfmt_init_gen_rand(&state, 123);

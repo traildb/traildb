@@ -76,6 +76,21 @@ void *j128m_fold(const struct judy_128_map *j128m,
     return state;
 }
 
+static void *num_keys_fun(__uint128_t key __attribute__((unused)),
+                          Word_t *value __attribute__((unused)),
+                          void *state)
+{
+    ++*(uint64_t*)state;
+    return state;
+}
+
+uint64_t j128m_num_keys(const struct judy_128_map *j128m)
+{
+    uint64_t count = 0;
+    j128m_fold(j128m, num_keys_fun, &count);
+    return count;
+}
+
 void j128m_free(struct judy_128_map *j128m)
 {
     uint64_t hi_key = 0;
@@ -89,5 +104,6 @@ void j128m_free(struct judy_128_map *j128m)
         JLN(hi_ptr, j128m->hi_map, hi_key);
     }
     JLFA(tmp, j128m->hi_map);
+    j128m->hi_map = NULL;
 }
 
