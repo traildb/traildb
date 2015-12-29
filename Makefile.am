@@ -23,7 +23,8 @@ libtraildb_la_SOURCES = \
   src/tdb_encode_model.c \
   src/tdb_queue.c \
   src/util.c \
-  src/judy_str_map.c
+  src/judy_str_map.c \
+  src/judy_128_map.c
 
 include_HEADERS = \
   src/traildb.h
