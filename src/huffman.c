@@ -95,6 +95,7 @@ static uint32_t sort_symbols(const Pvoid_t freqs,
     return (uint32_t)num_symbols;
 }
 
+#ifdef TDB_DEBUG_HUFFMAN
 static void print_codeword(const struct hnode *node)
 {
     uint32_t j;
@@ -137,6 +138,7 @@ static void output_stats(const struct hnode *book,
         fprintf(stderr, "\n");
     }
 }
+#endif
 
 static Pvoid_t make_codemap(struct hnode *nodes, uint32_t num_symbols)
 {
@@ -191,8 +193,10 @@ Pvoid_t huff_create_codemap(const Pvoid_t key_freqs)
     huffman_code(nodes, num_symbols);
     TDB_TIMER_END("huffman/huffman_code")
 
-    if (getenv("DEBUG_HUFFMAN"))
+#ifdef TDB_DEBUG_HUFFMAN
+    if (getenv("TDB_DEBUG_HUFFMAN"))
         output_stats(nodes, num_symbols, total_freq);
+#endif
 
     TDB_TIMER_START
     codemap = make_codemap(nodes, num_symbols);
