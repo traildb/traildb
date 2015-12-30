@@ -9,7 +9,7 @@
 #define DSFMT_MEXP 521
 #include <dsfmt/dSFMT.h>
 
-#include <huffman.h>
+#include <tdb_bits.h>
 
 #define NUM_WORDS 1000
 

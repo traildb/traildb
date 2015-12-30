@@ -5,7 +5,8 @@
 
 #include "tdb_internal.h"
 #include "tdb_encode_model.h"
-#include "huffman.h"
+#include "tdb_huffman.h"
+
 #include "util.h"
 #include "judy_str_map.h"
 
