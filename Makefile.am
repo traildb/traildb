@@ -26,6 +26,8 @@ libtraildb_la_SOURCES = \
   src/judy_str_map.c \
   src/judy_128_map.c
 
+EXTRA_libtraildb_la_SOURCES = src/xxhash/xxhash.c src/dsfmt/dSFMT.c
+
 include_HEADERS = \
   src/traildb.h
 
