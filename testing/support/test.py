@@ -6,8 +6,8 @@ import os
 
 class Testing:
     def __init__(self):
-        self.failed_tests = { }
-        self.succeeded_tests = { }
+        self.failed_tests = set()
+        self.succeeded_tests = set()
 
     def runCTest(self, cfile):
         (handle, path) = tempfile.mkstemp()
@@ -18,17 +18,17 @@ class Testing:
                   (os.getenv('CFLAGS', ''), cfile, path)
             if os.system(cmd) != 0:
                 print("FAILED: %s" % cfile)
-                self.failed_tests[cfile] = 1
+                self.failed_tests.add(cfile)
                 return
 
             os.system("chmod +x %s" % path)
             result = os.system("%s \"%s\"" % (path, temp_dir_path))
             if result != 0:
                 print("FAILED: %s" % cfile)
-                self.failed_tests[cfile] = 1
+                self.failed_tests.add(cfile)
             else:
                 print("SUCCEEDED: %s" % cfile)
-                self.succeeded_tests[cfile] = 1
+                self.succeeded_tests.add(cfile)
         finally:
             try:
                 os.remove(path)
@@ -53,10 +53,17 @@ class Testing:
 
     def runTests(self):
         self.runCTests()
+
+        if len(self.failed_tests) > 0:
+            print("Tests that failed:")
+            for s in self.failed_tests:
+                print(s)
+
         print("Number of failed tests: %d" % len(self.failed_tests))
         print("Number of succeeded tests: %d" % len(self.succeeded_tests))
-        if self.failed_tests > 0:
+        if len(self.failed_tests) > 0:
             return -1
+
         return 0
 
 if __name__ == '__main__':
