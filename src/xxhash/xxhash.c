@@ -694,8 +694,8 @@ FORCE_INLINE XXH_errorcode XXH32_update_endian (XXH32_state_t* state_in, const v
 
     if (p < bEnd)
     {
-        XXH_memcpy(state->mem32, p, (long unsigned int) (bEnd-p));
-        state->memsize = (U32)(bEnd-p);
+        XXH_memcpy(state->mem32, p, bEnd-p);
+        state->memsize = (int)(bEnd-p);
     }
 
     return XXH_OK;
@@ -848,8 +848,8 @@ FORCE_INLINE XXH_errorcode XXH64_update_endian (XXH64_state_t* state_in, const v
 
     if (p < bEnd)
     {
-        XXH_memcpy(state->mem64, p, (long unsigned int) (bEnd-p));
-        state->memsize = (U32)(bEnd-p);
+        XXH_memcpy(state->mem64, p, bEnd-p);
+        state->memsize = (int)(bEnd-p);
     }
 
     return XXH_OK;

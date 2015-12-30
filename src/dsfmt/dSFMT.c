@@ -535,9 +535,8 @@ void dsfmt_chk_init_gen_rand(dsfmt_t *dsfmt, uint32_t seed, int mexp) {
     psfmt = &dsfmt->status[0].u32[0];
     psfmt[idxof(0)] = seed;
     for (i = 1; i < (DSFMT_N + 1) * 4; i++) {
-        psfmt[idxof(i)] = 1812433253
-	    * (psfmt[idxof(i - 1)] ^ (psfmt[idxof(i - 1)] >> 30)) +
-              (uint32_t) i;
+        psfmt[idxof(i)] = 1812433253UL
+	    * (psfmt[idxof(i - 1)] ^ (psfmt[idxof(i - 1)] >> 30)) + i;
     }
     initial_mask(dsfmt);
     period_certification(dsfmt);
@@ -587,7 +586,7 @@ void dsfmt_chk_init_by_array(dsfmt_t *dsfmt, uint32_t init_key[],
     r = ini_func1(psfmt32[idxof(0)] ^ psfmt32[idxof(mid % size)]
 		  ^ psfmt32[idxof((size - 1) % size)]);
     psfmt32[idxof(mid % size)] += r;
-    r += (uint32_t) key_length;
+    r += key_length;
     psfmt32[idxof((mid + lag) % size)] += r;
     psfmt32[idxof(0)] = r;
     count--;
@@ -596,7 +595,7 @@ void dsfmt_chk_init_by_array(dsfmt_t *dsfmt, uint32_t init_key[],
 		      ^ psfmt32[idxof((i + mid) % size)]
 		      ^ psfmt32[idxof((i + size - 1) % size)]);
 	psfmt32[idxof((i + mid) % size)] += r;
-	r += init_key[j] + (uint32_t) i;
+	r += init_key[j] + i;
 	psfmt32[idxof((i + mid + lag) % size)] += r;
 	psfmt32[idxof(i)] = r;
 	i = (i + 1) % size;
@@ -606,7 +605,7 @@ void dsfmt_chk_init_by_array(dsfmt_t *dsfmt, uint32_t init_key[],
 		      ^ psfmt32[idxof((i + mid) % size)]
 		      ^ psfmt32[idxof((i + size - 1) % size)]);
 	psfmt32[idxof((i + mid) % size)] += r;
-	r += (uint32_t) i;
+	r += i;
 	psfmt32[idxof((i + mid + lag) % size)] += r;
 	psfmt32[idxof(i)] = r;
 	i = (i + 1) % size;
@@ -616,7 +615,7 @@ void dsfmt_chk_init_by_array(dsfmt_t *dsfmt, uint32_t init_key[],
 		      + psfmt32[idxof((i + mid) % size)]
 		      + psfmt32[idxof((i + size - 1) % size)]);
 	psfmt32[idxof((i + mid) % size)] ^= r;
-	r -= (uint32_t) i;
+	r -= i;
 	psfmt32[idxof((i + mid + lag) % size)] ^= r;
 	psfmt32[idxof(i)] = r;
 	i = (i + 1) % size;
