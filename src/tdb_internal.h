@@ -12,6 +12,16 @@
 #include "judy_128_map.h"
 #include "tdb_profile.h"
 
+/*
+These are defined by autoconf
+
+Nothing has been tested on 32-bit systems so it is
+better to fail loudly for now.
+*/
+#if SIZEOF_OFF_T != 8 || SIZEOF_SIZE_T != 8
+    #error "sizeof(off_t) and sizeof(size_t) must be 8"
+#endif
+
 typedef struct {
     uint64_t item_zero;
     uint32_t num_items;
