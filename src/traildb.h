@@ -4,69 +4,21 @@
 
 #include <stdint.h>
 
-#define TDB_MAX_PATH_SIZE   2048
-#define TDB_MAX_FIELDNAME_LENGTH 512
-#define TDB_MAX_ERROR_SIZE  (TDB_MAX_PATH_SIZE + 512)
+#include "tdb_limits.h"
+#include "tdb_types.h"
 
-/* MAX_NUM_TRAILS * 16 must fit in off_t (long) type */
-#define TDB_MAX_NUM_TRAILS  ((1LLU << 59) - 1)
-
-/* num_events is uint32_t in tdb_decode_trail() and elsewhere */
-#define TDB_MAX_TRAIL_LENGTH ((1LLU << 32) - 1)
-
-/* TODO this should be (1 << 7) - 2 */
-#define TDB_MAX_NUM_FIELDS ((1LLU << 8) - 2)
-
-/* 3 bytes are reserved for item value, with 0 value always denoting NULL */
-#define TDB_MAX_NUM_VALUES ((1LLU << 24) - 2)
-#define TDB_OVERFLOW_VALUE ((1LLU << 24) - 1)
-
-/* This is an arbitary value as long as it fits into stack comfortably */
-#define TDB_MAX_VALUE_SIZE  (1LLU << 10)
-#define TDB_MAX_LEXICON_SIZE UINT32_MAX
-#define TDB_MAX_TIMEDELTA  ((1LLU << 24) - 2) // ~194 days
-#define TDB_FAR_TIMEDELTA  ((1LLU << 24) - 1)
-#define TDB_FAR_TIMESTAMP    UINT32_MAX
-
-
-/* support a character set that allows easy urlencoding */
-#define TDB_FIELDNAME_CHARS "_-%"\
-                            "abcdefghijklmnopqrstuvwxyz"\
-                            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"\
-                            "0123456789"
-
+/*
 #define TDB_OVERFLOW_STR   "OVERFLOW"
 #define TDB_OVERFLOW_LSEP  '['
 #define TDB_OVERFLOW_RSEP  ']'
+*/
 
 #define TDB_VERSION_V0 0LLU
 #define TDB_VERSION_V0_1 1LLU
 #define TDB_VERSION_LATEST TDB_VERSION_V0_1
 
-/*
-   Internally we deal with ids:
-    (id) trail_id  -> (bytes) uuid
-    (id) field     -> (bytes) field_name
-    (id) val       -> (bytes) value
-
-   The complete picture looks like:
-
-    uuid      -> trail_id
-    trail_id  -> [event, ...]
-    event     := [timestamp, item, ...]
-    item      := (field, val)
-    field     -> field_name
-    val       -> value
-*/
-
-typedef uint8_t  tdb_field; //  8 bits
-typedef uint32_t tdb_val;   // 24 bits
-typedef uint32_t tdb_item;  // val, field
 typedef struct _tdb_cons tdb_cons;
 typedef struct _tdb tdb;
-
-#define tdb_item_field(item) (item & 255)
-#define tdb_item_val(item)   (item >> 8)
 
 /* TODO: move flags from finalize() to new() */
 tdb_cons *tdb_cons_new(const char *root,
