@@ -30,8 +30,12 @@
 
     Wide item (64 bit):
 
-    [ field | wide-flag | ext-field | ext-flag | val ]
-      7       1           7           1          48
+    [ field | wide-flag | ext-field | ext-flag | val | reserved ]
+      7       1           7           1          40    8
+
+    'ext-flag' and 'reserved' are reserved for future needs. Note that
+    timestamp items may use 47 bits, i.e. they have only 7 bits reserved
+    space.
 */
 
 typedef uint32_t tdb_field;

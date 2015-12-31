@@ -10,13 +10,13 @@ int main(int argc, char** argv)
 {
     const char *fields[] = {"a", "b"};
     const char *values1[] = {"red", "toy"};
-    const uint32_t lengths1[] = {3, 3};
+    const uint64_t lengths1[] = {3, 3};
     const char *values2[] = {"blue", "ball"};
-    const uint32_t lengths2[] = {4, 4};
+    const uint64_t lengths2[] = {4, 4};
     const char *values3[] = {"0123456789", "toy"};
-    const uint32_t lengths3[] = {10, 3};
+    const uint64_t lengths3[] = {10, 3};
     const char *p;
-    uint32_t len;
+    uint64_t len;
 
     tdb_cons* c = tdb_cons_new(argv[1], fields, 2);
 

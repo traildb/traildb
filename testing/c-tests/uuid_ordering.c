@@ -26,7 +26,7 @@ static void gen_random_uuid(uint8_t *uuid, dsfmt_t *state)
 int main(int argc, char **argv)
 {
     static const char **fields;
-    static uint32_t *lengths;
+    static uint64_t *lengths;
     dsfmt_t state;
     Pvoid_t uuids = NULL;
     tdb_cons* c = tdb_cons_new(argv[1], fields, 0);
