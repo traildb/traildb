@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
 #include <time.h>
@@ -12,6 +13,8 @@
 
 #define DSFMT_MEXP 521
 #include "dsfmt/dSFMT.h"
+
+#include "judy_128_map.h"
 
 #define MAX_PATH_SIZE 1024
 
@@ -68,11 +71,14 @@
     }
 
 struct sortpair{
-    Word_t key;
+    __uint128_t key;
     Word_t value;
 };
 
 struct sortpair *sort_judyl(const Pvoid_t judy, Word_t *num_items);
+
+struct sortpair *sort_j128m(const struct judy_128_map *j128m,
+                            uint64_t *num_items);
 
 uint8_t bits_needed(uint64_t max);
 
