@@ -304,22 +304,18 @@ int tdb_cons_add(tdb_cons *cons,
         tdb_field field = (tdb_field)(i + 1);
         tdb_val val = 0;
         tdb_item item;
-
+        /* TODO add a test for sparse trails */
         if (value_lengths[i]){
             if (!(val = (tdb_val)jsm_insert(&cons->lexicons[i],
                                             values[i],
                                             value_lengths[i])))
                 return 1;
-        }
 
-        /* TODO do we have to write NULL items? could we just
-        assume they exist implicitly? */
-        /* TODO add a test for sparse trails */
+        }
         item = tdb_make_item(field, val);
         memcpy(arena_add_item(&cons->items), &item, sizeof(tdb_item));
         ++event->num_items;
     }
-
     return 0;
 }
 
@@ -367,7 +363,7 @@ static uint64_t **append_lexicons(tdb_cons *cons, const tdb *db)
         struct tdb_lexicon lex;
         uint64_t *map;
 
-        tdb_lexicon_read(db, field, &lex);
+        tdb_lexicon_read(db, field + 1, &lex);
 
         if (!(map = lexicon_maps[field] = malloc(lex.size * sizeof(tdb_val))))
             goto err;
@@ -404,7 +400,8 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
     uint64_t trail_id;
     tdb_item *items;
     uint64_t i, e, n, items_len = 0;
-    int ret;
+    tdb_field field;
+    int ret = 0;
     /* event_width includes the event delimiter, 0 byte */
     const uint64_t event_width = db->num_fields + 1;
 
@@ -413,7 +410,13 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
     with NULLs automatically.
     */
     if (cons->num_ofields != db->num_fields - 1)
+        /* TODO fix error codes */
         return -1;
+
+    for (field = 0; field < cons->num_ofields; field++)
+        if (strcmp(cons->ofield_names[field], tdb_get_field_name(db, field + 1)))
+            /* TODO fix error codes */
+            return -2;
 
     if (db->min_timestamp < cons->min_timestamp)
         cons->min_timestamp = db->min_timestamp;
@@ -424,7 +427,6 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
     for (trail_id = 0; trail_id < tdb_num_trails(db); trail_id++){
         __uint128_t uuid_key;
         Word_t *uuid_ptr;
-        tdb_field field;
 
         memcpy(&uuid_key, tdb_get_uuid(db, trail_id), 16);
         uuid_ptr = j128m_insert(&cons->trails, uuid_key);
@@ -439,9 +441,9 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
                 uint64_t idx = e + field;
                 tdb_val val = tdb_item_val(items[idx]);
                 if (val)
-                    items[idx] = tdb_make_item(field, lexicon_maps[field - 1][val]);
-                else
-                    items[idx] = 0;
+                    /* translate non-NULL vals */
+                    val = lexicon_maps[field - 1][val - 1];
+                items[idx] = tdb_make_item(field, val);
             }
             append_event(cons, &items[e], uuid_ptr);
         }
