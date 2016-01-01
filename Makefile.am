@@ -1,6 +1,22 @@
 lib_LTLIBRARIES = libtraildb.la
 ACLOCAL_AMFLAGS = -I m4
-libtraildb_la_CFLAGS = -std=c99 -Wconversion -Wall -Wcast-qual -Wcast-align -Werror -Wextra -O3 -g
+libtraildb_la_CFLAGS = -std=c99 \
+                       -O3 \
+                       -g \
+                       -Wall \
+                       -Werror \
+                       -Wextra \
+                       -Wconversion \
+                       -Wcast-qual \
+                       -Wcast-align \
+                       -Wformat-security \
+                       -Wmissing-declarations \
+                       -Wmissing-prototypes \
+                       -Wnested-externs \
+                       -Wpointer-arith \
+                       -Wshadow \
+                       -Wstrict-prototypes
+
 AM_CPPFLAGS = "-I$(top_srcdir)/xxhash -I$(top_srcdir)/dsfmt"
 AM_CFLAGS=-O3 -g
 
