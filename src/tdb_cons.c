@@ -464,9 +464,11 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
     /* finalize event items */
     arena_flush(&cons->items);
     if (fclose(cons->items.fd)) {
+        cons->items.fd = NULL;
         WARN("Closing %s failed", cons->tempfile);
         return -1;
     }
+    cons->items.fd = NULL;
 
     if (num_events && cons->num_ofields) {
         if (tdb_mmap(cons->tempfile, &items_mmapped, NULL)) {
@@ -500,6 +502,7 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
 
     if (items_mmapped.data)
         munmap((void*)items_mmapped.data, items_mmapped.size);
+    tdb_cons_free(cons);
     return 0;
 
  error:
