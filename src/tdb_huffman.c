@@ -264,7 +264,7 @@ void huff_encode_grams(const struct judy_128_map *codemap,
         encode_gram(codemap, grams[i], buf, offs, fstats);
 }
 
-void *create_codebook_fun(__uint128_t symbol, Word_t *value, void *state)
+static void *create_codebook_fun(__uint128_t symbol, Word_t *value, void *state)
 {
     struct huff_codebook *book = (struct huff_codebook*)state;
     uint32_t code = HUFF_CODE(*value);

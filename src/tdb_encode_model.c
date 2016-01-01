@@ -34,8 +34,9 @@ struct ngram_state{
     struct gram_bufs gbufs;
 };
 
-static double get_sample_size()
+static double get_sample_size(void)
 {
+    /* TODO remove this env var */
     double d = 0.1;
     if (getenv("TDB_SAMPLE_SIZE")){
         char *endptr;
