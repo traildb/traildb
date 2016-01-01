@@ -12,7 +12,7 @@
 #define ARENA_DISK_BUFFER (1 << 23) /* must be a power of two */
 
 struct arena{
-    void *data;
+    char *data;
     uint64_t size;
     uint64_t next;
     uint32_t item_size;
