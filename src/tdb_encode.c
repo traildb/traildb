@@ -1,7 +1,9 @@
+#define _GNU_SOURCE /* mkostemp() */
 
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <stdlib.h>
 
 #include "tdb_internal.h"
 #include "tdb_encode_model.h"
@@ -376,7 +378,7 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
     Word_t tmp;
     FILE *grouped_w = NULL;
     FILE *grouped_r = NULL;
-    int ret = 0;
+    int fd, ret = 0;
     TDB_TIMER_DEF
 
     j128m_init(&gram_freqs);
@@ -393,9 +395,15 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
           and delta-encode timestamps */
     TDB_TIMER_START
 
-    tdb_path(grouped_path, "%s/tmp.grouped.%d", root, getpid());
-    if (!(grouped_w = fopen(grouped_path, "w")))
-        DIE("Could not open tmp file at %s", path);
+    tdb_path(grouped_path, "%s/tmp.grouped.XXXXXX", root);
+    if ((fd = mkostemp(grouped_path, 0)) == -1){
+        ret = -1;
+        goto error;
+    }
+    if (!(grouped_w = fdopen(fd, "w"))){
+        ret = -1;
+        goto error;
+    }
 
     if (cons->events.data)
         if ((ret = groupby_uuid(grouped_w,
@@ -416,6 +424,8 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
     j128m_free(&cons->trails);
 
     SAFE_CLOSE(grouped_w, grouped_path);
+    grouped_w = NULL;
+
     if (!(grouped_r = fopen(grouped_path, "r")))
         DIE("Could not open tmp file at %s", path);
     if (!(read_buf = malloc(READ_BUFFER_SIZE)))
@@ -484,6 +494,8 @@ error:
     j128m_free(&codemap);
     JLFA(tmp, unigram_freqs);
 
+    if (grouped_w)
+        fclose(grouped_w);
     if (grouped_r)
         fclose(grouped_r);
     unlink(grouped_path);

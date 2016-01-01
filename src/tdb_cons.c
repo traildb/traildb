@@ -1,9 +1,11 @@
 #define _DEFAULT_SOURCE /* ftruncate() */
+#define _GNU_SOURCE /* mkostemp() */
 
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include "judy_str_map.h"
 #include "tdb_internal.h"
@@ -185,6 +187,7 @@ tdb_cons *tdb_cons_new(const char *root,
 {
     tdb_cons *cons;
     tdb_field i;
+    int fd;
 
     if (num_ofields > TDB_MAX_NUM_FIELDS)
         return NULL;
@@ -216,8 +219,11 @@ tdb_cons *tdb_cons_new(const char *root,
     /* Opportunistically try to create the output directory.
        We don't care if it fails, e.g. because it already exists */
     mkdir(root, 0755);
-    tdb_path(cons->tempfile, "%s/tmp.items.%d", root, getpid());
-    if (!(cons->items.fd = fopen(cons->tempfile, "wx")))
+    tdb_path(cons->tempfile, "%s/tmp.items.XXXXXX", root);
+    if ((fd = mkostemp(cons->tempfile, 0)) == -1)
+        goto error;
+
+    if (!(cons->items.fd = fdopen(fd, "w")))
         goto error;
 
     if (cons->num_ofields > 0)
@@ -231,7 +237,7 @@ tdb_cons *tdb_cons_new(const char *root,
         }
 
     return cons;
- error:
+error:
     tdb_cons_free(cons);
     return NULL;
 }
@@ -240,10 +246,14 @@ void tdb_cons_free(tdb_cons *cons)
 {
     uint64_t i;
     for (i = 0; i < cons->num_ofields; i++){
-        free(cons->ofield_names[i]);
-        jsm_free(&cons->lexicons[i]);
+        if (cons->ofield_names)
+            free(cons->ofield_names[i]);
+        if (cons->lexicons)
+            jsm_free(&cons->lexicons[i]);
     }
     free(cons->lexicons);
+    if (cons->items.fd)
+        fclose(cons->items.fd);
     if (cons->tempfile)
         unlink(cons->tempfile);
     if (cons->events.data)
