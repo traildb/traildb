@@ -45,7 +45,7 @@ int main(int argc, char** argv)
     assert(tdb_get_field(t, "blah", &field) == -1);
     assert(tdb_get_field(t, "bloh", &field) == -1);
 
-    for (i = 0; i < tdb_num_trails(t); i++){
+    for (cmp = 0, i = 0; i < tdb_num_trails(t); i++){
         assert(tdb_get_trail(t, i, &items, &items_len, &j, 0) == 0);
         while (j--)
             cmp += items[j];
