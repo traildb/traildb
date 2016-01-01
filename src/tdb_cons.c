@@ -504,12 +504,10 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
 
     if (items_mmapped.data)
         munmap((void*)items_mmapped.data, items_mmapped.size);
-    tdb_cons_free(cons);
     return 0;
 
  error:
     if (items_mmapped.data)
         munmap((void*)items_mmapped.data, items_mmapped.size);
-    tdb_cons_free(cons);
     return -1;
 }
