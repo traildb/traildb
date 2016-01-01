@@ -142,46 +142,9 @@ static int store_uuids(tdb_cons *cons)
     return 0;
 }
 
-#if 0
-static int dump_trail_pointers(tdb_cons *cons)
-{
-    Word_t uuid_words[2]; // NB: word must be 64-bit
-    Word_t *ptr;
-    Word_t tmp;
-    uint64_t idx = 0;
-
-    /* serialize trail pointers, freeing uuid_index */
-
-    if ((cons->trail_pointers = malloc(cons->num_trails * 8)) == NULL) {
-        WARN("Could not allocate trail pointers");
-        return -1;
-    }
-
-    /* NOTE: The code below must populate trail_pointers
-       in the same order as what gets stored by store_uuids() */
-    uuid_words[0] = 0;
-    JLF(ptr, cons->uuid_index, uuid_words[0]);
-    while (ptr){
-        Pvoid_t uuid_index_lo = (Pvoid_t)*ptr;
-
-        uuid_words[1] = 0;
-        JLF(ptr, uuid_index_lo, uuid_words[1]);
-        while (ptr){
-            cons->trail_pointers[idx++] = *ptr - 1;
-            JLN(ptr, uuid_index_lo, uuid_words[1]);
-        }
-
-        JLFA(tmp, uuid_index_lo);
-        JLN(ptr, cons->uuid_index, uuid_words[0]);
-    }
-    JLFA(tmp, cons->uuid_index);
-    return 0;
-}
-#endif
-
 static int is_fieldname_invalid(const char* field)
 {
-    uint32_t i;
+    uint64_t i;
 
     if (!strcmp(field, "time"))
         return 1;
@@ -197,7 +160,7 @@ static int is_fieldname_invalid(const char* field)
 }
 
 static int find_duplicate_fieldnames(const char **ofield_names,
-                                     uint32_t num_ofields)
+                                     uint64_t num_ofields)
 {
     Pvoid_t check = NULL;
     tdb_field i;
@@ -218,7 +181,7 @@ static int find_duplicate_fieldnames(const char **ofield_names,
 
 tdb_cons *tdb_cons_new(const char *root,
                        const char **ofield_names,
-                       uint32_t num_ofields)
+                       uint64_t num_ofields)
 {
     tdb_cons *cons;
     tdb_field i;
@@ -245,7 +208,7 @@ tdb_cons *tdb_cons_new(const char *root,
 
     cons->root = strdup(root);
 
-    cons->min_timestamp = UINT32_MAX;
+    cons->min_timestamp = UINT64_MAX;
     cons->num_ofields = num_ofields;
     cons->events.item_size = sizeof(tdb_cons_event);
     cons->items.item_size = sizeof(tdb_item);
@@ -275,7 +238,7 @@ tdb_cons *tdb_cons_new(const char *root,
 
 void tdb_cons_free(tdb_cons *cons)
 {
-    uint32_t i;
+    uint64_t i;
     for (i = 0; i < cons->num_ofields; i++){
         free(cons->ofield_names[i]);
         jsm_free(&cons->lexicons[i]);
@@ -294,65 +257,15 @@ void tdb_cons_free(tdb_cons *cons)
     free(cons);
 }
 
-#if 0
-/* TODO re-enable this if we decide to support overflow values. */
-
-/*
-this function guarantees that the string representation of
-TDB_OVERFLOW_VAL is unique in this lexicon.
-*/
-static const uint8_t *find_overflow_value(tdb_cons *cons, tdb_field field)
-{
-    static const int LEN = sizeof(TDB_OVERFLOW_STR) - 1;
-    int i, j;
-    Word_t *ptr;
-
-    for (i = 1; i * 2 + LEN < TDB_MAX_VALUE_SIZE; i++){
-        for (j = 0; j < i; j++){
-            cons->overflow_str[j] = TDB_OVERFLOW_LSEP;
-            cons->overflow_str[i + LEN + j] = TDB_OVERFLOW_RSEP;
-        }
-        memcpy(&cons->overflow_str[i], TDB_OVERFLOW_STR, LEN);
-        cons->overflow_str[i * 2 + LEN] = 0;
-        JSLG(ptr, cons->lexicons[field], cons->overflow_str);
-        if (!ptr)
-            return cons->overflow_str;
-    }
-    DIE("Field %u overflows and could not generate a unique overflow value",
-        field);
-}
-#endif
-
-/*
-Insert a new string in the lexicon and return the matching val.
-*/
-static tdb_val insert_to_lexicon(struct judy_str_map *jsm,
-                                 const char *value,
-                                 uint32_t value_length)
-{
-    tdb_val val;
-
-    if (jsm_num_keys(jsm) < TDB_MAX_NUM_VALUES){
-        if ((val = (tdb_val)jsm_insert(jsm, value, value_length)))
-            return val;
-        else
-            return 0;
-    }else{
-        if ((val = (tdb_val)jsm_get(jsm, value, value_length)))
-            return val;
-        else
-            return TDB_OVERFLOW_VALUE;
-    }
-}
-
 /*
 Append an event in this cons.
+TODO tests for append
 */
 int tdb_cons_add(tdb_cons *cons,
                  const uint8_t uuid[16],
-                 const uint32_t timestamp,
+                 const uint64_t timestamp,
                  const char **values,
-                 const uint32_t *value_lengths)
+                 const uint64_t *value_lengths)
 {
     tdb_field i;
     tdb_cons_event *event;
@@ -379,20 +292,21 @@ int tdb_cons_add(tdb_cons *cons,
 
     for (i = 0; i < cons->num_ofields; i++){
         tdb_field field = (tdb_field)(i + 1);
-        tdb_item item = field;
-        tdb_val val;
+        tdb_val val = 0;
+        tdb_item item;
 
         if (value_lengths[i]){
-            if ((val = insert_to_lexicon(&cons->lexicons[i],
-                                         values[i],
-                                         value_lengths[i])))
-                item |= val << 8;
-            else
+            if (!(val = (tdb_val)jsm_insert(&cons->lexicons[i],
+                                            values[i],
+                                            value_lengths[i])))
                 return 1;
         }
+
         /* TODO do we have to write NULL items? could we just
         assume they exist implicitly? */
-        *((tdb_item*)arena_add_item(&cons->items)) = item;
+        /* TODO add a test for sparse trails */
+        item = tdb_make_item(field, val);
+        memcpy(arena_add_item(&cons->items), &item, sizeof(tdb_item));
         ++event->num_items;
     }
 
@@ -404,7 +318,7 @@ Append a single event to this cons. The event is a usual srequence
 of (remapped) items. Used by tdb_cons_append().
 */
 static void append_event(tdb_cons *cons,
-                         const uint32_t *items,
+                         const tdb_item *items,
                          Word_t *uuid_ptr)
 {
     tdb_cons_event *event = (tdb_cons_event*)arena_add_item(&cons->events);
@@ -417,8 +331,12 @@ static void append_event(tdb_cons *cons,
 
     tdb_field field;
     for (field = 1; field < cons->num_ofields + 1; field++){
-        *((tdb_item*)arena_add_item(&cons->items)) = items[field];
-        ++event->num_items;
+        if (items[field]){
+            memcpy(arena_add_item(&cons->items),
+                   &items[field],
+                   sizeof(tdb_item));
+            ++event->num_items;
+        }
     }
 }
 
@@ -426,32 +344,31 @@ static void append_event(tdb_cons *cons,
 Append the lexicons of an existing TrailDB, db, to this cons. Used by
 tdb_cons_append().
 */
-static uint32_t **append_lexicons(tdb_cons *cons, const tdb *db)
+static uint64_t **append_lexicons(tdb_cons *cons, const tdb *db)
 {
-    uint32_t **lexicon_maps;
-    uint32_t i;
+    tdb_val **lexicon_maps;
+    tdb_val i;
     tdb_field field;
 
-    if (!(lexicon_maps = calloc(cons->num_ofields, sizeof(uint32_t*))))
+    if (!(lexicon_maps = calloc(cons->num_ofields, sizeof(tdb_val*))))
         return NULL;
 
     for (field = 0; field < cons->num_ofields; field++){
         struct tdb_lexicon lex;
-        uint32_t *map;
+        uint64_t *map;
 
         tdb_lexicon_read(db, field, &lex);
 
-        if (!(map = lexicon_maps[field] = malloc(lex.size * 4)))
+        if (!(map = lexicon_maps[field] = malloc(lex.size * sizeof(tdb_val))))
             goto err;
 
         for (i = 0; i < lex.size; i++){
-            uint32_t value_length;
+            uint64_t value_length;
             const char *value = tdb_lexicon_get(&lex, i, &value_length);
             tdb_val val;
-
-            if ((val = insert_to_lexicon(&cons->lexicons[field],
-                                         value,
-                                         value_length)))
+            if ((val = (tdb_val)jsm_insert(&cons->lexicons[field],
+                                            value,
+                                            value_length)))
                 map[i] = val;
             else
                 goto err;
@@ -470,15 +387,16 @@ This is a variation of tdb_cons_add(): Instead of accepting fields as
 strings, it reads them as integer items from an existing TrailDB and
 remaps them to match with this cons.
 */
+/* TODO append test */
 int tdb_cons_append(tdb_cons *cons, const tdb *db)
 {
-    uint32_t **lexicon_maps;
+    tdb_val **lexicon_maps = NULL;
     uint64_t trail_id;
     tdb_item *items;
-    uint32_t i, e, n, items_len = 0;
+    uint64_t i, e, n, items_len = 0;
     int ret;
     /* event_width includes the event delimiter, 0 byte */
-    const uint32_t event_width = db->num_fields + 1;
+    const uint64_t event_width = db->num_fields + 1;
 
     /* TODO: we could be much more permissive with what can be joined:
     we could support "full outer join" and replace all missing fields
@@ -490,7 +408,8 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
     if (db->min_timestamp < cons->min_timestamp)
         cons->min_timestamp = db->min_timestamp;
 
-    lexicon_maps = append_lexicons(cons, db);
+    if (!(lexicon_maps = append_lexicons(cons, db)))
+        goto err;
 
     for (trail_id = 0; trail_id < tdb_num_trails(db); trail_id++){
         __uint128_t uuid_key;
@@ -507,18 +426,23 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
         }
         for (e = 0; e < n; e += event_width){
             for (field = 1; field < cons->num_ofields + 1; field++){
-                uint32_t idx = e + field;
+                uint64_t idx = e + field;
                 tdb_val val = tdb_item_val(items[idx]);
-                if (val && val != TDB_OVERFLOW_VALUE)
-                    items[idx] = field | lexicon_maps[field - 1][val];
+                if (val)
+                    items[idx] = tdb_make_item(field, lexicon_maps[field - 1][val]);
+                else
+                    items[idx] = 0;
             }
             append_event(cons, &items[e], uuid_ptr);
         }
     }
 err:
-    for (i = 0; i < cons->num_ofields; i++)
-        free(lexicon_maps[i]);
-    free(lexicon_maps);
+    if (lexicon_maps){
+        for (i = 0; i < cons->num_ofields; i++)
+            free(lexicon_maps[i]);
+        free(lexicon_maps);
+    }
+    free(items);
     return ret;
 }
 

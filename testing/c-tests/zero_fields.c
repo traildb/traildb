@@ -11,10 +11,11 @@ int main(int argc, char** argv)
     const char *fields[] = {};
     tdb_cons* c = tdb_cons_new(argv[1], fields, 0);
     assert(c && "Expected tdb_cons_new() to succeed for zero fields.");
-    uint32_t i, j, cmp, sum = 0;
-    uint32_t zero = 0;
-    uint32_t *items;
-    uint32_t items_len = 0;
+    uint64_t i, j, cmp, sum = 0;
+    uint64_t zero = 0;
+    tdb_item *items;
+    uint64_t items_len = 0;
+    tdb_field field;
 
     memset(uuid, 0, 16);
 
@@ -34,14 +35,15 @@ int main(int argc, char** argv)
 
     assert(tdb_num_fields(t) == 1);
 
-    assert(tdb_get_field(t, "world") == -1);
-    assert(tdb_get_field(t, "hello") == -1);
-    assert(tdb_get_field(t, "what") == -1);
-    assert(tdb_get_field(t, "is") == -1);
-    assert(tdb_get_field(t, "this") == -1);
-    assert(tdb_get_field(t, "time") == 0);
-    assert(tdb_get_field(t, "blah") == -1);
-    assert(tdb_get_field(t, "bloh") == -1);
+    assert(tdb_get_field(t, "world", &field) == -1);
+    assert(tdb_get_field(t, "hello", &field) == -1);
+    assert(tdb_get_field(t, "what", &field) == -1);
+    assert(tdb_get_field(t, "is", &field) == -1);
+    assert(tdb_get_field(t, "this", &field) == -1);
+    assert(tdb_get_field(t, "time", &field) == 0);
+    assert(field == 0);
+    assert(tdb_get_field(t, "blah", &field) == -1);
+    assert(tdb_get_field(t, "bloh", &field) == -1);
 
     for (i = 0; i < tdb_num_trails(t); i++){
         assert(tdb_get_trail(t, i, &items, &items_len, &j, 0) == 0);

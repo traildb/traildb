@@ -26,13 +26,43 @@ static int compare(const void *p1, const void *p2)
     return 0;
 }
 
+static void *sort_j128m_fun(__uint128_t key, Word_t *value, void *state)
+{
+    struct sortpair *pair = (struct sortpair*)state;
+
+    pair->key = key;
+    pair->value = *value;
+
+    return ++pair;
+}
+
+struct sortpair *sort_j128m(const struct judy_128_map *j128m,
+                            uint64_t *num_items)
+{
+    struct sortpair *pairs;
+
+    *num_items = j128m_num_keys(j128m);
+
+    if (*num_items == 0)
+        return NULL;
+
+    if (!(pairs = calloc(*num_items, sizeof(struct sortpair))))
+        DIE("Couldn't allocate sortpairs (%llu pairs)",
+            (unsigned long long)*num_items);
+
+    j128m_fold(j128m, sort_j128m_fun, pairs);
+
+    qsort(pairs, *num_items, sizeof(struct sortpair), compare);
+    return pairs;
+}
+
 struct sortpair *sort_judyl(const Pvoid_t judy, Word_t *num_items)
 {
+
     uint32_t i;
     struct sortpair *pairs;
     Word_t key;
     Word_t *val;
-
     JLC(*num_items, judy, 0, (Word_t)-1);
 
     if (*num_items == 0)

@@ -5,13 +5,30 @@
 
 #include "tdb_internal.h"
 #include "tdb_encode_model.h"
-#include "huffman.h"
+#include "tdb_huffman.h"
+
 #include "util.h"
 #include "judy_str_map.h"
 
 #define EDGE_INCREMENT     1000000
 #define GROUPBUF_INCREMENT 10000000
 #define READ_BUFFER_SIZE  (1000000 * sizeof(tdb_event))
+
+struct jm_fold_state{
+    FILE *grouped_w;
+    const char *path;
+
+    tdb_event *buf;
+    uint64_t buf_size;
+
+    uint64_t trail_id;
+    const tdb_cons_event *events;
+    const uint64_t min_timestamp;
+    uint64_t max_timestamp;
+    uint64_t max_timedelta;
+
+    int ret;
+};
 
 static int compare(const void *p1, const void *p2)
 {
@@ -25,23 +42,6 @@ static int compare(const void *p1, const void *p2)
     return 0;
 }
 
-struct jm_fold_state{
-    FILE *grouped_w;
-    const char *path;
-
-    tdb_event *buf;
-    uint64_t buf_size;
-
-    uint64_t trail_id;
-    const tdb_cons_event *events;
-    const uint32_t min_timestamp;
-    uint32_t max_timestamp;
-    uint32_t max_timedelta;
-
-    uint64_t num_invalid;
-    int ret;
-};
-
 static void *groupby_uuid_handle_one_trail(
     __uint128_t uuid __attribute__((unused)),
     Word_t *value,
@@ -50,8 +50,8 @@ static void *groupby_uuid_handle_one_trail(
     struct jm_fold_state *s = (struct jm_fold_state*)state;
     /* find the last event belonging to this trail */
     const tdb_cons_event *ev = &s->events[*value - 1];
-    uint32_t j = 0;
-    uint32_t num_events = 0;
+    uint64_t j = 0;
+    uint64_t num_events = 0;
 
     /* if any of the trails fail, all fail, so it is pointless to continue */
     if (s->ret)
@@ -71,6 +71,7 @@ static void *groupby_uuid_handle_one_trail(
         s->buf[j].num_items = ev->num_items;
         s->buf[j].timestamp = ev->timestamp;
 
+        /* TODO write a test for an extra long (>2^32) trail */
         if (++j == TDB_MAX_TRAIL_LENGTH){
             s->ret = -1;
             return state;
@@ -96,19 +97,24 @@ static void *groupby_uuid_handle_one_trail(
         uint64_t delta = timestamp - prev_timestamp;
         if (delta < TDB_MAX_TIMEDELTA){
             if (timestamp > s->max_timestamp)
-                s->max_timestamp = (uint32_t)timestamp;
+                s->max_timestamp = timestamp;
             if (delta > s->max_timedelta)
-                s->max_timedelta = (uint32_t)delta;
-
-            /* Convert to the delta value index */
+                s->max_timedelta = delta;
             prev_timestamp = timestamp;
-            s->buf[j].timestamp = (uint32_t)(delta << 8);
+            /* convert the delta value to a proper item */
+            s->buf[j].timestamp = tdb_make_item(0, delta);
         }else{
+            /* TODO special error code for out of range timestamps */
+            s->ret = -2;
+            return state;
+        }
+        #if 0
             /* Use the out of range delta, perhaps a corrupted timestamp */
             s->max_timedelta = TDB_FAR_TIMEDELTA;
             s->buf[j].timestamp = TDB_FAR_TIMEDELTA << 8;
             ++s->num_invalid;
         }
+        #endif
     }
 
     SAFE_WRITE(s->buf, num_events * sizeof(tdb_event), s->path, s->grouped_w);
@@ -121,8 +127,8 @@ static int groupby_uuid(FILE *grouped_w,
                         const tdb_cons_event *events,
                         tdb_cons *cons,
                         uint64_t *num_trails,
-                        uint32_t *max_timestamp,
-                        uint32_t *max_timedelta)
+                        uint64_t *max_timestamp,
+                        uint64_t *max_timedelta)
 {
     struct jm_fold_state state = {
         .grouped_w = grouped_w,
@@ -141,31 +147,27 @@ static int groupby_uuid(FILE *grouped_w,
     return state.ret;
 }
 
-uint32_t edge_encode_items(const tdb_item *items,
-                           uint32_t **encoded,
-                           uint32_t *encoded_size,
+uint64_t edge_encode_items(const tdb_item *items,
+                           tdb_item **encoded,
+                           uint64_t *encoded_size,
                            tdb_item *prev_items,
                            const tdb_event *ev)
 {
-    uint32_t n = 0;
-    /* consider only valid timestamps (field == 0)
-       XXX: use invalid timestamps again when we add
-            the flag in finalize to skip OOD data */
-    if (tdb_item_field(ev->timestamp) == 0){
-        uint64_t j = ev->item_zero;
-        /* edge encode items: keep only fields that are different from
-           the previous event */
-        for (; j < ev->item_zero + ev->num_items; j++){
-            tdb_field field = tdb_item_field(items[j]);
-            if (prev_items[field] != items[j]){
-                if (n == *encoded_size){
-                    *encoded_size += EDGE_INCREMENT;
-                    if (!(*encoded = realloc(*encoded, *encoded_size * 4)))
-                        DIE("Could not allocate encoding buffer of %u items",
-                            *encoded_size);
-                }
-                (*encoded)[n++] = prev_items[field] = items[j];
+    uint64_t n = 0;
+    uint64_t j = ev->item_zero;
+    /* edge encode items: keep only fields that are different from
+       the previous event */
+    for (; j < ev->item_zero + ev->num_items; j++){
+        tdb_field field = tdb_item_field(items[j]);
+        if (prev_items[field] != items[j]){
+            if (n == *encoded_size){
+                *encoded_size += EDGE_INCREMENT;
+                if (!(*encoded = realloc(*encoded,
+                                         *encoded_size * sizeof(tdb_item))))
+                    DIE("Could not allocate encoding buffer of %"PRIu64" items",
+                        *encoded_size);
             }
+            (*encoded)[n++] = prev_items[field] = items[j];
         }
     }
     return n;
@@ -174,9 +176,9 @@ uint32_t edge_encode_items(const tdb_item *items,
 static void store_info(const char *path,
                        uint64_t num_trails,
                        uint64_t num_events,
-                       uint32_t min_timestamp,
-                       uint32_t max_timestamp,
-                       uint32_t max_timedelta)
+                       uint64_t min_timestamp,
+                       uint64_t max_timestamp,
+                       uint64_t max_timedelta)
 {
     FILE *out;
 
@@ -185,7 +187,7 @@ static void store_info(const char *path,
 
     SAFE_FPRINTF(out,
                  path,
-                 "%"PRIu64" %"PRIu64" %"PRIu32" %"PRIu32" %"PRIu32"\n",
+                 "%"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64"\n",
                  num_trails,
                  num_events,
                  min_timestamp,
@@ -195,21 +197,24 @@ static void store_info(const char *path,
     SAFE_CLOSE(out, path);
 }
 
+#define INITIAL_ENCODING_BUF_BITS 8 * 1024 * 1024
+
 static void encode_trails(const tdb_item *items,
                           FILE *grouped,
                           uint64_t num_events,
                           uint64_t num_trails,
-                          uint32_t num_fields,
-                          const Pvoid_t codemap,
-                          const Pvoid_t gram_freqs,
+                          uint64_t num_fields,
+                          const struct judy_128_map *codemap,
+                          const struct judy_128_map *gram_freqs,
                           const struct field_stats *fstats,
                           const char *path,
                           const char *toc_path)
 {
-    uint64_t *grams = NULL;
+    __uint128_t *grams = NULL;
     tdb_item *prev_items = NULL;
-    uint32_t *encoded = NULL;
-    uint32_t encoded_size = 0;
+    uint64_t *encoded = NULL;
+    uint64_t encoded_size = 0;
+    uint64_t buf_size = INITIAL_ENCODING_BUF_BITS;
     uint64_t i = 1;
     char *buf;
     FILE *out;
@@ -222,16 +227,14 @@ static void encode_trails(const tdb_item *items,
     if (!(out = fopen(path, "w")))
         DIE("Could not create trail file: %s", path);
 
-    /* huff_encode_grams guarantees that it writes fewer
-       than UINT32_MAX bits per buffer, or it fails */
-    if (!(buf = calloc(1, UINT32_MAX / 8 + 8)))
+    if (!(buf = calloc(1, buf_size / 8 + 8)))
         DIE("Could not allocate 512MB in encode_trails");
 
     if (!(prev_items = malloc(num_fields * sizeof(tdb_item))))
-        DIE("Could not allocate %u fields", num_fields);
+        DIE("Could not allocate %"PRIu64" fields", num_fields);
 
-    if (!(grams = malloc(num_fields * 8)))
-        DIE("Could not allocate %u grams", num_fields);
+    if (!(grams = malloc(num_fields * 16)))
+        DIE("Could not allocate %"PRIu64" grams", num_fields);
 
     if (!(toc = malloc((num_trails + 1) * 8)))
         DIE("Could not allocate %"PRIu64" offsets", num_trails + 1);
@@ -257,19 +260,31 @@ static void encode_trails(const tdb_item *items,
         while (ev.trail_id == trail_id){
 
             /* 1) produce an edge-encoded set of items for this event */
-            uint32_t n = edge_encode_items(items,
+            uint64_t n = edge_encode_items(items,
                                            &encoded,
                                            &encoded_size,
                                            prev_items,
                                            &ev);
 
             /* 2) cover the encoded set with a set of unigrams and bigrams */
-            uint32_t m = (uint32_t)choose_grams(encoded,
+            uint64_t m = choose_grams_one_event(encoded,
                                                 n,
                                                 gram_freqs,
                                                 &gbufs,
                                                 grams,
                                                 &ev);
+
+            uint64_t bits_needed = offs + huff_encoded_max_bits(m) + 64;
+            if (bits_needed > buf_size){
+                char *new_buf;
+                buf_size = bits_needed * 2;
+                if (!(new_buf = calloc(1, buf_size / 8 + 8)))
+                    DIE("Couldn't allocate an encoding "
+                        "buffer of %"PRIu64" bytes", buf_size / 8 + 8);
+                memcpy(new_buf, buf, offs / 8 + 1);
+                free(buf);
+                buf = new_buf;
+            }
 
             /* 3) huffman-encode grams */
             huff_encode_grams(codemap,
@@ -279,12 +294,10 @@ static void encode_trails(const tdb_item *items,
                               &offs,
                               fstats);
 
-            if (i++ < num_events) {
+            if (i++ < num_events){
                 SAFE_FREAD(grouped, path, &ev, sizeof(tdb_event));
-            } else {
+            }else
                 break;
-            }
-
         }
 
         /* write the length residual */
@@ -309,6 +322,7 @@ static void encode_trails(const tdb_item *items,
     /* write an extra 8 null bytes: huffman may require up to 7 when reading */
     uint64_t zero = 0;
     SAFE_WRITE(&zero, 8, path, out);
+    file_offs += 8;
     SAFE_CLOSE(out, path);
 
     if (!(out = fopen(toc_path, "w")))
@@ -326,7 +340,7 @@ static void encode_trails(const tdb_item *items,
     free(toc);
 }
 
-static void store_codebook(const Pvoid_t codemap, const char *path)
+static void store_codebook(const struct judy_128_map *codemap, const char *path)
 {
     FILE *out;
     uint32_t size;
@@ -351,19 +365,22 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
     struct field_stats *fstats = NULL;
     uint64_t num_trails = 0;
     uint64_t num_events = cons->events.next;
-    uint32_t num_fields = cons->num_ofields + 1;
-    uint32_t max_timestamp = 0;
-    uint32_t max_timedelta = 0;
+    uint64_t num_fields = cons->num_ofields + 1;
+    uint64_t max_timestamp = 0;
+    uint64_t max_timedelta = 0;
     uint64_t *field_cardinalities = NULL;
-    uint32_t i;
-    Pvoid_t unigram_freqs = NULL;
-    Pvoid_t gram_freqs = NULL;
-    Pvoid_t codemap = NULL;
+    uint64_t i;
+    Pvoid_t unigram_freqs;
+    struct judy_128_map gram_freqs;
+    struct judy_128_map codemap;
     Word_t tmp;
     FILE *grouped_w = NULL;
     FILE *grouped_r = NULL;
     int ret = 0;
     TDB_TIMER_DEF
+
+    j128m_init(&gram_freqs);
+    j128m_init(&codemap);
 
     if (!(field_cardinalities = calloc(cons->num_ofields, 8)))
         DIE("Couldn't malloc field_cardinalities");
@@ -424,16 +441,17 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
 
     /* 4. construct uni/bi-grams */
     TDB_TIMER_START
-    gram_freqs = make_grams(grouped_r,
-                            num_events,
-                            items,
-                            num_fields,
-                            unigram_freqs);
+    make_grams(grouped_r,
+               num_events,
+               items,
+               num_fields,
+               unigram_freqs,
+               &gram_freqs);
     TDB_TIMER_END("trail/gram_freqs");
 
     /* 5. build a huffman codebook and stats struct for encoding grams */
     TDB_TIMER_START
-    codemap = huff_create_codemap(gram_freqs);
+    huff_create_codemap(&gram_freqs, &codemap);
     fstats = huff_field_stats(field_cardinalities,
                               num_fields,
                               max_timedelta);
@@ -448,8 +466,8 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
                   num_events,
                   num_trails,
                   num_fields,
-                  codemap,
-                  gram_freqs,
+                  &codemap,
+                  &gram_freqs,
                   fstats,
                   path,
                   toc_path);
@@ -458,13 +476,13 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
     /* 7. write huffman codebook to disk */
     TDB_TIMER_START
     tdb_path(path, "%s/trails.codebook", root);
-    store_codebook(codemap, path);
+    store_codebook(&codemap, path);
     TDB_TIMER_END("trail/store_codebook");
 
 error:
+    j128m_free(&gram_freqs);
+    j128m_free(&codemap);
     JLFA(tmp, unigram_freqs);
-    JLFA(tmp, gram_freqs);
-    JLFA(tmp, codemap);
 
     if (grouped_r)
         fclose(grouped_r);

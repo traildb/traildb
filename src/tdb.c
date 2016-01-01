@@ -13,8 +13,11 @@
 #endif
 
 #include "tdb_internal.h"
-#include "huffman.h"
+#include "tdb_huffman.h"
 #include "util.h"
+
+/* TODO implement tdb_init() and fix error codes */
+/* TODO remove DIEs */
 
 void tdb_err(tdb *db, char *fmt, ...)
 {
@@ -79,12 +82,12 @@ void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex)
 }
 
 const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
-                            uint32_t i,
-                            uint32_t *length)
+                            tdb_val i,
+                            uint64_t *length)
 {
     if (lex->version == TDB_VERSION_V0){
         /* backwards compatibility with 0-terminated strings in v0 */
-        *length = (uint32_t)strlen(&lex->data[lex->toc[i]]);
+        *length = (uint64_t)strlen(&lex->data[lex->toc[i]]);
     }else
         *length = lex->toc[i + 1] - lex->toc[i];
     return &lex->data[lex->toc[i]];
@@ -95,8 +98,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
     FILE *f;
     char *line = NULL;
     size_t n = 0;
-    uint32_t i = 0;
-    tdb_field num_ofields = 0;
+    tdb_field i, num_ofields = 0;
 
     tdb_path(path, "%s/fields", root);
     if (!(f = fopen(path, "r"))){
@@ -127,7 +129,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
     }else
         db->lexicons = NULL;
 
-    if (!(db->previous_items = calloc(db->num_fields, 4))){
+    if (!(db->previous_items = calloc(db->num_fields, sizeof(tdb_item)))){
         tdb_err(db, "Could not alloc %u values", db->num_fields);
         goto error;
     }
@@ -209,6 +211,8 @@ static int read_version(tdb *db, const char *path)
         tdb_err(db, "Invalid version file");
         return -1;
     }
+    /* TODO check that db->version <= TDB_VERSION_LATEST */
+
     fclose(f);
 
     return 0;
@@ -224,7 +228,7 @@ static int read_info(tdb *db, const char *path)
     }
 
     if (fscanf(f,
-               "%"PRIu64" %"PRIu64" %u %u %u",
+               "%"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64,
                &db->num_trails,
                &db->num_events,
                &db->min_timestamp,
@@ -266,11 +270,10 @@ tdb *tdb_open(const char *root)
         tdb_path(path, "%s/cookies", root);
         if (access(path, F_OK))
             tdb_path(path, "%s/uuids", root);
-        if (tdb_mmap(path, &db->uuids, db)){
-            printf("FUU %s\n", path);
+        if (tdb_mmap(path, &db->uuids, db))
             goto err;
-        }
 
+        /* TODO deprecate .index */
         tdb_path(path, "%s/cookies.index", root);
         if (access(path, F_OK))
             tdb_path(path, "%s/uuids.index", root);
@@ -305,7 +308,7 @@ err:
     return NULL;
 }
 
-void tdb_willneed(tdb *db)
+void tdb_willneed(const tdb *db)
 {
     if (db){
         tdb_field i;
@@ -314,26 +317,26 @@ void tdb_willneed(tdb *db)
                     db->lexicons[i].size,
                     MADV_WILLNEED);
 
-        madvise((void*)db->uuids.data, db->uuids.size, MADV_WILLNEED);
-        madvise((void*)db->codebook.data, db->codebook.size, MADV_WILLNEED);
-        madvise((void*)db->trails.data, db->trails.size, MADV_WILLNEED);
-        madvise((void*)db->toc.data, db->toc.size, MADV_WILLNEED);
+        madvise(db->uuids.data, db->uuids.size, MADV_WILLNEED);
+        madvise(db->codebook.data, db->codebook.size, MADV_WILLNEED);
+        madvise(db->trails.data, db->trails.size, MADV_WILLNEED);
+        madvise(db->toc.data, db->toc.size, MADV_WILLNEED);
     }
 }
 
-void tdb_dontneed(tdb *db)
+void tdb_dontneed(const tdb *db)
 {
     if (db){
         tdb_field i;
         for (i = 0; i < db->num_fields - 1; i++)
-            madvise((void*)db->lexicons[i].data,
+            madvise(db->lexicons[i].data,
                     db->lexicons[i].size,
                     MADV_DONTNEED);
 
-        madvise((void*)db->uuids.data, db->uuids.size, MADV_DONTNEED);
-        madvise((void*)db->codebook.data, db->codebook.size, MADV_DONTNEED);
-        madvise((void*)db->trails.data, db->trails.size, MADV_DONTNEED);
-        madvise((void*)db->toc.data, db->toc.size, MADV_DONTNEED);
+        madvise(db->uuids.data, db->uuids.size, MADV_DONTNEED);
+        madvise(db->codebook.data, db->codebook.size, MADV_DONTNEED);
+        madvise(db->trails.data, db->trails.size, MADV_DONTNEED);
+        madvise(db->toc.data, db->toc.size, MADV_DONTNEED);
     }
 }
 
@@ -342,14 +345,14 @@ void tdb_close(tdb *db)
     if (db){
         tdb_field i;
         for (i = 0; i < db->num_fields - 1; i++){
-            free((char*)db->field_names[i + 1]);
-            munmap((void*)db->lexicons[i].data, db->lexicons[i].size);
+            free(db->field_names[i + 1]);
+            munmap(db->lexicons[i].data, db->lexicons[i].size);
         }
 
-        munmap((void*)db->uuids.data, db->uuids.size);
-        munmap((void*)db->codebook.data, db->codebook.size);
-        munmap((void*)db->trails.data, db->trails.size);
-        munmap((void*)db->toc.data, db->toc.size);
+        munmap(db->uuids.data, db->uuids.size);
+        munmap(db->codebook.data, db->codebook.size);
+        munmap(db->trails.data, db->trails.size);
+        munmap(db->toc.data, db->toc.size);
 
         free(db->lexicons);
         free(db->previous_items);
@@ -360,7 +363,7 @@ void tdb_close(tdb *db)
     }
 }
 
-uint32_t tdb_lexicon_size(const tdb *db, tdb_field field)
+uint64_t tdb_lexicon_size(const tdb *db, tdb_field field)
 {
     if (field == 0 || field >= db->num_fields)
         return 0;
@@ -373,32 +376,35 @@ uint32_t tdb_lexicon_size(const tdb *db, tdb_field field)
     }
 }
 
-int tdb_get_field(tdb *db, const char *field_name)
+int tdb_get_field(const tdb *db, const char *field_name, tdb_field *field)
 {
     tdb_field i;
     for (i = 0; i < db->num_fields; i++)
-        if (!strcmp(field_name, db->field_names[i]))
-            return i;
-    tdb_err(db, "Field not found: %s", field_name);
+        if (!strcmp(field_name, db->field_names[i])){
+            *field = i;
+            return 0;
+        }
     return -1;
 }
 
-const char *tdb_get_field_name(tdb *db, tdb_field field)
+const char *tdb_get_field_name(const tdb *db, tdb_field field)
 {
     if (field < db->num_fields)
         return db->field_names[field];
     return NULL;
 }
 
+#if 0
 int tdb_field_has_overflow_vals(tdb *db, tdb_field field)
 {
     return tdb_lexicon_size(db, field) > TDB_MAX_NUM_VALUES;
 }
+#endif
 
 tdb_item tdb_get_item(const tdb *db,
                       tdb_field field,
                       const char *value,
-                      uint32_t value_length)
+                      uint64_t value_length)
 {
     if (!value_length)
         /* NULL value for this field */
@@ -413,7 +419,7 @@ tdb_item tdb_get_item(const tdb *db,
         tdb_lexicon_read(db, field, &lex);
 
         for (i = 0; i < lex.size; i++){
-            uint32_t length;
+            uint64_t length;
             const char *token = tdb_lexicon_get(&lex, i, &length);
             if (length == value_length && !memcmp(&token, value, length))
                 return field | ((i + 1) << 8);
@@ -425,7 +431,7 @@ tdb_item tdb_get_item(const tdb *db,
 const char *tdb_get_value(const tdb *db,
                           tdb_field field,
                           tdb_val val,
-                          uint32_t *value_length)
+                          uint64_t *value_length)
 {
     if (field == 0 || field >= db->num_fields)
         return NULL;
@@ -446,7 +452,7 @@ const char *tdb_get_value(const tdb *db,
 
 const char *tdb_get_item_value(const tdb *db,
                                tdb_item item,
-                               uint32_t *value_length)
+                               uint64_t *value_length)
 {
     return tdb_get_value(db,
                          tdb_item_field(item),
@@ -461,15 +467,10 @@ const uint8_t *tdb_get_uuid(const tdb *db, uint64_t trail_id)
     return NULL;
 }
 
-inline uint64_t tdb_get_trail_offs(const tdb *db, uint64_t trail_id)
-{
-    if (db->trails.size < UINT32_MAX)
-        return ((uint32_t*)db->toc.data)[trail_id];
-    return ((uint64_t*)db->toc.data)[trail_id];
-}
-
 int64_t tdb_get_trail_id(const tdb *db, const uint8_t *uuid)
 {
+    /* TODO implement binary search */
+    /* TODO remove UUID index */
     uint64_t i;
 #ifdef ENABLE_UUID_INDEX
     /* (void*) cast is horrible below. I don't know why cmph_search_packed
@@ -493,6 +494,7 @@ int64_t tdb_get_trail_id(const tdb *db, const uint8_t *uuid)
     return -1;
 }
 
+/* TODO obsolete with binary search */
 int tdb_has_uuid_index(const tdb *db __attribute__((unused)))
 {
 #ifdef ENABLE_UUID_INDEX
@@ -517,17 +519,17 @@ uint64_t tdb_num_events(const tdb *db)
     return db->num_events;
 }
 
-uint32_t tdb_num_fields(const tdb *db)
+uint64_t tdb_num_fields(const tdb *db)
 {
     return db->num_fields;
 }
 
-uint32_t tdb_min_timestamp(const tdb *db)
+uint64_t tdb_min_timestamp(const tdb *db)
 {
     return db->min_timestamp;
 }
 
-uint32_t tdb_max_timestamp(const tdb *db)
+uint64_t tdb_max_timestamp(const tdb *db)
 {
     return db->max_timestamp;
 }
@@ -537,15 +539,16 @@ uint64_t tdb_version(const tdb *db)
     return db->version;
 }
 
-int tdb_set_filter(tdb *db, const uint32_t *filter, uint32_t filter_len)
+int tdb_set_filter(tdb *db, const tdb_item *filter, uint64_t filter_len)
 {
+    /* TODO check that filter is valid: sum(clauses) < filter_len */
     free(db->filter);
     if (filter){
-        if (!(db->filter = malloc(filter_len * 4))){
+        if (!(db->filter = malloc(filter_len * sizeof(tdb_item)))){
             tdb_err(db, "Could not alloc new filter");
             return -1;
         }
-        memcpy(db->filter, filter, filter_len * 4);
+        memcpy(db->filter, filter, filter_len * sizeof(tdb_item));
         db->filter_len = filter_len;
     }else{
         db->filter = NULL;
@@ -554,7 +557,7 @@ int tdb_set_filter(tdb *db, const uint32_t *filter, uint32_t filter_len)
     return 0;
 }
 
-const uint32_t *tdb_get_filter(const tdb *db, uint32_t *filter_len)
+const tdb_item *tdb_get_filter(const tdb *db, uint64_t *filter_len)
 {
     *filter_len = db->filter_len;
     return db->filter;

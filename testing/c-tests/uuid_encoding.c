@@ -7,9 +7,6 @@
 
 int main(int argc, char** argv)
 {
-    ((void) argc);
-    ((void) argv);
-
     for ( int i1 = 0; i1 < 10000; ++i1 )
     {
         uint8_t hex_uuid[33];

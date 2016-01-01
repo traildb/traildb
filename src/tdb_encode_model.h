@@ -2,32 +2,44 @@
 #ifndef __TDB_ENCODE_MODEL_H__
 #define __TDB_ENCODE_MODEL_H__
 
+#include <stdio.h>
+#include <stdint.h>
+
+#include <Judy.h>
+
+#include "tdb_types.h"
+#include "judy_128_map.h"
+
 struct gram_bufs{
-    uint64_t *chosen;
+    __uint128_t *chosen;
     uint64_t *scores;
+    /* size of the above two */
+    uint64_t buf_len;
+
     uint8_t *covered;
-    uint32_t num_fields;
+    uint64_t num_fields;
 };
 
-void init_gram_bufs(struct gram_bufs *b, uint32_t num_fields);
+void init_gram_bufs(struct gram_bufs *b, uint64_t num_fields);
 void free_gram_bufs(struct gram_bufs *b);
 
-uint64_t choose_grams(const uint32_t *encoded,
-                      uint64_t num_encoded,
-                      const Pvoid_t gram_freqs,
-                      struct gram_bufs *g,
-                      uint64_t *grams,
-                      const tdb_event *ev);
+uint64_t choose_grams_one_event(const tdb_item *encoded,
+                                uint64_t num_encoded,
+                                const struct judy_128_map *gram_freqs,
+                                struct gram_bufs *g,
+                                __uint128_t *grams,
+                                const tdb_event *ev);
 
-Pvoid_t make_grams(FILE *grouped,
-                   uint64_t num_events,
-                   const tdb_item *items,
-                   uint32_t num_fields,
-                   const Pvoid_t unigram_freqs);
+void make_grams(FILE *grouped,
+                uint64_t num_events,
+                const tdb_item *items,
+                uint64_t num_fields,
+                const Pvoid_t unigram_freqs,
+                struct judy_128_map *final_freqs);
 
 Pvoid_t collect_unigrams(FILE *grouped,
                          uint64_t num_events,
                          const tdb_item *items,
-                         uint32_t num_fields);
+                         uint64_t num_fields);
 
 #endif /* __TDB_ENCODE_MODEL_H__ */

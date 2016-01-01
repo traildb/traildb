@@ -29,7 +29,7 @@ Word_t *j128m_insert(struct judy_128_map *j128m, __uint128_t key)
     return lo_ptr;
 }
 
-Word_t *j128m_get(struct judy_128_map *j128m, __uint128_t key)
+Word_t *j128m_get(const struct judy_128_map *j128m, __uint128_t key)
 {
     uint64_t hi_key = (key >> 64) & UINT64_MAX;
     uint64_t lo_key = key & UINT64_MAX;

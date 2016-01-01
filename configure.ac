@@ -27,5 +27,13 @@ AC_CHECK_HEADERS([cmph.h], [], [
   AC_MSG_ERROR([unable to find cmph.h])
 ], [])
 
+AC_CHECK_TYPE(__uint128_t, [], [
+  AC_MSG_ERROR([__uint128_t not defined])
+])
+
+AC_CHECK_SIZEOF([off_t])
+
+AC_CHECK_SIZEOF([size_t])
+
 AC_OUTPUT
 

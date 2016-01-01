@@ -11,7 +11,7 @@ int main(int argc, char** argv)
 {
     static char buf[TDB_MAX_FIELDNAME_LENGTH + 1];
     const char *bad[TDB_MAX_NUM_FIELDS + 1];
-    uint32_t i;
+    uint64_t i;
 
     bad[0] = bad[1] = buf;
 

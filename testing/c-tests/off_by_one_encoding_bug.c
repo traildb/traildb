@@ -28,10 +28,10 @@ int main(int argc, char** argv)
 {
     static uint8_t uuid[16];
     const char *fields[] = {"a", "b"};
-    uint32_t lengths[] = {3, 2};
+    uint64_t lengths[] = {3, 2};
     tdb_item *items;
-    uint32_t n, items_len = 0;
-    uint32_t i;
+    uint64_t n, items_len = 0;
+    uint64_t i;
 
     tdb_cons* c = tdb_cons_new(argv[1], fields, 2);
     assert(c != NULL);
@@ -50,7 +50,7 @@ int main(int argc, char** argv)
 
     for (i = 0; i < sizeof(EVENTS) / sizeof(struct event); i++){
         uint64_t trail_id;
-        uint32_t len;
+        uint64_t len;
         const char *val;
 
         memcpy(uuid, &i, 4);
