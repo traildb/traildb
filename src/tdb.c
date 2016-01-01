@@ -129,7 +129,7 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
     }else
         db->lexicons = NULL;
 
-    if (!(db->previous_items = calloc(db->num_fields, 4))){
+    if (!(db->previous_items = calloc(db->num_fields, sizeof(tdb_item)))){
         tdb_err(db, "Could not alloc %u values", db->num_fields);
         goto error;
     }
@@ -544,11 +544,11 @@ int tdb_set_filter(tdb *db, const tdb_item *filter, uint64_t filter_len)
     /* TODO check that filter is valid: sum(clauses) < filter_len */
     free(db->filter);
     if (filter){
-        if (!(db->filter = malloc(filter_len * 4))){
+        if (!(db->filter = malloc(filter_len * sizeof(tdb_item)))){
             tdb_err(db, "Could not alloc new filter");
             return -1;
         }
-        memcpy(db->filter, filter, filter_len * 4);
+        memcpy(db->filter, filter, filter_len * sizeof(tdb_item));
         db->filter_len = filter_len;
     }else{
         db->filter = NULL;

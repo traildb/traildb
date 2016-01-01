@@ -162,7 +162,8 @@ uint64_t edge_encode_items(const tdb_item *items,
         if (prev_items[field] != items[j]){
             if (n == *encoded_size){
                 *encoded_size += EDGE_INCREMENT;
-                if (!(*encoded = realloc(*encoded, *encoded_size * 4)))
+                if (!(*encoded = realloc(*encoded,
+                                         *encoded_size * sizeof(tdb_item))))
                     DIE("Could not allocate encoding buffer of %"PRIu64" items",
                         *encoded_size);
             }

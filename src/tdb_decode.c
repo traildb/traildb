@@ -76,7 +76,7 @@ int tdb_get_trail_filtered(const tdb *db,
     int r;
 
     if (!*items_buf_len){
-        if (!(*items = malloc(INITIAL_ITEMS_BUF_LEN * 4)))
+        if (!(*items = malloc(INITIAL_ITEMS_BUF_LEN * sizeof(tdb_item))))
             return -1;
         *items_buf_len = INITIAL_ITEMS_BUF_LEN;
     }
@@ -96,7 +96,7 @@ int tdb_get_trail_filtered(const tdb *db,
         else{
             *items_buf_len *= 2;
             free(*items);
-            if (!(*items = malloc(*items_buf_len * 4))){
+            if (!(*items = malloc(*items_buf_len * sizeof(tdb_item)))){
                 *items_buf_len = 0;
                 return -1;
             }
