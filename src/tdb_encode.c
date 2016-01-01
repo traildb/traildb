@@ -13,7 +13,7 @@
 #include "judy_str_map.h"
 
 #define EDGE_INCREMENT     1000000
-#define GROUPBUF_INCREMENT 10000000
+#define GROUPBUF_INCREMENT 1000000
 #define READ_BUFFER_SIZE  (1000000 * sizeof(tdb_event))
 
 struct jm_fold_state{

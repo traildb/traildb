@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 #ifndef ARENA_INCREMENT
-#define ARENA_INCREMENT 100000000
+#define ARENA_INCREMENT 1000000
 #endif
 
 #define ARENA_DISK_BUFFER (1 << 23) /* must be a power of two */
