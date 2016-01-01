@@ -16,7 +16,7 @@
 #define RANDOM_SEED 238713
 #define UNIGRAM_SUPPORT 0.00001
 #define NUM_EVENTS_SAMPLING_THRESHOLD 1000000
-#define INITIAL_GRAM_BUF_LEN 256
+#define INITIAL_GRAM_BUF_LEN (256 * 256)
 
 #define MIN(a,b) ((a)>(b)?(b):(a))
 
@@ -125,13 +125,13 @@ static void *event_fold(event_op op,
 
 static void alloc_gram_bufs(struct gram_bufs *b)
 {
-    if (!(b->chosen = malloc(b->buf_len * b->buf_len * 16)))
+    if (!(b->chosen = malloc(b->buf_len * 16)))
         DIE("Could not allocate bigram gram_buf (%"PRIu64" bytes)",
-            b->buf_len * b->buf_len * 16);
+            b->buf_len * 16);
 
-    if (!(b->scores = malloc(b->buf_len * b->buf_len * 8)))
+    if (!(b->scores = malloc(b->buf_len * 8)))
         DIE("Could not allocate scores gram_buf (%"PRIu64" bytes)",
-            b->buf_len * b->buf_len * 8);
+            b->buf_len * 8);
 }
 
 void init_gram_bufs(struct gram_bufs *b, uint64_t num_fields)
@@ -140,7 +140,7 @@ void init_gram_bufs(struct gram_bufs *b, uint64_t num_fields)
         DIE("Could not allocate covered gram_buf (%"PRIu64" fields)",
             num_fields);
 
-    b->buf_len = MIN(num_fields, INITIAL_GRAM_BUF_LEN);
+    b->buf_len = MIN(num_fields * num_fields, INITIAL_GRAM_BUF_LEN);
     b->num_fields = num_fields;
     alloc_gram_bufs(b);
 }
