@@ -38,8 +38,7 @@ static void do_cons(const char *root, int do_finalize)
 
     if (do_finalize)
         assert(tdb_cons_finalize(c, 0) == 0);
-    else
-        tdb_cons_free(c);
+    tdb_cons_free(c);
 
     free(lengths);
     free(fields_ptr);
@@ -66,7 +65,7 @@ int main(int argc, char** argv)
     struct rlimit limit = {.rlim_cur = MEM_LIMIT,
                            .rlim_max = MEM_LIMIT};
 
-    //assert(setrlimit(RLIMIT_AS, &limit) == 0);
+    assert(setrlimit(RLIMIT_AS, &limit) == 0);
 
     for (i = 0; i < NUM_CONS_ITER; i++)
         do_cons(argv[1], 0);
