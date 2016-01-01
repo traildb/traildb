@@ -20,13 +20,6 @@ libtraildb_la_CFLAGS = -std=c99 \
 AM_CPPFLAGS = "-I$(top_srcdir)/xxhash -I$(top_srcdir)/dsfmt"
 AM_CFLAGS=-O3 -g
 
-MOSTLYCLEANFILES = $(top_srcdir)/src/xxhash/*.lo \
-                   $(top_srcdir)/src/xxhash/*.o \
-                   $(top_srcdir)/src/xxhash/.libs/* \
-                   $(top_srcdir)/src/dsfmt/*.lo \
-                   $(top_srcdir)/src/dsfmt/*.o \
-                   $(top_srcdir)/src/dsfmt/.libs/*
-
 libtraildb_la_LIBADD = $(top_srcdir)/src/xxhash/xxhash.lo $(top_srcdir)/src/dsfmt/dSFMT.lo
 libtraildb_la_SOURCES = \
   src/tdb.c \
