@@ -17,10 +17,10 @@ libtraildb_la_CFLAGS = -std=c99 \
                        -Wshadow \
                        -Wstrict-prototypes
 
-AM_CPPFLAGS = "-I$(top_srcdir)/xxhash -I$(top_srcdir)/dsfmt"
+AM_CPPFLAGS = -Isrc/xxhash -Isrc/dsfmt
 AM_CFLAGS=-O3 -g
 
-libtraildb_la_LIBADD = $(top_srcdir)/src/xxhash/xxhash.lo $(top_srcdir)/src/dsfmt/dSFMT.lo
+libtraildb_la_LIBADD = src/xxhash/xxhash.lo src/dsfmt/dSFMT.lo
 libtraildb_la_SOURCES = \
   src/tdb.c \
   src/tdb_cons.c \
@@ -38,5 +38,7 @@ libtraildb_la_SOURCES = \
 EXTRA_libtraildb_la_SOURCES = src/xxhash/xxhash.c src/dsfmt/dSFMT.c
 
 include_HEADERS = \
-  src/traildb.h
+  src/traildb.h \
+  src/tdb_types.h \
+  src/tdb_limits.h
 
