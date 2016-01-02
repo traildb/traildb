@@ -462,6 +462,7 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
 {
     struct tdb_file items_mmapped = {};
     uint64_t num_events = cons->events.next;
+    int ret = 0;
 
     /* finalize event items */
     arena_flush(&cons->items);
@@ -481,33 +482,36 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
 
     TDB_TIMER_DEF
 
+    /* TODO fix error codes (ret) below */
     /* finalize lexicons */
     TDB_TIMER_START
-    if (store_lexicons(cons))
+    if (store_lexicons(cons)){
+        ret = -1;
         goto error;
+    }
     TDB_TIMER_END("encoder/store_lexicons")
 
     TDB_TIMER_START
-    if (store_uuids(cons))
+    if (store_uuids(cons)){
+        ret = -1;
         goto error;
+    }
     TDB_TIMER_END("encoder/store_uuids")
 
     TDB_TIMER_START
-    if (store_version(cons))
+    if (store_version(cons)){
+        ret = -1;
         goto error;
+    }
     TDB_TIMER_END("encoder/store_version")
 
     TDB_TIMER_START
-    if (tdb_encode(cons, (tdb_item*)items_mmapped.data))
+    if ((ret = tdb_encode(cons, (tdb_item*)items_mmapped.data)))
         goto error;
     TDB_TIMER_END("encoder/encode")
 
+error:
     if (items_mmapped.data)
         munmap((void*)items_mmapped.data, items_mmapped.size);
-    return 0;
-
- error:
-    if (items_mmapped.data)
-        munmap((void*)items_mmapped.data, items_mmapped.size);
-    return -1;
+    return ret;
 }

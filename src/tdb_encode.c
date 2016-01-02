@@ -107,7 +107,7 @@ static void *groupby_uuid_handle_one_trail(
             s->buf[j].timestamp = tdb_make_item(0, delta);
         }else{
             /* TODO special error code for out of range timestamps */
-            s->ret = -2;
+            s->ret = -5;
             return state;
         }
         #if 0
@@ -138,6 +138,11 @@ static int groupby_uuid(FILE *grouped_w,
         .path = path,
         .min_timestamp = cons->min_timestamp
     };
+
+    /* we require (min_timestamp - 0 < TDB_MAX_TIMEDELTA) */
+    if (cons->min_timestamp >= TDB_MAX_TIMEDELTA)
+        /* TODO make sure this matches with the error code above */
+        return -5;
 
     j128m_fold(&cons->trails, groupby_uuid_handle_one_trail, &state);
 
