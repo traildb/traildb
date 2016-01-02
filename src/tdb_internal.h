@@ -95,15 +95,6 @@ struct _tdb {
     uint64_t version;
 };
 
-#if 0
-struct _tdb_split {
-    tdb_cons **cons;
-    tdb_fold_fn split_fn;
-    unsigned int num_parts;
-    char *values;
-};
-#endif
-
 void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex);
 
 const char *tdb_lexicon_get(const struct tdb_lexicon *lex,

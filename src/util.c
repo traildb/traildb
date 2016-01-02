@@ -128,25 +128,6 @@ void dsfmt_shuffle(uint64_t *arr, uint64_t len, uint32_t seed)
     }
 }
 
-/* TODO delete this */
-#if 0
-char *dupstrs(const char *strs, size_t num)
-{
-    if (num == 0)
-        return NULL;
-
-    char *dup;
-    const char *str = strs;
-    size_t i, n;
-    for (i = 0; i < num; i++)
-        str += strlen(str) + 1;
-    n = str - strs;
-    if ((dup = malloc(n * sizeof(char))) == NULL)
-        return NULL;
-    return memcpy((void *)dup, strs, n);
-}
-#endif
-
 const char *mmap_file(const char *path, uint64_t *size)
 {
     int fd;
