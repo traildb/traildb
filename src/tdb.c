@@ -368,7 +368,6 @@ uint64_t tdb_lexicon_size(const tdb *db, tdb_field field)
     if (field == 0 || field >= db->num_fields)
         return 0;
     else{
-        /* TODO this used to include overflow value */
         struct tdb_lexicon lex;
         tdb_lexicon_read(db, field, &lex);
         /* +1 refers to the implicit NULL value (empty string) */
@@ -394,13 +393,6 @@ const char *tdb_get_field_name(const tdb *db, tdb_field field)
     return NULL;
 }
 
-#if 0
-int tdb_field_has_overflow_vals(tdb *db, tdb_field field)
-{
-    return tdb_lexicon_size(db, field) > TDB_MAX_NUM_VALUES;
-}
-#endif
-
 tdb_item tdb_get_item(const tdb *db,
                       tdb_field field,
                       const char *value,
@@ -414,8 +406,6 @@ tdb_item tdb_get_item(const tdb *db,
     else{
         struct tdb_lexicon lex;
         tdb_val i;
-        /* TODO handle overflow value */
-
         tdb_lexicon_read(db, field, &lex);
 
         for (i = 0; i < lex.size; i++){
@@ -443,7 +433,6 @@ const char *tdb_get_value(const tdb *db,
         struct tdb_lexicon lex;
         tdb_lexicon_read(db, field, &lex);
         if ((val - 1) < lex.size)
-            /* TODO handle overflow value */
             return tdb_lexicon_get(&lex, val - 1, value_length);
         else
             return NULL;

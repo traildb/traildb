@@ -42,14 +42,6 @@ be higher than TDB_MAX_NUM_VALUES, see tdb_types.h for details
 /* TODO make TDB_MAX_LEXICON_SIZE limit 64-bit */
 #define TDB_MAX_LEXICON_SIZE UINT32_MAX
 
-/*
-#define TDB_MAX_TIMEDELTA  ((1LLU << 24) - 2) // ~194 days
-#define TDB_FAR_TIMEDELTA  ((1LLU << 24) - 1)
-#define TDB_FAR_TIMESTAMP    UINT32_MAX
-#define TDB_OVERFLOW_VALUE ((1LLU << 24) - 1)
-
-*/
-
 /* Support a character set that allows easy urlencoding.
    These characters are used in filenames, so better to be
    extra paranoid. */

@@ -110,13 +110,6 @@ static void *groupby_uuid_handle_one_trail(
             s->ret = -5;
             return state;
         }
-        #if 0
-            /* Use the out of range delta, perhaps a corrupted timestamp */
-            s->max_timedelta = TDB_FAR_TIMEDELTA;
-            s->buf[j].timestamp = TDB_FAR_TIMEDELTA << 8;
-            ++s->num_invalid;
-        }
-        #endif
     }
 
     SAFE_WRITE(s->buf, num_events * sizeof(tdb_event), s->path, s->grouped_w);
@@ -392,7 +385,6 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
     if (!(field_cardinalities = calloc(cons->num_ofields, 8)))
         DIE("Couldn't malloc field_cardinalities");
 
-    /* TODO: this wouldn't include OVERFLOW_VALUE */
     for (i = 0; i < cons->num_ofields; i++)
         field_cardinalities[i] = jsm_num_keys(&cons->lexicons[i]);
 

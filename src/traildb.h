@@ -9,13 +9,6 @@
 
 /* add to configure.ac: use jemalloc if available */
 
-/*
-TODO deprecate all OVERFLOW-related stuff
-#define TDB_OVERFLOW_STR   "OVERFLOW"
-#define TDB_OVERFLOW_LSEP  '['
-#define TDB_OVERFLOW_RSEP  ']'
-*/
-
 #define TDB_VERSION_V0 0LLU
 #define TDB_VERSION_V0_1 1LLU
 #define TDB_VERSION_LATEST TDB_VERSION_V0_1
@@ -53,9 +46,6 @@ uint64_t tdb_lexicon_size(const tdb *db, tdb_field field);
 
 int tdb_get_field(const tdb *db, const char *field_name, tdb_field *field);
 const char *tdb_get_field_name(const tdb *db, tdb_field field);
-
-/* TODO deprecate this after wide fields */
-int tdb_field_has_overflow_vals(tdb *db, tdb_field field);
 
 tdb_item tdb_get_item(const tdb *db,
                       tdb_field field,
