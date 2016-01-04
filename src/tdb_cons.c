@@ -250,6 +250,8 @@ int tdb_cons_open(tdb_cons *cons,
 
     cons->min_timestamp = UINT64_MAX;
     cons->num_ofields = num_ofields;
+    /* make an option for this (memory / speed tradeoff) */
+    cons->events.arena_increment = 1000000;
     cons->events.item_size = sizeof(tdb_cons_event);
     cons->items.item_size = sizeof(tdb_item);
 

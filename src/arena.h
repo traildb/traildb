@@ -15,8 +15,8 @@ struct arena{
     char *data;
     uint64_t size;
     uint64_t next;
-    uint32_t item_size;
-    uint32_t arena_increment;
+    uint64_t item_size;
+    uint64_t arena_increment;
     FILE *fd;
 };
 

@@ -23,17 +23,22 @@ void *arena_add_item(struct arena *a)
     if (a->fd){
         if (a->size == 0){
             a->size = ARENA_DISK_BUFFER;
-            if (!(a->data = malloc(a->item_size * (uint64_t)a->size)))
+            if (!(a->data = malloc(a->item_size * (uint64_t)a->size))){
+                a->size = 0;
                 return NULL;
+            }
         }else if ((a->next & (ARENA_DISK_BUFFER - 1)) == 0){
-            arena_flush(a);
+            if (arena_flush(a))
+                return NULL;
         }
         return a->data + a->item_size * (a->next++ & (ARENA_DISK_BUFFER - 1));
     }else{
         if (a->next >= a->size){
             a->size += a->arena_increment ? a->arena_increment: ARENA_INCREMENT;
-            if (!(a->data = realloc(a->data, a->item_size * (uint64_t)a->size)))
+            if (!(a->data = realloc(a->data, a->item_size * (uint64_t)a->size))){
+                a->size = 0;
                 return NULL;
+            }
         }
         return a->data + a->item_size * a->next++;
     }
