@@ -7,7 +7,6 @@
 /* these are kept in stack, so they shouldn't be overly large */
 #define TDB_MAX_PATH_SIZE   2048
 #define TDB_MAX_FIELDNAME_LENGTH 512
-#define TDB_MAX_ERROR_SIZE  (TDB_MAX_PATH_SIZE + 512)
 
 /* MAX_NUM_TRAILS * 16 must fit in off_t (long) type */
 #define TDB_MAX_NUM_TRAILS  ((1LLU << 59) - 1)

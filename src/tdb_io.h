@@ -6,11 +6,8 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
+#include "tdb_limits.h"
 #include "tdb_error.h"
-
-/* these are kept in stack, so they shouldn't be overly large */
-#define TDB_MAX_PATH_SIZE   2048
-#define TDB_MAX_FIELDNAME_LENGTH 512
 
 #define TDB_OPEN(file, path, mode)\
     if (!(file = fopen(path, mode))){\

@@ -6,16 +6,19 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "judy_str_map.h"
 #include "tdb_internal.h"
+#include "tdb_error.h"
+#include "tdb_io.h"
 #include "arena.h"
-#include "util.h"
 
 struct jm_fold_state{
-    const char *path;
     FILE *out;
     uint64_t offset;
+    int ret;
 };
 
 static void *lexicon_store_fun(uint64_t id,
@@ -24,19 +27,25 @@ static void *lexicon_store_fun(uint64_t id,
                                void *state)
 {
     struct jm_fold_state *s = (struct jm_fold_state*)state;
+    int ret = 0;
+
+    if (s->ret)
+        return state;
 
     /* NOTE: vals start at 1, otherwise we would need to +1 */
-    SAFE_SEEK(s->out, id * 4, s->path);
-    SAFE_WRITE(&s->offset, 4, s->path, s->out);
+    TDB_SEEK(s->out, id * 4);
+    TDB_WRITE(s->out, &s->offset, 4);
 
-    SAFE_SEEK(s->out, s->offset, s->path);
-    SAFE_WRITE(value, len, s->path, s->out);
+    TDB_SEEK(s->out, s->offset);
+    TDB_WRITE(s->out, value, len);
 
+done:
+    s->ret = ret;
     s->offset += len;
     return state;
 }
 
-static void lexicon_store(const struct judy_str_map *lexicon, const char *path)
+static int lexicon_store(const struct judy_str_map *lexicon, const char *path)
 {
     /*
     Lexicon format:
@@ -49,63 +58,65 @@ static void lexicon_store(const struct judy_str_map *lexicon, const char *path)
     struct jm_fold_state state;
     uint64_t count = jsm_num_keys(lexicon);
     uint64_t size = (count + 2) * 4;
+    int ret = 0;
 
-    state.path = path;
+    state.out = NULL;
+    state.ret = 0;
     state.offset = (count + 2) * 4;
 
     /* TODO remove this limit - we could allow arbitrary-size lexicons */
     if (size > TDB_MAX_LEXICON_SIZE)
-        DIE("Lexicon %s would be huge! %"PRIu64" items, %"PRIu64" bytes",
-            path,
-            count,
-            size);
+        return TDB_ERR_LEXICON_TOO_LARGE;
 
-    SAFE_OPEN(state.out, path, "w");
-
-    if (ftruncate(fileno(state.out), (off_t)size))
-        DIE("Could not initialize lexicon file (%"PRIu64" bytes): %s",
-            size,
-            path);
-
-    SAFE_WRITE(&count, 4, path, state.out);
+    TDB_OPEN(state.out, path, "w");
+    TDB_TRUNCATE(state.out, (off_t)size);
+    TDB_WRITE(state.out, &count, 4);
 
     jsm_fold(lexicon, lexicon_store_fun, &state);
+    if ((ret = state.ret))
+        goto done;
 
-    SAFE_SEEK(state.out, (count + 1) * 4, path);
-    SAFE_WRITE(&state.offset, 4, path, state.out);
+    TDB_SEEK(state.out, (count + 1) * 4);
+    TDB_WRITE(state.out, &state.offset, 4);
 
-    SAFE_CLOSE(state.out, path);
+done:
+    TDB_CLOSE_FINAL(state.out);
+    return ret;
 }
 
 static int store_lexicons(tdb_cons *cons)
 {
     tdb_field i;
-    FILE *out;
+    FILE *out = NULL;
     char path[TDB_MAX_PATH_SIZE];
+    int ret = 0;
 
-    tdb_path(path, "%s/fields", cons->root);
-    SAFE_OPEN(out, path, "w");
+    TDB_PATH(path, "%s/fields", cons->root);
+    TDB_OPEN(out, path, "w");
 
     for (i = 0; i < cons->num_ofields; i++){
-        tdb_path(path, "%s/lexicon.%s", cons->root, cons->ofield_names[i]);
-        lexicon_store(&cons->lexicons[i], path);
-        fprintf(out, "%s\n", cons->ofield_names[i]);
+        TDB_PATH(path, "%s/lexicon.%s", cons->root, cons->ofield_names[i]);
+        if ((ret = lexicon_store(&cons->lexicons[i], path)))
+            goto done;
+        TDB_FPRINTF(out, "%s\n", cons->ofield_names[i]);
     }
-    SAFE_CLOSE(out, path);
-
-    return 0;
+done:
+    TDB_CLOSE_FINAL(out);
+    return ret;
 }
 
 static int store_version(tdb_cons *cons)
 {
-    FILE *out;
+    FILE *out = NULL;
     char path[TDB_MAX_PATH_SIZE];
+    int ret = 0;
 
-    tdb_path(path, "%s/version", cons->root);
-    SAFE_OPEN(out, path, "w");
-    SAFE_FPRINTF(out, path, "%llu", TDB_VERSION_LATEST);
-    SAFE_CLOSE(out, path);
-    return 0;
+    TDB_PATH(path, "%s/version", cons->root);
+    TDB_OPEN(out, path, "w");
+    TDB_FPRINTF(out, "%llu", TDB_VERSION_LATEST);
+done:
+    TDB_CLOSE_FINAL(out);
+    return ret;
 }
 
 static void *store_uuids_fun(__uint128_t key,
@@ -113,38 +124,38 @@ static void *store_uuids_fun(__uint128_t key,
                              void *state)
 {
     struct jm_fold_state *s = (struct jm_fold_state*)state;
-    SAFE_WRITE(&key, 16, s->path, s->out);
+    int ret = 0;
+    TDB_WRITE(s->out, &key, 16);
+done:
+    s->ret = ret;
     return s;
 }
 
 static int store_uuids(tdb_cons *cons)
 {
     char path[TDB_MAX_PATH_SIZE];
-    struct jm_fold_state state = {.path = path};
+    struct jm_fold_state state = {.ret = 0};
     uint64_t num_trails = j128m_num_keys(&cons->trails);
+    int ret = 0;
 
     /* this is why num_trails < TDB_MAX)NUM_TRAILS < 2^59:
        (2^59 - 1) * 16 < LONG_MAX (off_t) */
-    if (num_trails > TDB_MAX_NUM_TRAILS) {
-        WARN("Too many trails (%"PRIu64")", num_trails);
-        return 1;
-    }
+    if (num_trails > TDB_MAX_NUM_TRAILS)
+        return TDB_ERR_TOO_MANY_TRAILS;
 
-    tdb_path(path, "%s/uuids", cons->root);
-    SAFE_OPEN(state.out, path, "w");
-
-    if (ftruncate(fileno(state.out), (off_t)(num_trails * 16))) {
-        WARN("Could not init (%"PRIu64" trails): %s", num_trails, path);
-        return -1;
-    }
+    TDB_PATH(path, "%s/uuids", cons->root);
+    TDB_OPEN(state.out, path, "w");
+    TDB_TRUNCATE(state.out, ((off_t)(num_trails * 16)));
 
     j128m_fold(&cons->trails, store_uuids_fun, &state);
+    ret = state.ret;
 
-    SAFE_CLOSE(state.out, path);
-    return 0;
+done:
+    TDB_CLOSE_FINAL(state.out);
+    return ret;
 }
 
-static int is_fieldname_invalid(const char* field)
+int is_fieldname_invalid(const char* field)
 {
     uint64_t i;
 
@@ -181,35 +192,55 @@ static int find_duplicate_fieldnames(const char **ofield_names,
     return 0;
 }
 
-tdb_cons *tdb_cons_new(const char *root,
-                       const char **ofield_names,
-                       uint64_t num_ofields)
+tdb_cons *tdb_cons_init(void)
 {
-    tdb_cons *cons;
+    return calloc(1, sizeof(tdb_cons));
+}
+
+int tdb_cons_open(tdb_cons *cons,
+                  const char *root,
+                  const char **ofield_names,
+                  uint64_t num_ofields)
+{
     tdb_field i;
     int fd;
+    int ret = 0;
+
+    /*
+    by handling the "cons == NULL" case here gracefully, we allow the return
+    value of tdb_init() to be used unchecked like here:
+
+    int err;
+    tdb_cons *cons = tdb_cons_init();
+    if ((err = tdb_cons_open(cons, path, fields, num_fields)))
+        printf("Opening cons failed: %s", tdb_error(err));
+    */
+    if (!cons)
+        return TDB_ERR_HANDLE_IS_NULL;
 
     if (num_ofields > TDB_MAX_NUM_FIELDS)
-        return NULL;
+        return TDB_ERR_TOO_MANY_FIELDS;
 
     if (find_duplicate_fieldnames(ofield_names, num_ofields))
-        return NULL;
-
-    if ((cons = calloc(1, sizeof(tdb_cons))) == NULL)
-        return NULL;
+        return TDB_ERR_DUPLICATE_FIELDS;
 
     if (!(cons->ofield_names = calloc(num_ofields, sizeof(char*))))
-        goto error;
+        return TDB_ERR_NOMEM;
 
     for (i = 0; i < num_ofields; i++){
-        if (is_fieldname_invalid(ofield_names[i]))
-            goto error;
+        if (is_fieldname_invalid(ofield_names[i])){
+            ret = TDB_ERR_INVALID_FIELDNAME;
+            goto done;
+        }
         cons->ofield_names[i] = strdup(ofield_names[i]);
     }
 
     j128m_init(&cons->trails);
 
-    cons->root = strdup(root);
+    if (!(cons->root = strdup(root))){
+        ret = TDB_ERR_NOMEM;
+        goto done;
+    }
 
     cons->min_timestamp = UINT64_MAX;
     cons->num_ofields = num_ofields;
@@ -219,30 +250,37 @@ tdb_cons *tdb_cons_new(const char *root,
     /* Opportunistically try to create the output directory.
        We don't care if it fails, e.g. because it already exists */
     mkdir(root, 0755);
-    tdb_path(cons->tempfile, "%s/tmp.items.XXXXXX", root);
-    if ((fd = mkostemp(cons->tempfile, 0)) == -1)
-        goto error;
+    TDB_PATH(cons->tempfile, "%s/tmp.items.XXXXXX", root);
+    if ((fd = mkostemp(cons->tempfile, 0)) == -1){
+        ret = TDB_ERR_IO_OPEN;
+        goto done;
+    }
 
-    if (!(cons->items.fd = fdopen(fd, "w")))
-        goto error;
+    if (!(cons->items.fd = fdopen(fd, "w"))){
+        ret = TDB_ERR_IO_OPEN;
+        goto done;
+    }
 
     if (cons->num_ofields > 0)
         if (!(cons->lexicons = calloc(cons->num_ofields,
-                                      sizeof(struct judy_str_map))))
-            goto error;
+                                      sizeof(struct judy_str_map)))){
+            ret = TDB_ERR_NOMEM;
+            goto done;
+        }
 
     for (i = 0; i < cons->num_ofields; i++){
         if (jsm_init(&cons->lexicons[i]))
-            goto error;
+            ret = TDB_ERR_NOMEM;
+            goto done;
         }
 
-    return cons;
-error:
-    tdb_cons_free(cons);
-    return NULL;
+    return ret;
+done:
+    tdb_cons_close(cons);
+    return ret;
 }
 
-void tdb_cons_free(tdb_cons *cons)
+void tdb_cons_close(tdb_cons *cons)
 {
     uint64_t i;
     for (i = 0; i < cons->num_ofields; i++){
@@ -269,7 +307,6 @@ void tdb_cons_free(tdb_cons *cons)
 
 /*
 Append an event in this cons.
-TODO tests for append
 */
 int tdb_cons_add(tdb_cons *cons,
                  const uint8_t uuid[16],
@@ -284,12 +321,13 @@ int tdb_cons_add(tdb_cons *cons,
 
     for (i = 0; i < cons->num_ofields; i++)
         if (value_lengths[i] > TDB_MAX_VALUE_SIZE)
-            return 2;
+            return TDB_ERR_VALUE_TOO_LONG;
 
     memcpy(&uuid_key, uuid, 16);
     uuid_ptr = j128m_insert(&cons->trails, uuid_key);
 
-    event = (tdb_cons_event*)arena_add_item(&cons->events);
+    if (!(event = (tdb_cons_event*)arena_add_item(&cons->events)))
+        return TDB_ERR_NOMEM;
 
     event->item_zero = cons->items.next;
     event->num_items = 0;
@@ -304,16 +342,20 @@ int tdb_cons_add(tdb_cons *cons,
         tdb_field field = (tdb_field)(i + 1);
         tdb_val val = 0;
         tdb_item item;
+        void *dst;
+
         /* TODO add a test for sparse trails */
         if (value_lengths[i]){
             if (!(val = (tdb_val)jsm_insert(&cons->lexicons[i],
                                             values[i],
                                             value_lengths[i])))
-                return 1;
+                return TDB_ERR_NOMEM;
 
         }
         item = tdb_make_item(field, val);
-        memcpy(arena_add_item(&cons->items), &item, sizeof(tdb_item));
+        if (!(dst = arena_add_item(&cons->items)))
+            return TDB_ERR_NOMEM;
+        memcpy(dst, &item, sizeof(tdb_item));
         ++event->num_items;
     }
     return 0;
@@ -366,7 +408,7 @@ static uint64_t **append_lexicons(tdb_cons *cons, const tdb *db)
         tdb_lexicon_read(db, field + 1, &lex);
 
         if (!(map = lexicon_maps[field] = malloc(lex.size * sizeof(tdb_val))))
-            goto err;
+            goto error;
 
         for (i = 0; i < lex.size; i++){
             uint64_t value_length;
@@ -377,11 +419,11 @@ static uint64_t **append_lexicons(tdb_cons *cons, const tdb *db)
                                             value_length)))
                 map[i] = val;
             else
-                goto err;
+                goto error;
         }
     }
     return lexicon_maps;
-err:
+error:
     for (i = 0; i < cons->num_ofields; i++)
         free(lexicon_maps[i]);
     free(lexicon_maps);
@@ -393,7 +435,6 @@ This is a variation of tdb_cons_add(): Instead of accepting fields as
 strings, it reads them as integer items from an existing TrailDB and
 remaps them to match with this cons.
 */
-/* TODO append test */
 int tdb_cons_append(tdb_cons *cons, const tdb *db)
 {
     tdb_val **lexicon_maps = NULL;
@@ -405,24 +446,24 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
     /* event_width includes the event delimiter, 0 byte */
     const uint64_t event_width = db->num_fields + 1;
 
-    /* TODO: we could be much more permissive with what can be joined:
+    /* NOTE we could be much more permissive with what can be joined:
     we could support "full outer join" and replace all missing fields
     with NULLs automatically.
     */
     if (cons->num_ofields != db->num_fields - 1)
-        /* TODO fix error codes */
-        return -1;
+        return TDB_ERR_APPEND_FIELDS_MISMATCH;
 
     for (field = 0; field < cons->num_ofields; field++)
         if (strcmp(cons->ofield_names[field], tdb_get_field_name(db, field + 1)))
-            /* TODO fix error codes */
-            return -2;
+            return TDB_ERR_APPEND_FIELDS_MISMATCH;
 
     if (db->min_timestamp < cons->min_timestamp)
         cons->min_timestamp = db->min_timestamp;
 
-    if (!(lexicon_maps = append_lexicons(cons, db)))
-        goto err;
+    if (!(lexicon_maps = append_lexicons(cons, db))){
+        ret = TDB_ERR_NOMEM;
+        goto done;
+    }
 
     for (trail_id = 0; trail_id < tdb_num_trails(db); trail_id++){
         __uint128_t uuid_key;
@@ -433,8 +474,8 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
 
         /* TODO this could use an iterator of the trail */
         if (tdb_get_trail(db, trail_id, &items, &items_len, &n, 0)){
-            ret = -1;
-            goto err;
+            ret = TDB_ERR_NOMEM;
+            goto done;
         }
         for (e = 0; e < n; e += event_width){
             for (field = 1; field < cons->num_ofields + 1; field++){
@@ -448,7 +489,7 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
             append_event(cons, &items[e], uuid_ptr);
         }
     }
-err:
+done:
     if (lexicon_maps){
         for (i = 0; i < cons->num_ofields; i++)
             free(lexicon_maps[i]);
@@ -467,44 +508,35 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
     memset(&items_mmapped, 0, sizeof(struct tdb_file));
 
     /* finalize event items */
-    arena_flush(&cons->items);
+    if ((ret = arena_flush(&cons->items)))
+        goto error;
+
     if (fclose(cons->items.fd)) {
         cons->items.fd = NULL;
-        WARN("Closing %s failed", cons->tempfile);
-        return -1;
+        return TDB_ERR_IO_CLOSE;
     }
     cons->items.fd = NULL;
 
     if (num_events && cons->num_ofields) {
-        if (tdb_mmap(cons->tempfile, &items_mmapped, NULL)) {
-            WARN("Mmapping %s failed", cons->tempfile);
-            return -1;
-        }
+        if (tdb_mmap(cons->tempfile, &items_mmapped))
+            return TDB_ERR_IO_READ;
     }
 
     TDB_TIMER_DEF
 
-    /* TODO fix error codes (ret) below */
-    /* finalize lexicons */
     TDB_TIMER_START
-    if (store_lexicons(cons)){
-        ret = -1;
+    if ((ret = store_lexicons(cons)))
         goto error;
-    }
     TDB_TIMER_END("encoder/store_lexicons")
 
     TDB_TIMER_START
-    if (store_uuids(cons)){
-        ret = -1;
+    if ((ret = store_uuids(cons)))
         goto error;
-    }
     TDB_TIMER_END("encoder/store_uuids")
 
     TDB_TIMER_START
-    if (store_version(cons)){
-        ret = -1;
+    if ((ret = store_version(cons)))
         goto error;
-    }
     TDB_TIMER_END("encoder/store_version")
 
     TDB_TIMER_START
@@ -514,6 +546,6 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
 
 error:
     if (items_mmapped.data)
-        munmap((void*)items_mmapped.data, items_mmapped.size);
+        munmap(items_mmapped.data, items_mmapped.size);
     return ret;
 }

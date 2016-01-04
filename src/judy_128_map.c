@@ -21,6 +21,7 @@ Word_t *j128m_insert(struct judy_128_map *j128m, __uint128_t key)
     Word_t *hi_ptr;
     Pvoid_t lo_map;
 
+    /* TODO handle out of memory with Judy - see man 3 judy */
     JLI(hi_ptr, j128m->hi_map, hi_key);
     lo_map = (Pvoid_t)*hi_ptr;
     JLI(lo_ptr, lo_map, lo_key);

@@ -6,71 +6,47 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
+#if 0
 #ifdef ENABLE_UUID_INDEX
 #include <cmph.h>
 #endif
+#endif
 
 #include "tdb_internal.h"
+#include "tdb_error.h"
+#include "tdb_io.h"
 #include "tdb_huffman.h"
-#include "util.h"
 
-/* TODO implement tdb_init() and fix error codes */
-/* TODO remove DIEs */
-
-void tdb_err(tdb *db, char *fmt, ...)
+int tdb_mmap(const char *path, struct tdb_file *dst)
 {
-    if (db){
-        va_list aptr;
-        va_start(aptr, fmt);
-        vsnprintf(db->error, TDB_MAX_ERROR_SIZE, fmt, aptr);
-        va_end(aptr);
-    }
-}
-
-void tdb_path(char path[TDB_MAX_PATH_SIZE], char *fmt, ...)
-{
-    va_list aptr;
-
-    va_start(aptr, fmt);
-    if (vsnprintf(path, TDB_MAX_PATH_SIZE, fmt, aptr) >= TDB_MAX_PATH_SIZE)
-        DIE("Path too long (fmt %s)", fmt);
-    va_end(aptr);
-}
-
-int tdb_mmap(const char *path, struct tdb_file *dst, tdb *db)
-{
-    int fd;
+    int fd, ret = 0;
     struct stat stats;
 
-    if ((fd = open(path, O_RDONLY)) == -1){
-        tdb_err(db, "Could not open path: %s", path);
+    if ((fd = open(path, O_RDONLY)) == -1)
         return -1;
-    }
 
     if (fstat(fd, &stats)){
-        tdb_err(db, "Could not stat path: %s", path);
-        close(fd);
-        return -1;
+        ret = -1;
+        goto done;
     }
 
-    if ((dst->size = (uint64_t)stats.st_size))
+    dst->size = (uint64_t)stats.st_size;
+    dst->data = MAP_FAILED;
+
+    if (dst->size > 0)
         dst->data = mmap(NULL, dst->size, PROT_READ, MAP_SHARED, fd, 0);
-    else {
-        tdb_err(db, "Could not mmap path: %s", path);
-        close(fd);
-        return -1;
-    }
 
     if (dst->data == MAP_FAILED){
-        tdb_err(db, "Could not mmap path: %s", path);
-        close(fd);
-        return -1;
+        ret = -1;
+        goto done;
     }
 
+done:
     close(fd);
-    return 0;
+    return ret;
 }
 
 void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex)
@@ -95,16 +71,15 @@ const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
 
 static int tdb_fields_open(tdb *db, const char *root, char *path)
 {
-    FILE *f;
+    FILE *f = NULL;
     char *line = NULL;
     size_t n = 0;
     tdb_field i, num_ofields = 0;
+    int ret = 0;
 
-    tdb_path(path, "%s/fields", root);
-    if (!(f = fopen(path, "r"))){
-        tdb_err(db, "Could not open path: %s", path);
-        return -1;
-    }
+    TDB_PATH(path, "%s/fields", root);
+    if (!(f = fopen(path, "r")))
+        return TDB_ERR_INVALID_FIELDS_FILE;
 
     while (getline(&line, &n, f) != -1)
         ++num_ofields;
@@ -112,26 +87,26 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
 
     if (!feof(f)){
         /* we can get here if malloc fails inside getline() */
-        tdb_err(db, "getline failed when opening fields");
-        goto error;
+        ret = TDB_ERR_NOMEM;
+        goto done;
     }
 
     if (!(db->field_names = calloc(db->num_fields, sizeof(char*)))){
-        tdb_err(db, "Could not alloc %u field names", db->num_fields);
-        goto error;
+        ret = TDB_ERR_NOMEM;
+        goto done;
     }
 
     if (num_ofields){
         if (!(db->lexicons = calloc(num_ofields, sizeof(struct tdb_file)))){
-            tdb_err(db, "Could not alloc %u files", num_ofields);
-            goto error;
+            ret = TDB_ERR_NOMEM;
+            goto done;
         }
     }else
         db->lexicons = NULL;
 
     if (!(db->previous_items = calloc(db->num_fields, sizeof(tdb_item)))){
-        tdb_err(db, "Could not alloc %u values", db->num_fields);
-        goto error;
+        ret = TDB_ERR_NOMEM;
+        goto done;
     }
 
     rewind(f);
@@ -142,43 +117,45 @@ static int tdb_fields_open(tdb *db, const char *root, char *path)
 
         line[strlen(line) - 1] = 0;
 
+        /* let's be paranoid and sanity check the fieldname again */
+        if (is_fieldname_invalid(line)){
+            ret = TDB_ERR_INVALID_FIELDS_FILE;
+            goto done;
+        }
+
         if (!(db->field_names[i] = strdup(line))){
-            tdb_err(db, "Could not allocate field name %d", i);
-            goto error;
+            ret = TDB_ERR_NOMEM;
+            goto done;
         }
 
-        tdb_path(path, "%s/lexicon.%s", root, line);
-        /* TODO convert old-style lexicons to the new format on the fly */
-        if (tdb_mmap(path, &db->lexicons[i - 1], db)){
-            goto error;
+        TDB_PATH(path, "%s/lexicon.%s", root, line);
+        if (tdb_mmap(path, &db->lexicons[i - 1])){
+            ret = TDB_ERR_INVALID_LEXICON_FILE;
+            goto done;
         }
     }
 
-    if (i != db->num_fields) {
-        tdb_err(db, "Error reading fields file");
-        goto error;
+    if (i != db->num_fields){
+        ret = TDB_ERR_INVALID_FIELDS_FILE;
+        goto done;
     }
 
+done:
     free(line);
-    fclose(f);
-    return 0;
-
-error:
-    free(line);
-    fclose(f);
-    return -1;
+    if (f)
+        fclose(f);
+    return ret;
 }
 
 static int init_field_stats(tdb *db)
 {
+    uint64_t *field_cardinalities = NULL;
     tdb_field i;
-    uint64_t *field_cardinalities;
+    int ret = 0;
 
-    if (db->num_fields > 1) {
+    if (db->num_fields > 1){
         if (!(field_cardinalities = calloc(db->num_fields - 1, 8)))
-            return -1;
-    } else {
-        field_cardinalities = NULL;
+            return TDB_ERR_NOMEM;
     }
 
     for (i = 1; i < db->num_fields; i++){
@@ -189,43 +166,37 @@ static int init_field_stats(tdb *db)
 
     if (!(db->field_stats = huff_field_stats(field_cardinalities,
                                              db->num_fields,
-                                             db->max_timestamp_delta))){
-        free(field_cardinalities);
-        return -1;
-    }
+                                             db->max_timestamp_delta)))
+        ret = TDB_ERR_NOMEM;
 
     free(field_cardinalities);
-    return 0;
+    return ret;
 }
 
 static int read_version(tdb *db, const char *path)
 {
     FILE *f;
+    int ret = 0;
 
-    if (!(f = fopen(path, "r"))){
-        tdb_err(db, "Could not open path: %s", path);
-        return -1;
-    }
+    if (!(f = fopen(path, "r")))
+        return TDB_ERR_INVALID_VERSION_FILE;
 
-    if (fscanf(f, "%"PRIu64, &db->version) != 1){
-        tdb_err(db, "Invalid version file");
-        return -1;
-    }
-    /* TODO check that db->version <= TDB_VERSION_LATEST */
+    if (fscanf(f, "%"PRIu64, &db->version) != 1)
+        ret = TDB_ERR_INVALID_VERSION_FILE;
+    else if (db->version > TDB_VERSION_LATEST)
+        ret = TDB_ERR_INCOMPATIBLE_VERSION;
 
     fclose(f);
-
-    return 0;
+    return ret;
 }
 
 static int read_info(tdb *db, const char *path)
 {
     FILE *f;
+    int ret = 0;
 
-    if (!(f = fopen(path, "r"))){
-        tdb_err(db, "Could not open path: %s", path);
-        return -1;
-    }
+    if (!(f = fopen(path, "r")))
+        return TDB_ERR_INVALID_INFO_FILE;
 
     if (fscanf(f,
                "%"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64,
@@ -233,79 +204,91 @@ static int read_info(tdb *db, const char *path)
                &db->num_events,
                &db->min_timestamp,
                &db->max_timestamp,
-               &db->max_timestamp_delta) != 5){
-        tdb_err(db, "Invalid info file");
-        return -1;
-    }
+               &db->max_timestamp_delta) != 5)
+        ret = TDB_ERR_INVALID_INFO_FILE;
     fclose(f);
-
-    return 0;
+    return ret;
 }
 
-tdb *tdb_open(const char *root)
+tdb *tdb_init(void)
+{
+    return calloc(1, sizeof(tdb));
+}
+
+int tdb_open(tdb *db, const char *root)
 {
     char path[TDB_MAX_PATH_SIZE];
-    tdb *db;
+    int ret = 0;
 
-    /* TODO create a version file and a version check that prevents older versions of
-       traildb from reading newer files */
+    /*
+    by handling the "db == NULL" case here gracefully, we allow the return
+    value of tdb_init() to be used unchecked like here:
 
-    if (!(db = calloc(1, sizeof(tdb))))
-        return NULL;
+    int err;
+    tdb *db = tdb_init();
+    if ((err = tdb_open(db, path)))
+        printf("Opening tbd failed: %s", tdb_error(err));
+    */
+    if (!db)
+        return TDB_ERR_HANDLE_IS_NULL;
 
-    tdb_path(path, "%s/info", root);
-    if (read_info(db, path))
-        goto err;
+    TDB_PATH(path, "%s/info", root);
+    if ((ret = read_info(db, path)))
+        goto done;
 
-    tdb_path(path, "%s/version", root);
+    TDB_PATH(path, "%s/version", root);
     if (access(path, F_OK))
         db->version = TDB_VERSION_V0;
-    else{
-        if (read_version(db, path))
-            goto err;
-    }
+    else if ((ret = read_version(db, path)))
+        goto done;
+
+    if ((ret = tdb_fields_open(db, root, path)))
+        goto done;
+
+    if ((ret = init_field_stats(db)))
+        goto done;
 
     if (db->num_trails) {
         /* backwards compatibility: UUIDs used to be called cookies */
-        tdb_path(path, "%s/cookies", root);
+        TDB_PATH(path, "%s/cookies", root);
         if (access(path, F_OK))
-            tdb_path(path, "%s/uuids", root);
-        if (tdb_mmap(path, &db->uuids, db))
-            goto err;
+            TDB_PATH(path, "%s/uuids", root);
+        if (tdb_mmap(path, &db->uuids)){
+            ret = TDB_ERR_INVALID_UUIDS_FILE;
+            goto done;
+        }
 
+        #if 0
         /* TODO deprecate .index */
         tdb_path(path, "%s/cookies.index", root);
         if (access(path, F_OK))
             tdb_path(path, "%s/uuids.index", root);
         if (tdb_mmap(path, &db->uuid_index, db))
             db->uuid_index.data = NULL;
+        #endif
 
-        tdb_path(path, "%s/trails.codebook", root);
-        if (tdb_mmap(path, &db->codebook, db))
-            goto err;
+        TDB_PATH(path, "%s/trails.codebook", root);
+        if (tdb_mmap(path, &db->codebook)){
+            ret = TDB_ERR_INVALID_CODEBOOK_FILE;
+            goto done;
+        }
 
-        tdb_path(path, "%s/trails.data", root);
-        if (tdb_mmap(path, &db->trails, db))
-            goto err;
+        TDB_PATH(path, "%s/trails.data", root);
+        if (tdb_mmap(path, &db->trails)){
+            ret = TDB_ERR_INVALID_TRAILS_FILE;
+            goto done;
+        }
 
-        tdb_path(path, "%s/trails.toc", root);
+        TDB_PATH(path, "%s/trails.toc", root);
         if (access(path, F_OK)) // backwards compat
-            tdb_path(path, "%s/trails.data", root);
-        if (tdb_mmap(path, &db->toc, db))
-            goto err;
+            TDB_PATH(path, "%s/trails.data", root);
+        if (tdb_mmap(path, &db->toc)){
+            ret = TDB_ERR_INVALID_TRAILS_FILE;
+            goto done;
+        }
     }
-
-    if (tdb_fields_open(db, root, path))
-        goto err;
-
-    if (init_field_stats(db)){
-        tdb_err(db, "Could not init field stats");
-        goto err;
-    }
-    return db;
-err:
-    db->error_code = 1;
-    return NULL;
+done:
+    return ret;
 }
 
 void tdb_willneed(const tdb *db)
@@ -383,7 +366,7 @@ int tdb_get_field(const tdb *db, const char *field_name, tdb_field *field)
             *field = i;
             return 0;
         }
-    return -1;
+    return TDB_ERR_UNKNOWN_FIELD;
 }
 
 const char *tdb_get_field_name(const tdb *db, tdb_field field)
@@ -480,7 +463,7 @@ int64_t tdb_get_trail_id(const tdb *db, const uint8_t *uuid)
     for (i = 0; i < db->num_trails; i++)
         if (!memcmp(tdb_get_uuid(db, i), uuid, 16))
             return (int64_t)i;
-    return -1;
+    return TDB_ERR_UNKNOWN_UUID;
 }
 
 /* TODO obsolete with binary search */
@@ -493,9 +476,13 @@ int tdb_has_uuid_index(const tdb *db __attribute__((unused)))
 #endif
 }
 
-const char *tdb_error(const tdb *db)
+const char *tdb_error(int errcode)
 {
-    return db->error;
+    /* TODO implement this */
+    switch (errcode){
+        default:
+            return "Unknown error";
+    }
 }
 
 uint64_t tdb_num_trails(const tdb *db)
@@ -533,10 +520,8 @@ int tdb_set_filter(tdb *db, const tdb_item *filter, uint64_t filter_len)
     /* TODO check that filter is valid: sum(clauses) < filter_len */
     free(db->filter);
     if (filter){
-        if (!(db->filter = malloc(filter_len * sizeof(tdb_item)))){
-            tdb_err(db, "Could not alloc new filter");
-            return -1;
-        }
+        if (!(db->filter = malloc(filter_len * sizeof(tdb_item))))
+            return TDB_ERR_NOMEM;
         memcpy(db->filter, filter, filter_len * sizeof(tdb_item));
         db->filter_len = filter_len;
     }else{

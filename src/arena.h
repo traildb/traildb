@@ -20,7 +20,7 @@ struct arena{
     FILE *fd;
 };
 
-void arena_flush(const struct arena *a);
+int arena_flush(const struct arena *a);
 
 void *arena_add_item(struct arena *a);
 

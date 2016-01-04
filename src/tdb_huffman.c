@@ -7,8 +7,8 @@
 #include "tdb_queue.h"
 #include "tdb_profile.h"
 #include "tdb_huffman.h"
+#include "tdb_error.h"
 
-#include "util.h"
 #include "judy_128_map.h"
 
 #define MIN(a,b) ((a)>(b)?(b):(a))
@@ -21,6 +21,63 @@ struct hnode{
     struct hnode *left;
     struct hnode *right;
 };
+
+struct sortpair{
+    __uint128_t key;
+    Word_t value;
+};
+
+static uint8_t bits_needed(uint64_t max)
+{
+    uint64_t x = max;
+    uint8_t bits = x ? 0: 1;
+    while (x){
+        x >>= 1;
+        ++bits;
+    }
+    return bits;
+}
+
+static int compare(const void *p1, const void *p2)
+{
+    const struct sortpair *x = (const struct sortpair*)p1;
+    const struct sortpair *y = (const struct sortpair*)p2;
+
+    if (x->value > y->value)
+        return -1;
+    else if (x->value < y->value)
+        return 1;
+    return 0;
+}
+
+static void *sort_j128m_fun(__uint128_t key, Word_t *value, void *state)
+{
+    struct sortpair *pair = (struct sortpair*)state;
+
+    pair->key = key;
+    pair->value = *value;
+
+    return ++pair;
+}
+
+static struct sortpair *sort_j128m(const struct judy_128_map *j128m,
+                                   uint64_t *num_items)
+{
+    struct sortpair *pairs;
+
+    *num_items = j128m_num_keys(j128m);
+
+    if (*num_items == 0)
+        return NULL;
+
+    if (!(pairs = calloc(*num_items, sizeof(struct sortpair))))
+        return NULL;
+
+    j128m_fold(j128m, sort_j128m_fun, pairs);
+
+    qsort(pairs, *num_items, sizeof(struct sortpair), compare);
+    return pairs;
+}
 
 static void allocate_codewords(struct hnode *node,
                                uint32_t code,
@@ -58,10 +115,10 @@ static int huffman_code(struct hnode *symbols, uint32_t num)
     if (!num)
         return 0;
     if (!(nodes = tdb_queue_new(num * 2)))
-        return -1;
+        return TDB_ERR_NOMEM;
     if (!(newnodes = malloc(num * sizeof(struct hnode)))){
         tdb_queue_free(nodes);
-        return -1;
+        return TDB_ERR_NOMEM;
     }
 
     /* construct the huffman tree bottom up */
@@ -81,26 +138,30 @@ static int huffman_code(struct hnode *symbols, uint32_t num)
 }
 
 
-static uint32_t sort_symbols(const struct judy_128_map *freqs,
-                             uint64_t *totalfreq,
-                             struct hnode *book)
+static int sort_symbols(const struct judy_128_map *freqs,
+                        uint64_t *totalfreq,
+                        uint32_t *num_symbols,
+                        struct hnode *book)
 {
-    Word_t i;
-    uint64_t num_symbols;
-    struct sortpair *pairs = sort_j128m(freqs, &num_symbols);
+    uint64_t i;
+    struct sortpair *pairs;
+    uint64_t num;
+
+    if (!(pairs = sort_j128m(freqs, &num)))
+        return TDB_ERR_NOMEM;
 
     *totalfreq = 0;
-    for (i = 0; i < num_symbols; i++)
+    for (i = 0; i < num; i++)
         *totalfreq += pairs[i].value;
 
-    num_symbols = MIN(HUFF_CODEBOOK_SIZE, num_symbols);
-    for (i = 0; i < num_symbols; i++){
+    *num_symbols = (uint32_t)(MIN(HUFF_CODEBOOK_SIZE, num));
+    for (i = 0; i < *num_symbols; i++){
         book[i].symbol = pairs[i].key;
         book[i].weight = pairs[i].value;
     }
 
     free(pairs);
-    return (uint32_t)num_symbols;
+    return 0;
 }
 
 #ifdef TDB_DEBUG_HUFFMAN
@@ -148,17 +209,20 @@ static void output_stats(const struct hnode *book,
 }
 #endif
 
-static void make_codemap(struct hnode *nodes,
-                         uint32_t num_symbols,
-                         struct judy_128_map *codemap)
+static int make_codemap(struct hnode *nodes,
+                        uint32_t num_symbols,
+                        struct judy_128_map *codemap)
 {
     uint32_t i = num_symbols;
     while (i--){
         if (nodes[i].num_bits){
+            /* TODO TDB_ERR_NOMEM handling */
             Word_t *ptr = j128m_insert(codemap, nodes[i].symbol);
             *ptr = nodes[i].code | (nodes[i].num_bits << 16);
         }
     }
+
+    return 0;
 }
 
 struct field_stats *huff_field_stats(const uint64_t *field_cardinalities,
@@ -179,23 +243,29 @@ struct field_stats *huff_field_stats(const uint64_t *field_cardinalities,
     return fstats;
 }
 
-void huff_create_codemap(const struct judy_128_map *gram_freqs,
-                         struct judy_128_map *codemap)
+int huff_create_codemap(const struct judy_128_map *gram_freqs,
+                        struct judy_128_map *codemap)
 {
     struct hnode *nodes;
     uint64_t total_freq;
     uint32_t num_symbols;
+    int ret = 0;
     TDB_TIMER_DEF
 
-    if (!(nodes = calloc(HUFF_CODEBOOK_SIZE, sizeof(struct hnode))))
-        DIE("Could not allocate huffman codebook");
+    if (!(nodes = calloc(HUFF_CODEBOOK_SIZE, sizeof(struct hnode)))){
+        ret = TDB_ERR_NOMEM;
+        goto done;
+    }
 
     TDB_TIMER_START
-    num_symbols = sort_symbols(gram_freqs, &total_freq, nodes);
+    if ((ret = sort_symbols(gram_freqs, &total_freq, &num_symbols, nodes)))
+        goto done;
+
     TDB_TIMER_END("huffman/sort_symbols")
 
     TDB_TIMER_START
-    huffman_code(nodes, num_symbols);
+    if ((ret = huffman_code(nodes, num_symbols)))
+        goto done;
     TDB_TIMER_END("huffman/huffman_code")
 
 #ifdef TDB_DEBUG_HUFFMAN
@@ -204,10 +274,13 @@ void huff_create_codemap(const struct judy_128_map *gram_freqs,
 #endif
 
     TDB_TIMER_START
-    make_codemap(nodes, num_symbols, codemap);
+    if ((ret = make_codemap(nodes, num_symbols, codemap)))
+        goto done;
     TDB_TIMER_END("huffman/make_codemap")
 
+done:
     free(nodes);
+    return ret;
 }
 
 static inline void encode_gram(const struct judy_128_map *codemap,
@@ -287,7 +360,7 @@ struct huff_codebook *huff_create_codebook(const struct judy_128_map *codemap,
 
     *size = HUFF_CODEBOOK_SIZE * sizeof(struct huff_codebook);
     if (!(book = calloc(1, *size)))
-        DIE("Could not allocate codebook in huff_create_codebook");
+        return NULL;
 
     j128m_fold(codemap, create_codebook_fun, book);
 
