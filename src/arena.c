@@ -20,11 +20,13 @@ done:
 
 void *arena_add_item(struct arena *a)
 {
+    if (a->failed)
+        return NULL;
     if (a->fd){
         if (a->size == 0){
             a->size = ARENA_DISK_BUFFER;
             if (!(a->data = malloc(a->item_size * (uint64_t)a->size))){
-                a->size = 0;
+                a->failed = 1;
                 return NULL;
             }
         }else if ((a->next & (ARENA_DISK_BUFFER - 1)) == 0){
@@ -36,7 +38,7 @@ void *arena_add_item(struct arena *a)
         if (a->next >= a->size){
             a->size += a->arena_increment ? a->arena_increment: ARENA_INCREMENT;
             if (!(a->data = realloc(a->data, a->item_size * (uint64_t)a->size))){
-                a->size = 0;
+                a->failed = 1;
                 return NULL;
             }
         }

@@ -17,6 +17,7 @@ struct arena{
     uint64_t next;
     uint64_t item_size;
     uint64_t arena_increment;
+    int failed;
     FILE *fd;
 };
 
