@@ -5,57 +5,57 @@
 #include <string.h>
 
 #include <traildb.h>
-#include <util.h>
+#include <tdb_io.h>
 
 static void empty_tdb_append(const char *root)
 {
-    char path[MAX_PATH_SIZE];
+    char path[TDB_MAX_PATH_SIZE];
     const char *fields[] = {};
 
-    make_path(path, "%s.%u", root, 1);
-    tdb_cons* c1 = tdb_cons_new(path, fields, 0);
-    assert(c1 != NULL);
+    tdb_path(path, "%s.%u", root, 1);
+    tdb_cons* c1 = tdb_cons_init();
+    assert(tdb_cons_open(c1, path, fields, 0) == 0);
     assert(tdb_cons_finalize(c1, 0) == 0);
-    tdb* t1 = tdb_open(path);
-    assert(t1 != NULL);
+    tdb* t1 = tdb_init();
+    assert(tdb_open(t1, path) == 0);
 
-    make_path(path, "%s.%u", root, 2);
-    tdb_cons* c2 = tdb_cons_new(path, fields, 0);
-    assert(c2 != NULL);
+    tdb_path(path, "%s.%u", root, 2);
+    tdb_cons* c2 = tdb_cons_init();
+    assert(tdb_cons_open(c2, path, fields, 0) == 0);
     assert(tdb_cons_append(c2, t1) == 0);
     assert(tdb_cons_finalize(c2, 0) == 0);
 
-    tdb* t2 = tdb_open(path);
-    assert(t2 != NULL);
+    tdb* t2 = tdb_init();
+    assert(tdb_open(t2, path) == 0);
     assert(tdb_num_trails(t2) == 0);
     assert(tdb_num_fields(t2) == 1);
 }
 
 static void mismatching_fields(const char *root)
 {
-    char path[MAX_PATH_SIZE];
+    char path[TDB_MAX_PATH_SIZE];
     const char *fields1[] = {"a", "b", "c"};
     const char *fields2[] = {"d", "e"};
 
-    make_path(path, "%s.%u", root, 1);
-    tdb_cons* c1 = tdb_cons_new(path, fields1, 2);
-    assert(c1 != NULL);
+    tdb_path(path, "%s.%u", root, 1);
+    tdb_cons* c1 = tdb_cons_init();
+    assert(tdb_cons_open(c1, path, fields1, 2) == 0);
     assert(tdb_cons_finalize(c1, 0) == 0);
-    tdb* t1 = tdb_open(path);
-    assert(t1 != NULL);
+    tdb* t1 = tdb_init();
+    assert(tdb_open(t1, path) == 0);
 
     /* mismatching number of fields - this should fail */
-    make_path(path, "%s.%u", root, 2);
-    tdb_cons* c2 = tdb_cons_new(path, fields1, 3);
-    assert(c2 != NULL);
-    assert(tdb_cons_append(c2, t1) == -1);
+    tdb_path(path, "%s.%u", root, 2);
+    tdb_cons* c2 = tdb_cons_init();
+    assert(tdb_cons_open(c2, path, fields1, 3) == 0);
+    assert(tdb_cons_append(c2, t1) == TDB_ERR_APPEND_FIELDS_MISMATCH);
     assert(tdb_cons_finalize(c2, 0) == 0);
 
     /* mismatching field names - this should fail */
-    make_path(path, "%s.%u", root, 2);
-    c2 = tdb_cons_new(path, fields2, 2);
-    assert(c2 != NULL);
-    assert(tdb_cons_append(c2, t1) == -2);
+    tdb_path(path, "%s.%u", root, 2);
+    c2 = tdb_cons_init();
+    assert(tdb_cons_open(c2, path, fields2, 2) == 0);
+    assert(tdb_cons_append(c2, t1) == TDB_ERR_APPEND_FIELDS_MISMATCH);
     assert(tdb_cons_finalize(c2, 0) == 0);
 }
 
@@ -68,7 +68,7 @@ struct event{
 static void simple_append(const char *root)
 {
     static uint8_t uuid[16];
-    char path[MAX_PATH_SIZE];
+    char path[TDB_MAX_PATH_SIZE];
     const char *fields[] = {"f1", "f2"};
     const uint64_t lengths[] = {1, 1};
     tdb_item *items;
@@ -86,8 +86,9 @@ static void simple_append(const char *root)
         {30,  "d", "2"},
         {100, "a", "2"},
     };
-    make_path(path, "%s.%u", root, 1);
-    tdb_cons* c = tdb_cons_new(path, fields, 2);
+    tdb_path(path, "%s.%u", root, 1);
+    tdb_cons* c = tdb_cons_init();
+    assert(tdb_cons_open(c, path, fields, 2) == 0);
 
     for (i = 0; i < 3; i++){
         const char *values[] = {EVENTS1[i].value1, EVENTS1[i].value2};
@@ -99,11 +100,12 @@ static void simple_append(const char *root)
     }
 
     assert(tdb_cons_finalize(c, 0) == 0);
-    tdb* db = tdb_open(path);
-    assert(db != NULL);
+    tdb* db = tdb_init();
+    assert(tdb_open(db, path) == 0);
 
-    make_path(path, "%s.%u", root, 2);
-    c = tdb_cons_new(path, fields, 2);
+    tdb_path(path, "%s.%u", root, 2);
+    c = tdb_cons_init();
+    assert(tdb_cons_open(c, path, fields, 2) == 0);
 
     for (i = 0; i < 2; i++){
         const char *values[] = {EVENTS2[i].value1, EVENTS2[i].value2};
@@ -129,8 +131,8 @@ static void simple_append(const char *root)
     assert(tdb_cons_finalize(c, 0) == 0);
     tdb_close(db);
 
-    db = tdb_open(path);
-    assert(db != NULL);
+    db = tdb_init();
+    assert(tdb_open(db, path) == 0);
     assert(tdb_lexicon_size(db, 1) == 6);
     assert(tdb_lexicon_size(db, 2) == 4);
     assert(tdb_num_trails(db) == 2);
