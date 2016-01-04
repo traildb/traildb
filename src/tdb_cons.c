@@ -235,7 +235,10 @@ int tdb_cons_open(tdb_cons *cons,
             ret = TDB_ERR_INVALID_FIELDNAME;
             goto done;
         }
-        cons->ofield_names[i] = strdup(ofield_names[i]);
+        if (!(cons->ofield_names[i] = strdup(ofield_names[i]))){
+            ret = TDB_ERR_NOMEM;
+            goto done;
+        }
     }
 
     j128m_init(&cons->trails);
@@ -271,8 +274,8 @@ int tdb_cons_open(tdb_cons *cons,
             goto done;
         }
 
-    for (i = 0; i < cons->num_ofields; i++){
-        if (jsm_init(&cons->lexicons[i]))
+    for (i = 0; i < cons->num_ofields; i++)
+        if (jsm_init(&cons->lexicons[i])){
             ret = TDB_ERR_NOMEM;
             goto done;
         }
@@ -442,7 +445,7 @@ int tdb_cons_append(tdb_cons *cons, const tdb *db)
 {
     tdb_val **lexicon_maps = NULL;
     uint64_t trail_id;
-    tdb_item *items;
+    tdb_item *items = NULL;
     uint64_t i, e, n, items_len = 0;
     tdb_field field;
     int ret = 0;
@@ -514,7 +517,7 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
     if ((ret = arena_flush(&cons->items)))
         goto error;
 
-    if (fclose(cons->items.fd)) {
+    if (cons->items.fd && fclose(cons->items.fd)) {
         cons->items.fd = NULL;
         return TDB_ERR_IO_CLOSE;
     }

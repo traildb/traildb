@@ -67,11 +67,11 @@ static struct sortpair *sort_j128m(const struct judy_128_map *j128m,
 
     *num_items = j128m_num_keys(j128m);
 
-    if (*num_items == 0)
-        return NULL;
-
     if (!(pairs = calloc(*num_items, sizeof(struct sortpair))))
         return NULL;
+
+    if (*num_items == 0)
+        return pairs;
 
     j128m_fold(j128m, sort_j128m_fun, pairs);
 
