@@ -37,7 +37,7 @@ be higher than TDB_MAX_NUM_VALUES, see tdb_types.h for details
 #define TDB_VAL32_MAX   ((1LLU << 24) - 1)
 
 /* This is an arbitary value as long as it fits into stack comfortably */
-#define TDB_MAX_VALUE_SIZE  (1LLU << 10)
+#define TDB_MAX_VALUE_SIZE  (1LLU << 20)
 /* TODO make TDB_MAX_LEXICON_SIZE limit 64-bit */
 #define TDB_MAX_LEXICON_SIZE UINT32_MAX
 
