@@ -218,6 +218,9 @@ int tdb_cons_open(tdb_cons *cons,
     if (!cons)
         return TDB_ERR_HANDLE_IS_NULL;
 
+    if (cons->events.item_size)
+        return TDB_ERR_HANDLE_ALREADY_OPENED;
+
     if (num_ofields > TDB_MAX_NUM_FIELDS)
         return TDB_ERR_TOO_MANY_FIELDS;
 

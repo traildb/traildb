@@ -232,6 +232,9 @@ int tdb_open(tdb *db, const char *root)
     if (!db)
         return TDB_ERR_HANDLE_IS_NULL;
 
+    if (db->num_fields)
+        return TDB_ERR_HANDLE_ALREADY_OPENED;
+
     TDB_PATH(path, "%s/info", root);
     if ((ret = read_info(db, path)))
         goto done;
