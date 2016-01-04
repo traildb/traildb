@@ -15,6 +15,10 @@
 #include "tdb_io.h"
 #include "arena.h"
 
+#ifndef EVENTS_ARENA_INCREMENT
+#define EVENTS_ARENA_INCREMENT 1000000
+#endif
+
 struct jm_fold_state{
     FILE *out;
     uint64_t offset;
@@ -250,8 +254,7 @@ int tdb_cons_open(tdb_cons *cons,
 
     cons->min_timestamp = UINT64_MAX;
     cons->num_ofields = num_ofields;
-    /* make an option for this (memory / speed tradeoff) */
-    cons->events.arena_increment = 1000000;
+    cons->events.arena_increment = EVENTS_ARENA_INCREMENT;
     cons->events.item_size = sizeof(tdb_cons_event);
     cons->items.item_size = sizeof(tdb_item);
 
