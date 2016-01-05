@@ -42,3 +42,7 @@ include_HEADERS = \
   src/tdb_types.h \
   src/tdb_limits.h
 
+bin_PROGRAMS = traildb_bench
+traildb_bench_SOURCES = src/traildb_bench.c
+traildb_bench_CFLAGS = ${libtraildb_la_CFLAGS} -Isrc/
+traildb_bench_LDADD = libtraildb.la
