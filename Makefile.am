@@ -1,6 +1,7 @@
 lib_LTLIBRARIES = libtraildb.la
 ACLOCAL_AMFLAGS = -I m4
 libtraildb_la_CFLAGS = -std=c99 \
+                       -DJUDYERROR=judyerror_macro_missing_fix_this \
                        -O3 \
                        -g \
                        -Wall \
