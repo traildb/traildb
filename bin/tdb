@@ -24,7 +24,7 @@ def info(args, opts):
     for arg in args:
         tdb = TrailDB(arg)
         print '%s' % arg
-        print ' # cookies:                   %12d' % tdb.num_cookies
+        print ' # trails:                    %12d' % tdb.num_trails
         print ' # events:                    %12d' % tdb.num_events
         print ' # fields:                    %12d' % tdb.num_fields
         for f in tdb.fields[1:]:

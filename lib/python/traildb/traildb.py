@@ -16,53 +16,56 @@ def api(fun, args, res=None):
 
 tdb         = c_void_p
 tdb_cons    = c_void_p
-tdb_field   = c_uint8
-tdb_val     = c_uint32
-tdb_item    = c_uint32
+tdb_field   = c_uint32
+tdb_val     = c_uint64
+tdb_item    = c_uint64
 tdb_fold_fn = CFUNCTYPE(c_void_p, tdb, c_uint64, POINTER(tdb_item), c_void_p)
 
-api(lib.tdb_cons_new, [c_char_p, POINTER(c_char), c_uint32], tdb_cons)
-api(lib.tdb_cons_free, [tdb_cons])
-api(lib.tdb_cons_add, [tdb_cons, POINTER(c_ubyte), c_uint32, POINTER(c_char)], c_int)
+#api(lib.tdb_cons_open, [c_char_p, POINTER(c_char), c_uint32], tdb_cons)
+api(lib.tdb_cons_close, [tdb_cons])
+#api(lib.tdb_cons_add, [tdb_cons, POINTER(c_ubyte), c_uint32, POINTER(c_char)], c_int)
 api(lib.tdb_cons_append, [tdb_cons, tdb], c_int)
 api(lib.tdb_cons_finalize, [tdb_cons, c_uint64], c_int)
 
-api(lib.tdb_open, [c_char_p], tdb)
+api(lib.tdb_open, [tdb, c_char_p], c_int)
 api(lib.tdb_close, [tdb])
 
 api(lib.tdb_lexicon_size, [tdb, tdb_field], c_int)
 
 api(lib.tdb_get_field, [tdb, c_char_p], c_uint)
 api(lib.tdb_get_field_name, [tdb, tdb_field], c_char_p)
-api(lib.tdb_field_has_overflow_vals, [tdb, tdb_field], c_int)
+#api(lib.tdb_field_has_overflow_vals, [tdb, tdb_field], c_int)
 
 api(lib.tdb_get_item, [tdb, tdb_field, c_char_p], c_uint)
 api(lib.tdb_get_value, [tdb, tdb_field, tdb_val], c_char_p)
 api(lib.tdb_get_item_value, [tdb, tdb_item], c_char_p)
 
-api(lib.tdb_get_cookie, [tdb, c_uint64], POINTER(c_ubyte))
-api(lib.tdb_get_cookie_id, [tdb, POINTER(c_ubyte)], c_uint64)
-api(lib.tdb_has_cookie_index, [tdb], c_int)
+api(lib.tdb_get_uuid, [tdb, c_uint64], POINTER(c_ubyte))
+api(lib.tdb_get_trail_id, [tdb, POINTER(c_ubyte)], c_uint64)
+api(lib.tdb_has_uuid_index, [tdb], c_int)
 
 api(lib.tdb_error, [tdb], c_char_p)
 
-api(lib.tdb_num_cookies, [tdb], c_uint64)
+api(lib.tdb_num_trails, [tdb], c_uint64)
 api(lib.tdb_num_events, [tdb], c_uint64)
-api(lib.tdb_num_fields, [tdb], c_uint32)
-api(lib.tdb_min_timestamp, [tdb], c_uint32)
-api(lib.tdb_max_timestamp, [tdb], c_uint32)
+api(lib.tdb_num_fields, [tdb], c_uint64)
+api(lib.tdb_min_timestamp, [tdb], c_uint64)
+api(lib.tdb_max_timestamp, [tdb], c_uint64)
 
-api(lib.tdb_split, [tdb, c_uint, c_char_p, c_uint64], c_int)
+#api(lib.tdb_split, [tdb, c_uint, c_char_p, c_uint64], c_int)
 
 api(lib.tdb_set_filter, [tdb, POINTER(c_uint32), c_uint32], c_int)
 api(lib.tdb_get_filter, [tdb, POINTER(c_uint32)], POINTER(c_uint32))
 
-api(lib.tdb_decode_trail, [tdb, c_uint64, POINTER(c_uint32), c_uint32, c_int], c_uint32)
+api(lib.tdb_decode_trail,
+    [tdb, c_uint64, POINTER(tdb_item), c_uint64, POINTER(c_uint64), c_int],
+    c_int)
 api(lib.tdb_decode_trail_filtered,
-    [tdb, c_uint64, POINTER(c_uint32), c_uint32, c_int, POINTER(c_uint32), c_uint32],
-    c_uint32)
+    [tdb, c_uint64, POINTER(tdb_item), c_uint64, POINTER(c_uint64), c_int,
+     POINTER(tdb_item), c_uint64],
+    c_int)
 
-api(lib.tdb_fold, [tdb, tdb_fold_fn, c_void_p], c_void_p)
+#api(lib.tdb_fold, [tdb, tdb_fold_fn, c_void_p], c_void_p)
 
 def hexcookie(cookie):
     if isinstance(cookie, basestring):
@@ -116,14 +119,16 @@ class TrailDBConstructor(object):
 
 class TrailDB(object):
     def __init__(self, path):
-        self._db = db = lib.tdb_open(path)
-        if not db:
+        self._db = db = lib.tdb_init()
+        res = lib.tdb_open(self._db, path)
+        if res != 0:
             raise TrailDBError("Could not open %s" % path)
-        self.num_cookies = lib.tdb_num_cookies(db)
+        self.num_trails = lib.tdb_num_trails(db)
         self.num_events = lib.tdb_num_events(db)
         self.num_fields = lib.tdb_num_fields(db)
         self.fields = [lib.tdb_get_field_name(db, i) for i in xrange(self.num_fields)]
         self._evcls = namedtuple('event', self.fields, rename=True)
+        print "num fields", self.num_fields, self.fields
         self._trail_buf_size = 0
         self._grow_buffer()
 
@@ -132,7 +137,7 @@ class TrailDB(object):
 
     def _grow_buffer(self, increment=1000000):
         self._trail_buf_size += increment
-        self._trail_buf = (c_uint32 * self._trail_buf_size)()
+        self._trail_buf = (c_uint64 * self._trail_buf_size)()
         return self._trail_buf, self._trail_buf_size
 
     def __contains__(self, cookieish):
@@ -148,7 +153,7 @@ class TrailDB(object):
         return self.trail(cookieish)
 
     def __len__(self):
-        return self.num_cookies
+        return self.num_trails
 
     def crumbs(self, **kwds):
         for i in xrange(len(self)):
@@ -163,9 +168,10 @@ class TrailDB(object):
 
         db, cls = self._db, self._evcls
         buf, size = self._trail_buf, self._trail_buf_size
+        num = c_uint64()
         q = None
 
-        if id >= self.num_cookies:
+        if id >= self.num_trails:
             raise IndexError("Cookie index out of range")
 
         edge_flag = 1 if edge_encoded else 0
@@ -175,15 +181,16 @@ class TrailDB(object):
 
         while True:
             if q:
-                num = lib.tdb_decode_trail_filtered(db,
+                res = lib.tdb_decode_trail_filtered(db,
                                                     id,
                                                     buf,
                                                     size,
+                                                    num,
                                                     edge_flag,
                                                     q,
                                                     len(q))
             else:
-                num = lib.tdb_decode_trail(db, id, buf, size, edge_flag)
+                res = lib.tdb_decode_trail(db, id, buf, size, num, edge_flag)
 
             if num == size:
                 buf, size = self._grow_buffer()
@@ -196,27 +203,31 @@ class TrailDB(object):
             value = lambda f, v: v
 
         def gen(i=0):
-            while i < num:
+            # TODO: Support 64-bit wide items
+            while i < num.value:
                 tstamp = datetime.utcfromtimestamp(buf[i]) if ptime else buf[i]
                 values = []
                 i += 1
-                while i < num and buf[i]:
+                while i < num.value and buf[i]:
                     values.append(value(buf[i] & 255, buf[i] >> 8))
                     i += 1
+
+                # A Null word is inserted between items
                 i += 1
                 yield cls(tstamp, *values)
 
         def gen_edge(i=0):
-            while i < num:
+            # TODO: Support 64-bit wide items
+            while i < num.value:
                 tstamp = datetime.utcfromtimestamp(buf[i]) if ptime else buf[i]
                 values = {}
                 i += 1
-                while i < num and buf[i]:
+                while i < num.value and buf[i]:
                     field = self.fields[buf[i] & 255]
                     values[field] = value(buf[i] & 255, buf[i] >> 8)
                     i += 1
                 i += 1
-                yield tstamp, values
+                yield cls(tstamp, *values)
 
         return list(gen_edge() if edge_encoded else gen())
 
@@ -258,7 +269,7 @@ class TrailDB(object):
         return value
 
     def cookie(self, id, raw=False):
-        cookie = lib.tdb_get_cookie(self._db, id)
+        cookie = lib.tdb_get_uuid(self._db, id)
         if cookie:
             if raw:
                 return string_at(cookie, 16)
@@ -267,8 +278,8 @@ class TrailDB(object):
         raise IndexError("Cookie index out of range")
 
     def cookie_id(self, cookie):
-        cookie_id = lib.tdb_get_cookie_id(self._db, rawcookie(cookie))
-        if cookie_id < self.num_cookies:
+        cookie_id = lib.tdb_get_trail_id(self._db, rawcookie(cookie))
+        if cookie_id < self.num_trails:
             return cookie_id
         raise IndexError("Cookie '%s' not found" % cookie)
 
