@@ -294,7 +294,7 @@ static int choose_grams(const tdb_item *encoded,
     while (n--){
         /* TODO fix this once j128m returns proper error codes */
         Word_t *ptr = j128m_insert(g->final_freqs, g->grams[n]);
-        if (*ptr)
+        if (ptr)
             ++*ptr;
         else
             return TDB_ERR_NOMEM;
