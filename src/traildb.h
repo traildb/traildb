@@ -6,6 +6,7 @@
 
 #include "tdb_limits.h"
 #include "tdb_types.h"
+#include "tdb_error.h"
 
 /* add to configure.ac: use jemalloc if available */
 
@@ -17,10 +18,13 @@ typedef struct _tdb_cons tdb_cons;
 typedef struct _tdb tdb;
 
 /* TODO: move flags from finalize() to new() */
-tdb_cons *tdb_cons_new(const char *root,
-                       const char **ofield_names,
-                       uint64_t num_ofields);
-void tdb_cons_free(tdb_cons *cons);
+tdb_cons *tdb_cons_init(void);
+int tdb_cons_open(tdb_cons *cons,
+                  const char *root,
+                  const char **ofield_names,
+                  uint64_t num_ofields);
+
+void tdb_cons_close(tdb_cons *cons);
 
 int tdb_cons_add(tdb_cons *cons,
                  const uint8_t uuid[16],
@@ -35,9 +39,9 @@ int tdb_cons_finalize(tdb_cons *cons, uint64_t flags);
 int tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16]);
 int tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32]);
 
-/* TODO: separate tdb_new() from tdb_open() */
 /* TODO: add uint64_t flags to tdb_new() */
-tdb *tdb_open(const char *root);
+tdb *tdb_init(void);
+int tdb_open(tdb *db, const char *root);
 void tdb_close(tdb *db);
 void tdb_dontneed(const tdb *db);
 void tdb_willneed(const tdb *db);
@@ -71,8 +75,7 @@ int tdb_has_uuid_index(const tdb *db);
 int tdb_set_filter(tdb *db, const tdb_item *filter, uint64_t filter_len);
 const tdb_item *tdb_get_filter(const tdb *db, uint64_t *filter_len);
 
-/* TODO refactor error handling */
-const char *tdb_error(const tdb *db);
+const char *tdb_error(int errcode);
 
 uint64_t tdb_num_trails(const tdb *db);
 uint64_t tdb_num_events(const tdb *db);
@@ -84,15 +87,16 @@ uint64_t tdb_version(const tdb *db);
 
 /* part of public api, to find uuids in partitions */
 /* TODO deprecate this? */
+#if 0
 static inline unsigned int tdb_djb2(const uint8_t *str) {
   unsigned int hash = 5381, c;
   while ((c = *str++))
     hash = ((hash << 5) + hash) + c;
   return hash;
 }
+#endif
 
 /* TODO pointers to tdb_decode could benefit from 'restrict' */
-/* TODO make returned error codes consistent */
 int tdb_decode_trail(const tdb *db,
                      uint64_t trail_id,
                      tdb_item *dst,

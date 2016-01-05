@@ -24,8 +24,8 @@ int main(int argc, char** argv)
     tdb_item *items;
     uint64_t n, items_len = 0;
 
-    tdb_cons* c = tdb_cons_new(argv[1], fields, 3);
-    assert(c && "Expected tdb_cons_new() to succeed.");
+    tdb_cons* c = tdb_cons_init();
+    assert(tdb_cons_open(c, argv[1], fields, 3) == 0);
 
     for (i = 0; i < sizeof(LENGTHS) / sizeof(LENGTHS[0]); i++){
         lengths[0] = lengths[1] = lengths[2] = LENGTHS[i];
@@ -37,14 +37,11 @@ int main(int argc, char** argv)
         for (j = 0; j < NUM_EVENTS; j++)
             tdb_cons_add(c, uuid, i, values, lengths);
     }
-    assert( tdb_cons_finalize(c, 0) == 0 );
-    tdb_cons_free(c);
+    assert(tdb_cons_finalize(c, 0) == 0);
+    tdb_cons_close(c);
 
-    tdb* t = tdb_open(argv[1]);
-    if (!t){
-        fprintf(stderr, "tdb_open() failed.\n");
-        return -1;
-    }
+    tdb* t = tdb_init();
+    assert(tdb_open(t, argv[1]) == 0);
 
     for (i = 0; i < sizeof(LENGTHS) / sizeof(LENGTHS[0]); i++){
         memset(uuid, i, sizeof(uuid));

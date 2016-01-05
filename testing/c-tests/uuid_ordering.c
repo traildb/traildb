@@ -29,13 +29,13 @@ int main(int argc, char **argv)
     static uint64_t *lengths;
     dsfmt_t state;
     Pvoid_t uuids = NULL;
-    tdb_cons* c = tdb_cons_new(argv[1], fields, 0);
+    tdb_cons* c = tdb_cons_init();
     uint64_t i, j;
     __uint128_t prev_uuid = 0;
     Word_t key;
     int tst;
 
-    assert(c != NULL);
+    assert(tdb_cons_open(c, argv[1], fields, 0) == 0);
     dsfmt_init_gen_rand(&state, 2489);
 
     for (i = 0; i < NUM_TRAILS; i++){
@@ -55,13 +55,10 @@ int main(int argc, char **argv)
     J1C(key, uuids, 0, -1);
     assert(key == NUM_TRAILS);
     assert(tdb_cons_finalize(c, 0) == 0);
-    tdb_cons_free(c);
+    tdb_cons_close(c);
 
-    tdb* t = tdb_open(argv[1]);
-    if (!t){
-        fprintf(stderr, "tdb_open() failed.\n");
-        return -1;
-    }
+    tdb* t = tdb_init();
+    assert(tdb_open(t, argv[1]) == 0);
 
     assert(tdb_num_trails(t) == NUM_TRAILS);
     assert(tdb_num_events(t) == NUM_TRAILS * NUM_EVENTS);

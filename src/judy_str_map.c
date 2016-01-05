@@ -3,6 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#undef JUDYERROR
+#define JUDYERROR(CallerFile, CallerLine, JudyFunc, JudyErrno, JudyErrID) \
+{                                                                         \
+   if ((JudyErrno) == JU_ERRNO_NOMEM)                                     \
+       goto out_of_memory;                                                \
+}
+#include <Judy.h>
+
 #include "judy_str_map.h"
 
 #define MAX_NUM_RETRIES 16
@@ -75,6 +83,9 @@ static uint64_t jsm_insert_small(struct judy_str_map *jsm,
         *ptr = ++jsm->num_keys;
 
     return *ptr;
+
+out_of_memory:
+    return 0;
 }
 
 static uint64_t jsm_insert_large(struct judy_str_map *jsm,
@@ -125,6 +136,9 @@ static uint64_t jsm_insert_large(struct judy_str_map *jsm,
         jsm->buffer_offset += length;
         return item.id;
     }
+
+out_of_memory:
+    return 0;
 }
 
 void *jsm_fold(const struct judy_str_map *jsm,
@@ -153,6 +167,12 @@ void *jsm_fold(const struct judy_str_map *jsm,
     }
 
     return state;
+
+out_of_memory:
+    /* this really should be impossible:
+       iterating shouldn't consume extra memory */
+    fprintf(stderr, "jsm_fold out of memory! this shouldn't happen\n");
+    exit(1);
 }
 
 uint64_t jsm_insert(struct judy_str_map *jsm, const char *buf, uint64_t length)
@@ -194,6 +214,9 @@ void jsm_free(struct judy_str_map *jsm)
     JLFA(tmp, jsm->large_map);
 
     free(jsm->buffer);
+
+out_of_memory:
+    return;
 }
 
 uint64_t jsm_num_keys(const struct judy_str_map *jsm)

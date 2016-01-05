@@ -1,20 +1,15 @@
-/* DESCRIPTION: Tests that empty creation of traildb works. */
+#include <assert.h>
+#include <stdio.h>
 
 #include <traildb.h>
-#include <stdio.h>
 
 int main(int argc, char** argv)
 {
     const char *fields[] = {""};
-    tdb_cons* c = tdb_cons_new(argv[1], fields, 0);
-    if ( !c ) { fprintf(stderr, "tdb_cons_new() failed.\n"); return -1; }
-
-    if ( tdb_cons_finalize(c, 0) ) {
-        fprintf(stderr, "tdb_cons_finalize() returned non-zero.\n");
-        return -1;
-    }
-
-    tdb_cons_free(c);
+    tdb_cons* c = tdb_cons_init();
+    assert(tdb_cons_open(c, argv[1], fields, 0) == 0);
+    assert(tdb_cons_finalize(c, 0) == 0);
+    tdb_cons_close(c);
     return 0;
 }
 

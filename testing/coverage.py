@@ -68,9 +68,12 @@ def run_coverage_test(coverage):
     result = -1
 
     try:
-        cflags = "%s -I%s/src/ -L%s/.libs" % (os.getenv('CFLAGS', ''),
-                                              upper_path,
-                                              temp_dir_path)
+        # setting EVENTS_ARENA_INCREMENT to a small value (=100) is needed by
+        # out_of_memory tests which produce more interesting results, Judy memory
+        # errors in particular, when it is not only the large arena that hits
+        # malloc failures.
+        cflags = "%s -DEVENTS_ARENA_INCREMENT=100 -I%s/src/ -L%s/.libs" %\
+                 (os.getenv('CFLAGS', ''), upper_path, temp_dir_path)
 
         if has_coverage and coverage:
             os.putenv("CFLAGS", cflags + " --coverage")

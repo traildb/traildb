@@ -4,13 +4,12 @@
 
 #include <stdint.h>
 
-#include <Judy.h>
-
 #include "traildb.h"
 #include "arena.h"
 #include "judy_str_map.h"
 #include "judy_128_map.h"
 #include "tdb_profile.h"
+#include "tdb_io.h"
 
 /*
 These are defined by autoconf
@@ -82,15 +81,12 @@ struct _tdb {
     char **field_names;
     struct field_stats *field_stats;
 
+    /* move these to a separate tdb_opt object */
     tdb_item *filter;
     /* TODO add and check MAX_FILTER_LEN */
     uint64_t filter_len;
 
     tdb_item *previous_items;
-
-    /* TODO refactor error handling */
-    int error_code;
-    char error[TDB_MAX_ERROR_SIZE];
 
     uint64_t version;
 };
@@ -101,16 +97,17 @@ const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
                             tdb_val i,
                             uint64_t *length);
 
-void tdb_err(tdb *db, char *fmt, ...);
-void tdb_path(char path[TDB_MAX_PATH_SIZE], char *fmt, ...);
-int tdb_mmap(const char *path, struct tdb_file *dst, tdb *db);
-
 int tdb_encode(tdb_cons *cons, tdb_item *items);
 
-uint64_t edge_encode_items(const tdb_item *items,
-                           tdb_item **encoded,
-                           uint64_t *encoded_size,
-                           tdb_item *prev_items,
-                           const tdb_event *ev);
+int edge_encode_items(const tdb_item *items,
+                      tdb_item **encoded,
+                      uint64_t *num_encoded,
+                      uint64_t *encoded_size,
+                      tdb_item *prev_items,
+                      const tdb_event *ev);
+
+int tdb_mmap(const char *path, struct tdb_file *dst);
+
+int is_fieldname_invalid(const char* field);
 
 #endif /* __TDB_INTERNAL_H__ */

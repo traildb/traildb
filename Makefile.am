@@ -1,6 +1,7 @@
 lib_LTLIBRARIES = libtraildb.la
 ACLOCAL_AMFLAGS = -I m4
 libtraildb_la_CFLAGS = -std=c99 \
+                       -DJUDYERROR=judyerror_macro_missing_fix_this \
                        -O3 \
                        -g \
                        -Wall \
@@ -30,7 +31,6 @@ libtraildb_la_SOURCES = \
   src/tdb_encode_model.c \
   src/tdb_queue.c \
   src/tdb_huffman.c \
-  src/util.c \
   src/arena.c \
   src/judy_str_map.c \
   src/judy_128_map.c

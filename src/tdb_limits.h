@@ -7,7 +7,6 @@
 /* these are kept in stack, so they shouldn't be overly large */
 #define TDB_MAX_PATH_SIZE   2048
 #define TDB_MAX_FIELDNAME_LENGTH 512
-#define TDB_MAX_ERROR_SIZE  (TDB_MAX_PATH_SIZE + 512)
 
 /* MAX_NUM_TRAILS * 16 must fit in off_t (long) type */
 #define TDB_MAX_NUM_TRAILS  ((1LLU << 59) - 1)
@@ -38,7 +37,7 @@ be higher than TDB_MAX_NUM_VALUES, see tdb_types.h for details
 #define TDB_VAL32_MAX   ((1LLU << 24) - 1)
 
 /* This is an arbitary value as long as it fits into stack comfortably */
-#define TDB_MAX_VALUE_SIZE  (1LLU << 10)
+#define TDB_MAX_VALUE_SIZE  (1LLU << 20)
 /* TODO make TDB_MAX_LEXICON_SIZE limit 64-bit */
 #define TDB_MAX_LEXICON_SIZE UINT32_MAX
 

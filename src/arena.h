@@ -15,12 +15,13 @@ struct arena{
     char *data;
     uint64_t size;
     uint64_t next;
-    uint32_t item_size;
-    uint32_t arena_increment;
+    uint64_t item_size;
+    uint64_t arena_increment;
+    int failed;
     FILE *fd;
 };
 
-void arena_flush(const struct arena *a);
+int arena_flush(const struct arena *a);
 
 void *arena_add_item(struct arena *a);
 

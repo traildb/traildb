@@ -1,6 +1,5 @@
 #include "tdb_internal.h"
 #include "tdb_huffman.h"
-#include "util.h"
 
 static inline uint64_t tdb_get_trail_offs(const tdb *db, uint64_t trail_id)
 {
@@ -77,7 +76,7 @@ int tdb_get_trail_filtered(const tdb *db,
 
     if (!*items_buf_len){
         if (!(*items = malloc(INITIAL_ITEMS_BUF_LEN * sizeof(tdb_item))))
-            return -1;
+            return TDB_ERR_NOMEM;
         *items_buf_len = INITIAL_ITEMS_BUF_LEN;
     }
     while (1){
@@ -98,7 +97,7 @@ int tdb_get_trail_filtered(const tdb *db,
             free(*items);
             if (!(*items = malloc(*items_buf_len * sizeof(tdb_item)))){
                 *items_buf_len = 0;
-                return -1;
+                return TDB_ERR_NOMEM;
             }
         }
     }
@@ -141,8 +140,7 @@ int tdb_decode_trail_filtered(const tdb *db,
     tdb_item item;
 
     if (trail_id >= db->num_trails)
-        /* TODO proper error code */
-        return -1;
+        return TDB_ERR_INVALID_TRAIL_ID;
 
     data = &db->trails.data[tdb_get_trail_offs(db, trail_id)];
     trail_size = tdb_get_trail_offs(db, trail_id + 1) -
@@ -187,7 +185,7 @@ int tdb_decode_trail_filtered(const tdb *db,
                     db->previous_items[field] = item;
                     if (edge_encoded && i < dst_size)
                         dst[i++] = item;
-                    item = HUFF_BIGRAM_OTHER_ITEM(gram);
+                    gram = item = HUFF_BIGRAM_OTHER_ITEM(gram);
                 }while ((field = tdb_item_field(item)));
             }else{
                 /* we hit the next timestamp, take a step back and break */

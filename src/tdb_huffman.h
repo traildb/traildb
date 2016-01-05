@@ -28,8 +28,8 @@ struct field_stats{
 
 /* ENCODE */
 
-void huff_create_codemap(const struct judy_128_map *gram_freqs,
-                         struct judy_128_map *codemap);
+int huff_create_codemap(const struct judy_128_map *gram_freqs,
+                        struct judy_128_map *codemap);
 
 void huff_encode_grams(const struct judy_128_map *codemap,
                        const __uint128_t *grams,

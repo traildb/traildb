@@ -20,22 +20,23 @@ struct gram_bufs{
     uint64_t num_fields;
 };
 
-void init_gram_bufs(struct gram_bufs *b, uint64_t num_fields);
+int init_gram_bufs(struct gram_bufs *b, uint64_t num_fields);
 void free_gram_bufs(struct gram_bufs *b);
 
-uint64_t choose_grams_one_event(const tdb_item *encoded,
-                                uint64_t num_encoded,
-                                const struct judy_128_map *gram_freqs,
-                                struct gram_bufs *g,
-                                __uint128_t *grams,
-                                const tdb_event *ev);
+int choose_grams_one_event(const tdb_item *encoded,
+                           uint64_t num_encoded,
+                           const struct judy_128_map *gram_freqs,
+                           struct gram_bufs *g,
+                           __uint128_t *grams,
+                           uint64_t *num_grams,
+                           const tdb_event *ev);
 
-void make_grams(FILE *grouped,
-                uint64_t num_events,
-                const tdb_item *items,
-                uint64_t num_fields,
-                const Pvoid_t unigram_freqs,
-                struct judy_128_map *final_freqs);
+int make_grams(FILE *grouped,
+               uint64_t num_events,
+               const tdb_item *items,
+               uint64_t num_fields,
+               const Pvoid_t unigram_freqs,
+               struct judy_128_map *final_freqs);
 
 Pvoid_t collect_unigrams(FILE *grouped,
                          uint64_t num_events,

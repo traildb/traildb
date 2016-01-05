@@ -32,13 +32,13 @@ static void do_cons(const char *root, int do_finalize)
         lengths[i] = 1;
     }
 
-    tdb_cons* c = tdb_cons_new(root, fields_ptr, NUM_FIELDS);
-    assert(c != NULL);
+    tdb_cons* c = tdb_cons_init();
+    assert(tdb_cons_open(c, root, fields_ptr, NUM_FIELDS) == 0);
     assert(tdb_cons_add(c, uuid, 0, fields_ptr, lengths) == 0);
 
     if (do_finalize)
         assert(tdb_cons_finalize(c, 0) == 0);
-    tdb_cons_free(c);
+    tdb_cons_close(c);
 
     free(lengths);
     free(fields_ptr);
@@ -50,8 +50,8 @@ static void do_open(const char *path)
     tdb_item *items;
     uint64_t n, items_len = 0;
 
-    tdb* t = tdb_open(path);
-    assert(t != NULL);
+    tdb* t = tdb_init();
+    assert(tdb_open(t, path) == 0);
     assert(tdb_get_trail(t, 0, &items, &items_len, &n, 0) == 0);
     assert(n == NUM_FIELDS + 2);
     tdb_close(t);
