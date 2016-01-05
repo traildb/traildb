@@ -12,21 +12,22 @@ static tdb *make_tdb(const char *root,
 {
     static uint8_t uuid[16];
     const char *fields[] = {};
-    tdb_cons* c = tdb_cons_new(root, fields, 0);
+    tdb_cons* c = tdb_cons_init();
     uint64_t zero = 0;
     uint32_t i;
 
-    assert(c != NULL);
+    assert(tdb_cons_open(c, root, fields, 0) == 0);
 
     for (i = 0; i < num; i++)
         assert(tdb_cons_add(c, uuid, tstamps[i], fields, &zero) == 0);
 
-    assert(tdb_cons_finalize(c, 0) == should_fail);
-    tdb_cons_free(c);
+    assert(tdb_cons_finalize(c, 0) ==
+           (should_fail ? TDB_ERR_TIMESTAMP_TOO_LARGE: 0));
+    tdb_cons_close(c);
 
     if (!should_fail){
-        tdb* t = tdb_open(root);
-        assert(t != NULL);
+        tdb* t = tdb_init();
+        assert(tdb_open(t, root) == 0);
         return t;
     }else
         return NULL;

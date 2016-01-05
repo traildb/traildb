@@ -9,8 +9,8 @@ int main(int argc, char** argv)
 {
     uint8_t uuid[16];
     const char *fields[] = {};
-    tdb_cons* c = tdb_cons_new(argv[1], fields, 0);
-    assert(c && "Expected tdb_cons_new() to succeed for zero fields.");
+    tdb_cons* c = tdb_cons_init();
+    assert(tdb_cons_open(c, argv[1], fields, 0) == 0);
     uint64_t i, j, cmp, sum = 0;
     uint64_t zero = 0;
     tdb_item *items;
@@ -27,23 +27,23 @@ int main(int argc, char** argv)
         }
     }
 
-    assert( tdb_cons_finalize(c, 0) == 0 );
-    tdb_cons_free(c);
+    assert(tdb_cons_finalize(c, 0) == 0);
+    tdb_cons_close(c);
 
-    tdb* t = tdb_open(argv[1]);
-    if ( !t ) { fprintf(stderr, "tdb_open() failed.\n"); return -1; }
+    tdb* t = tdb_init();
+    assert(tdb_open(t, argv[1]) == 0);
 
     assert(tdb_num_fields(t) == 1);
 
-    assert(tdb_get_field(t, "world", &field) == -1);
-    assert(tdb_get_field(t, "hello", &field) == -1);
-    assert(tdb_get_field(t, "what", &field) == -1);
-    assert(tdb_get_field(t, "is", &field) == -1);
-    assert(tdb_get_field(t, "this", &field) == -1);
+    assert(tdb_get_field(t, "world", &field) == TDB_ERR_UNKNOWN_FIELD);
+    assert(tdb_get_field(t, "hello", &field) == TDB_ERR_UNKNOWN_FIELD);
+    assert(tdb_get_field(t, "what", &field) == TDB_ERR_UNKNOWN_FIELD);
+    assert(tdb_get_field(t, "is", &field) == TDB_ERR_UNKNOWN_FIELD);
+    assert(tdb_get_field(t, "this", &field) == TDB_ERR_UNKNOWN_FIELD);
     assert(tdb_get_field(t, "time", &field) == 0);
     assert(field == 0);
-    assert(tdb_get_field(t, "blah", &field) == -1);
-    assert(tdb_get_field(t, "bloh", &field) == -1);
+    assert(tdb_get_field(t, "blah", &field) == TDB_ERR_UNKNOWN_FIELD);
+    assert(tdb_get_field(t, "bloh", &field) == TDB_ERR_UNKNOWN_FIELD);
 
     for (cmp = 0, i = 0; i < tdb_num_trails(t); i++){
         assert(tdb_get_trail(t, i, &items, &items_len, &j, 0) == 0);

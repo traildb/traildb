@@ -33,8 +33,8 @@ int main(int argc, char** argv)
     uint64_t n, items_len = 0;
     uint64_t i;
 
-    tdb_cons* c = tdb_cons_new(argv[1], fields, 2);
-    assert(c != NULL);
+    tdb_cons* c = tdb_cons_init();
+    assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
 
     for (i = 0; i < sizeof(EVENTS) / sizeof(struct event); i++){
         const char *values[] = {"cli", EVENTS[i].value};
@@ -43,10 +43,10 @@ int main(int argc, char** argv)
     }
 
     assert(tdb_cons_finalize(c, 0) == 0);
-    tdb_cons_free(c);
+    tdb_cons_close(c);
 
-    tdb* t = tdb_open(argv[1]);
-    assert(t != NULL);
+    tdb* t = tdb_init();
+    assert(tdb_open(t, argv[1]) == 0);
 
     for (i = 0; i < sizeof(EVENTS) / sizeof(struct event); i++){
         uint64_t trail_id;
@@ -66,6 +66,7 @@ int main(int argc, char** argv)
         assert(memcmp(EVENTS[i].value, val, len) == 0);
     }
 
+    tdb_close(t);
     return 0;
 }
 

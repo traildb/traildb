@@ -18,20 +18,18 @@ int main(int argc, char** argv)
     const char *p;
     uint64_t len;
 
-    tdb_cons* c = tdb_cons_new(argv[1], fields, 2);
+    tdb_cons* c = tdb_cons_init();
+    assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
 
     tdb_cons_add(c, uuid, 0, values1, lengths1);
     tdb_cons_add(c, uuid, 0, values2, lengths2);
     tdb_cons_add(c, uuid, 0, values3, lengths3);
 
     assert( tdb_cons_finalize(c, 0) == 0 );
-    tdb_cons_free(c);
+    tdb_cons_close(c);
 
-    tdb* t = tdb_open(argv[1]);
-    if (!t){
-        fprintf(stderr, "tdb_open() failed.\n");
-        return -1;
-    }
+    tdb *t = tdb_init();
+    assert(tdb_open(t, argv[1]) == 0);
 
     assert(tdb_lexicon_size(t, 0) == 0);
     assert(tdb_lexicon_size(t, 1) == 4);
