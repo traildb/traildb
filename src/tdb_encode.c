@@ -6,13 +6,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+#undef JUDYERROR
+#define JUDYERROR(CallerFile, CallerLine, JudyFunc, JudyErrno, JudyErrID) \
+{                                                                         \
+   if ((JudyErrno) != JU_ERRNO_NOMEM)                                     \
+       goto out_of_memory;                                                \
+}
+#include <Judy.h>
+
 #include "tdb_internal.h"
 #include "tdb_encode_model.h"
 #include "tdb_huffman.h"
 #include "tdb_error.h"
 #include "tdb_io.h"
-
-#include "judy_str_map.h"
 
 #define EDGE_INCREMENT     1000000
 #define GROUPBUF_INCREMENT 1000000
@@ -465,6 +471,10 @@ int tdb_encode(tdb_cons *cons, tdb_item *items)
     /* 3. collect value (unigram) freqs, including delta-encoded timestamps */
     TDB_TIMER_START
     unigram_freqs = collect_unigrams(grouped_r, num_events, items, num_fields);
+    if (num_events > 0 && !unigram_freqs){
+        ret = TDB_ERR_NOMEM;
+        goto done;
+    }
     TDB_TIMER_END("trail/collect_unigrams");
 
     /* 4. construct uni/bi-grams */
@@ -528,4 +538,8 @@ done:
     free(fstats);
 
     return ret;
+
+out_of_memory:
+    return TDB_ERR_NOMEM;
 }
+

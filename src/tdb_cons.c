@@ -9,6 +9,14 @@
 #include <stdio.h>
 #include <string.h>
 
+#undef JUDYERROR
+#define JUDYERROR(CallerFile, CallerLine, JudyFunc, JudyErrno, JudyErrID) \
+{                                                                         \
+   if ((JudyErrno) != JU_ERRNO_NOMEM)                                     \
+       goto out_of_memory;                                                \
+}
+#include <Judy.h>
+
 #include "judy_str_map.h"
 #include "tdb_internal.h"
 #include "tdb_error.h"
@@ -188,12 +196,16 @@ static int find_duplicate_fieldnames(const char **ofield_names,
         JSLI(ptr, check, (const uint8_t*)ofield_names[i]);
         if (*ptr){
             JSLFA(tmp, check);
-            return 1;
+            return TDB_ERR_DUPLICATE_FIELDS;
+
         }
         *ptr = 1;
     }
     JSLFA(tmp, check);
     return 0;
+
+out_of_memory:
+    return TDB_ERR_NOMEM;
 }
 
 tdb_cons *tdb_cons_init(void)
@@ -228,8 +240,8 @@ int tdb_cons_open(tdb_cons *cons,
     if (num_ofields > TDB_MAX_NUM_FIELDS)
         return TDB_ERR_TOO_MANY_FIELDS;
 
-    if (find_duplicate_fieldnames(ofield_names, num_ofields))
-        return TDB_ERR_DUPLICATE_FIELDS;
+    if ((ret = find_duplicate_fieldnames(ofield_names, num_ofields)))
+        goto done;
 
     if (!(cons->ofield_names = calloc(num_ofields, sizeof(char*))))
         return TDB_ERR_NOMEM;

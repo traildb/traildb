@@ -4,6 +4,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#undef JUDYERROR
+#define JUDYERROR(CallerFile, CallerLine, JudyFunc, JudyErrno, JudyErrID) \
+{                                                                         \
+   if ((JudyErrno) != JU_ERRNO_NOMEM)                                     \
+       goto out_of_memory;                                                \
+}
+#include <Judy.h>
+
 #include "tdb_internal.h"
 #include "tdb_encode_model.h"
 #include "tdb_huffman.h"
@@ -286,14 +294,17 @@ static int choose_grams(const tdb_item *encoded,
     while (n--){
         /* TODO fix this once j128m returns proper error codes */
         Word_t *ptr = j128m_insert(g->final_freqs, g->grams[n]);
-        ++*ptr;
+        if (*ptr)
+            ++*ptr;
+        else
+            return TDB_ERR_NOMEM;
     }
 
     return 0;
 }
 
 
-static Pvoid_t find_candidates(const Pvoid_t unigram_freqs)
+static int find_candidates(const Pvoid_t unigram_freqs, Pvoid_t *candidates0)
 {
     Pvoid_t candidates = NULL;
     Word_t idx = 0;
@@ -321,7 +332,11 @@ static Pvoid_t find_candidates(const Pvoid_t unigram_freqs)
         JLN(ptr, unigram_freqs, idx);
     }
 
-    return candidates;
+    *candidates0 = candidates;
+    return 0;
+
+out_of_memory:
+    return TDB_ERR_NOMEM;
 }
 
 static int all_bigrams(const tdb_item *encoded,
@@ -351,7 +366,10 @@ static int all_bigrams(const tdb_item *encoded,
                     __uint128_t bigram = unigram1;
                     bigram |= ((__uint128_t)unigram2) << 64;
                     ptr = j128m_insert(&g->ngram_freqs, bigram);
-                    ++*ptr;
+                    if (ptr)
+                        ++*ptr;
+                    else
+                        return TDB_ERR_NOMEM;
                 }
             }
         }
@@ -384,7 +402,8 @@ int make_grams(FILE *grouped,
        for finding frequent sets (bigrams) */
 
     /* find unigrams that are sufficiently frequent */
-    g.candidates = find_candidates(unigram_freqs);
+    if ((ret = find_candidates(unigram_freqs, &g.candidates)))
+        goto done;
 
     /* collect frequencies of *all* occurring bigrams of candidate unigrams */
     ret = event_fold(all_bigrams, grouped, num_events, items, num_fields, &g);
@@ -404,6 +423,9 @@ done:
     free(g.grams);
 
     return ret;
+
+out_of_memory:
+    return TDB_ERR_NOMEM;
 }
 
 struct unigram_state{
@@ -427,6 +449,9 @@ static int all_freqs(const tdb_item *encoded,
     JLI(ptr, s->freqs, ev->timestamp);
     ++*ptr;
     return 0;
+
+out_of_memory:
+    return TDB_ERR_NOMEM;
 }
 
 Pvoid_t collect_unigrams(FILE *grouped,
@@ -436,7 +461,9 @@ Pvoid_t collect_unigrams(FILE *grouped,
 {
     /* calculate frequencies of all items */
     struct unigram_state state = {.freqs = NULL};
-    event_fold(all_freqs, grouped, num_events, items, num_fields, &state);
-    return state.freqs;
+    if (event_fold(all_freqs, grouped, num_events, items, num_fields, &state))
+        return NULL;
+    else
+        return state.freqs;
 }
 
