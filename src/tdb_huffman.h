@@ -71,7 +71,7 @@ static inline __uint128_t huff_decode_value(const struct huff_codebook *codebook
     /* TODO - we could have a special read_bits for this case */
     uint64_t enc = read_bits64(data, *offset, 64);
     if (enc & 1){
-        uint16_t idx = HUFF_CODE(enc >> 1);
+        uint32_t idx = HUFF_CODE(enc >> 1);
         *offset += codebook[idx].bits + 1;
         return codebook[idx].symbol;
     }else{
