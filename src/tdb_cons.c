@@ -297,9 +297,7 @@ int tdb_cons_open(tdb_cons *cons,
             goto done;
         }
 
-    return ret;
 done:
-    tdb_cons_close(cons);
     return ret;
 }
 
