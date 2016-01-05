@@ -185,7 +185,7 @@ int tdb_decode_trail_filtered(const tdb *db,
                     db->previous_items[field] = item;
                     if (edge_encoded && i < dst_size)
                         dst[i++] = item;
-                    item = HUFF_BIGRAM_OTHER_ITEM(gram);
+                    gram = item = HUFF_BIGRAM_OTHER_ITEM(gram);
                 }while ((field = tdb_item_field(item)));
             }else{
                 /* we hit the next timestamp, take a step back and break */
