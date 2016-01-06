@@ -402,7 +402,10 @@ int huff_convert_v0_codebook(struct tdb_file *codebook)
     new = (struct huff_codebook*)p;
 
     for (i = 0; i < HUFF_CODEBOOK_SIZE; i++){
-        new[i].symbol = (__uint128_t)old[i].symbol;
+        __uint128_t gram = old[i].symbol >> 32;
+        gram >>= 64;
+        gram |= (old[i].symbol & UINT32_MAX);
+        new[i].symbol = gram;
         new[i].bits = old[i].bits;
     }
 
