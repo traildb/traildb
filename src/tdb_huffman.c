@@ -369,6 +369,10 @@ struct huff_codebook *huff_create_codebook(const struct judy_128_map *codemap,
     return book;
 }
 
+/*
+this function converts old 64-bit symbols in v0 to new 128-bit
+symbols in v1
+*/
 int huff_convert_v0_codebook(struct tdb_file *codebook)
 {
     const struct huff_codebook_v0{
@@ -380,6 +384,11 @@ int huff_convert_v0_codebook(struct tdb_file *codebook)
     uint64_t i;
     uint64_t size = HUFF_CODEBOOK_SIZE * sizeof(struct huff_codebook);
     struct huff_codebook *new;
+
+    /*
+    we want to allocate memory with mmap() and not malloc() so that tdb_file
+    can be munmap()'ed as usual
+    */
     void *p = mmap(NULL,
                    size,
                    PROT_READ | PROT_WRITE,
@@ -393,7 +402,10 @@ int huff_convert_v0_codebook(struct tdb_file *codebook)
     new = (struct huff_codebook*)p;
 
     for (i = 0; i < HUFF_CODEBOOK_SIZE; i++){
-        new[i].symbol = (__uint128_t)old[i].symbol;
+        __uint128_t gram = old[i].symbol >> 32;
+        gram >>= 64;
+        gram |= (old[i].symbol & UINT32_MAX);
+        new[i].symbol = gram;
         new[i].bits = old[i].bits;
     }
 
