@@ -275,6 +275,9 @@ int tdb_open(tdb *db, const char *root)
             ret = TDB_ERR_INVALID_CODEBOOK_FILE;
             goto done;
         }
+        if (db->version == TDB_VERSION_V0)
+            if ((ret = huff_convert_v0_codebook(&db->codebook)))
+                goto done;
 
         TDB_PATH(path, "%s/trails.data", root);
         if (tdb_mmap(path, &db->trails)){

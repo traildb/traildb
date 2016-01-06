@@ -1,8 +1,11 @@
+#define _DEFAULT_SOURCE
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 #include "tdb_queue.h"
 #include "tdb_profile.h"
@@ -237,9 +240,8 @@ struct field_stats *huff_field_stats(const uint64_t *field_cardinalities,
 
     fstats->field_id_bits = bits_needed(num_fields);
     fstats->field_bits[0] = bits_needed(max_timestamp_delta);
-    for (i = 0; i < num_fields - 1; i++){
+    for (i = 0; i < num_fields - 1; i++)
         fstats->field_bits[i + 1] = bits_needed(field_cardinalities[i]);
-    }
     return fstats;
 }
 
@@ -365,5 +367,40 @@ struct huff_codebook *huff_create_codebook(const struct judy_128_map *codemap,
     j128m_fold(codemap, create_codebook_fun, book);
 
     return book;
+}
+
+int huff_convert_v0_codebook(struct tdb_file *codebook)
+{
+    const struct huff_codebook_v0{
+        uint64_t symbol;
+        uint32_t bits;
+    } __attribute__((packed)) *old =
+        (const struct huff_codebook_v0*)codebook->data;
+
+    uint64_t i;
+    uint64_t size = HUFF_CODEBOOK_SIZE * sizeof(struct huff_codebook);
+    struct huff_codebook *new;
+    void *p = mmap(NULL,
+                   size,
+                   PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS,
+                   -1,
+                   0);
+
+    if (p == MAP_FAILED)
+        return TDB_ERR_NOMEM;
+
+    new = (struct huff_codebook*)p;
+
+    for (i = 0; i < HUFF_CODEBOOK_SIZE; i++){
+        new[i].symbol = (__uint128_t)old[i].symbol;
+        new[i].bits = old[i].bits;
+    }
+
+    munmap(codebook->data, codebook->size);
+    codebook->data = p;
+    codebook->size = size;
+
+    return 0;
 }
 

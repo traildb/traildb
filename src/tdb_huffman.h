@@ -7,6 +7,7 @@
 #include "judy_128_map.h"
 #include "tdb_types.h"
 #include "tdb_bits.h"
+#include "tdb_internal.h"
 
 /* ensure TDB_CODEBOOK_SIZE < UINT32_MAX */
 #define HUFF_CODEBOOK_SIZE 65536
@@ -58,6 +59,8 @@ static inline uint64_t huff_encoded_max_bits(uint64_t num_grams)
 }
 
 /* DECODE */
+
+int huff_convert_v0_codebook(struct tdb_file *codebook);
 
 /* this may return either an unigram or a bigram */
 static inline __uint128_t huff_decode_value(const struct huff_codebook *codebook,
