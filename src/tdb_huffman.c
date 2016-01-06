@@ -404,7 +404,7 @@ int huff_convert_v0_codebook(struct tdb_file *codebook)
     for (i = 0; i < HUFF_CODEBOOK_SIZE; i++){
         /* extract the second part of the bigram */
         __uint128_t gram = old[i].symbol >> 32;
-        gram >>= 64;
+        gram <<= 64;
         /* extract the first part of the bigram */
         gram |= (old[i].symbol & UINT32_MAX);
         new[i].symbol = gram;
