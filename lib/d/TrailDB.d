@@ -12,7 +12,8 @@ import traildbc;
 
 immutable static BUFFER_SIZE = 1 << 18;
 
-/* Event in a TrailDB trail. Lazily computes field values. */
+/* Event in a TrailDB trail. Indexing returns immutable reference to field values. */
+/* The reference returned should be deep copied if another trail is loaded before use. */
 struct Event {
     void* _db; // Needed to get item value
     uint[] _buff; // Raw buffer of event
@@ -23,7 +24,7 @@ struct Event {
         _buff = buff_;
     }
 
-    char[] opIndex(uint j)
+    string opIndex(uint j)
     {
         if(j == 0) // Timestamp
         {
@@ -31,7 +32,9 @@ struct Event {
         }
         else
         {
-            return to!(char[])(tdb_get_item_value(_db, _buff[j]));
+            import core.stdc.string: strlen;
+            auto ret = tdb_get_item_value(_db, _buff[j]);
+            return ret ? cast(string)ret[0 .. strlen(ret)] : null;
         }
     }
 }
