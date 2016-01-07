@@ -39,3 +39,4 @@ configure
 coverage-html/
 m4/
 
+testing/c-tests/Makefile.am

@@ -7,6 +7,11 @@
 #include <traildb.h>
 #include <tdb_io.h>
 
+#ifndef MAX_PATH_SIZE
+# define MAX_PATH_SIZE 1024
+#endif
+
+
 static void empty_tdb_append(const char *root)
 {
     char path[TDB_MAX_PATH_SIZE];

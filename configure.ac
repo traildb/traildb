@@ -9,6 +9,7 @@ LT_INIT
 AC_PROG_CC
 AC_CONFIG_FILES([
   Makefile
+  testing/c-tests/Makefile
 ])
 AC_DEFINE(DSFMT_MEXP, 521)
 AC_DEFINE(HAVE_SSE2, 1)
