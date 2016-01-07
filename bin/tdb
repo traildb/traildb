@@ -2,7 +2,7 @@
 """
 tdb info TRAILDB ...
 tdb get TRAILDB ... [-i ID ...]
-tdb cat TRAILDB ... [-f FIELD ...]
+tdb cat TRAILDB ... [-f FIELD ...] [-p "FIELD='VAL' and FIELD!='VAL' ...]
 tdb lex TRAILDB ... [-f FIELD ...]
 tdb merge TRAILDB ... [-o OUTDB]
 """
@@ -11,6 +11,7 @@ import os
 import sys
 import argparse
 import itertools
+import ply
 
 from traildb import TrailDB, TrailDBConstructor
 
@@ -51,15 +52,32 @@ def lex(args, opts):
                 print '%s\t%s' % (field, value)
 
 def cat(args, opts):
+    filter_expr = None
+    if opts.predicates:
+        filter_expr = []
+        lexer = filter_lexer()
+        parser = filter_parser()
+        for predicate in opts.predicates:
+            lexer.input(predicate)
+            filter_expr.append(parser.parse(predicate, lexer = lexer))
+
     for arg in args:
         tdb = TrailDB(arg)
         if opts.field:
-            for cookie, trail in tdb.crumbs():
+            for cookie, trail in tdb.crumbs(filter_expr = filter_expr):
                 for event in trail:
-                    print '%s\t%s' % (cookie, tabify(getattr(event, f) for f in opts.field))
+                    try:
+                        print '%s\t%s' % (cookie, tabify(getattr(event, f) for f in opts.field))
+                    except IOError:
+                        # stdout closed, probably we're writing into 'head'
+                        return
         else:
-            for cookie, trail in tdb.crumbs():
-                print cookie, trail
+            for cookie, trail in tdb.crumbs(filter_expr = filter_expr):
+                try:
+                    print cookie, trail
+                except IOError:
+                    # stdout closed, probably we're writing into 'head'
+                    return
 
 def merge(args, opts):
     for n, arg in enumerate(args):
@@ -69,12 +87,49 @@ def merge(args, opts):
         cons.append(tdb)
     cons.finalize()
 
-def split(args, opts):
-    out = opts.outdb
-    fmt = out if '%' in out else '.%02d.'.join(out.split('.'))
-    for arg in args:
-        tdb = TrailDB(arg)
-        tdb.split(opts.num_parts, fmt=fmt)
+
+lexer_tokens = ('EQ', 'NEQ', 'VALUE', 'OR')
+def filter_lexer():
+    tokens   = lexer_tokens
+    reserved = { 'or'  : 'OR' }
+    t_OR     = r'or'
+    t_EQ     = r'='
+    t_NEQ    = r'!='
+    t_ignore = ' '
+    def t_VALUE(t):
+        r'\w+|\'\w+\''
+        t.type = reserved.get(t.value, 'VALUE')
+        if t.value[0] == "'" and t.value[-1] == "'":
+            t.value = t.value.strip("'")
+        return t
+
+    def t_error(t): raise Exception("illegal token: %s" %t)
+
+    import ply.lex
+    return ply.lex.lex()
+
+def filter_parser():
+    tokens = lexer_tokens
+
+    def p_expr(p):
+        """expression : expression OR expression"""
+        p[0] = []
+        p[0].extend(p[1])
+        p[0].extend(p[3])
+
+    def p_eq(p):
+        """expression : VALUE EQ VALUE"""
+        p[0] = [{'field': p[1], 'value': p[3], 'op': 'equal'}]
+
+    def p_neq(p):
+        """expression : VALUE NEQ VALUE"""
+        p[0] = [{'field': p[1], 'value': p[3], 'op': 'notequal'}]
+
+    def p_error(p):
+        raise Exception("Syntax error")
+
+    import ply.yacc
+    return ply.yacc.yacc(debug = False)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -84,6 +139,9 @@ def main():
     parser.add_argument('-f', '--field',
                         action='append',
                         help="name of field to operate on")
+    parser.add_argument('-p', '--predicates',
+                        action='append',
+                        help="predicate used for filtering")
     parser.add_argument('-o', '--outdb',
                         default='a.tdb',
                         help="name of output dbs for split / merge")

@@ -4,7 +4,7 @@ from collections import namedtuple, defaultdict
 from collections import Mapping
 from ctypes import c_char, c_char_p, c_ubyte, c_int, c_void_p
 from ctypes import c_uint, c_uint8, c_uint32, c_uint64
-from ctypes import CDLL, CFUNCTYPE, POINTER, string_at, byref
+from ctypes import CDLL, CFUNCTYPE, POINTER, string_at, byref, cast
 from datetime import datetime
 
 cd = os.path.dirname(os.path.abspath(__file__))
@@ -19,7 +19,6 @@ tdb_cons    = c_void_p
 tdb_field   = c_uint32
 tdb_val     = c_uint64
 tdb_item    = c_uint64
-tdb_fold_fn = CFUNCTYPE(c_void_p, tdb, c_uint64, POINTER(tdb_item), c_void_p)
 
 #api(lib.tdb_cons_open, [c_char_p, POINTER(c_char), c_uint32], tdb_cons)
 api(lib.tdb_cons_close, [tdb_cons])
@@ -36,8 +35,8 @@ api(lib.tdb_get_field, [tdb, c_char_p], c_uint)
 api(lib.tdb_get_field_name, [tdb, tdb_field], c_char_p)
 #api(lib.tdb_field_has_overflow_vals, [tdb, tdb_field], c_int)
 
-api(lib.tdb_get_item, [tdb, tdb_field, c_char_p], c_uint)
-api(lib.tdb_get_value, [tdb, tdb_field, tdb_val], c_char_p)
+api(lib.tdb_get_item, [tdb, tdb_field, c_char_p, c_uint64], tdb_item)
+api(lib.tdb_get_value, [tdb, tdb_field, tdb_val, POINTER(c_uint64)], c_char_p)
 api(lib.tdb_get_item_value, [tdb, tdb_item], c_char_p)
 
 api(lib.tdb_get_uuid, [tdb, c_uint64], POINTER(c_ubyte))
@@ -65,7 +64,6 @@ api(lib.tdb_decode_trail_filtered,
      POINTER(tdb_item), c_uint64],
     c_int)
 
-#api(lib.tdb_fold, [tdb, tdb_fold_fn, c_void_p], c_void_p)
 
 def hexcookie(cookie):
     if isinstance(cookie, basestring):
@@ -79,6 +77,26 @@ def rawcookie(cookie):
 
 def nullterm(strs, size):
     return '\x00'.join(strs) + (size - len(strs) + 1) * '\x00'
+
+
+# Port of tdb_item_field and tdb_item_val in tdb_types.h. Cannot use
+# them directly as they are inlined functions.
+
+def tdb_item_is32(item): return not (item & 128)
+def tdb_item_field32(item): return item & 127
+def tdb_item_val32(item): return (item >> 8) & 2147483647 # UINT32_MAX
+
+def tdb_item_field(item):
+    if tdb_item_is32(item):
+        return tdb_item_field32(item)
+    else:
+        return (item & 127) | (((item >> 8) & 127) << 7)
+
+def tdb_item_val(item):
+    if tdb_item_is32(item):
+        return tdb_item_val32(item)
+    else:
+        return item >> 16
 
 class TrailDBError(Exception):
     pass
@@ -128,7 +146,6 @@ class TrailDB(object):
         self.num_fields = lib.tdb_num_fields(db)
         self.fields = [lib.tdb_get_field_name(db, i) for i in xrange(self.num_fields)]
         self._evcls = namedtuple('event', self.fields, rename=True)
-        print "num fields", self.num_fields, self.fields
         self._trail_buf_size = 0
         self._grow_buffer()
 
@@ -187,8 +204,8 @@ class TrailDB(object):
                                                     size,
                                                     num,
                                                     edge_flag,
-                                                    q,
-                                                    len(q))
+                                                    cast(q, POINTER(c_uint64)),
+                                                    c_uint64(len(q)))
             else:
                 res = lib.tdb_decode_trail(db, id, buf, size, num, edge_flag)
 
@@ -198,9 +215,9 @@ class TrailDB(object):
                 break
 
         if expand:
-            value = lambda f, v: lib.tdb_get_value(db, f, v)
+            value = lambda i: self.value(tdb_item_field(i), tdb_item_val(i))
         else:
-            value = lambda f, v: v
+            value = lambda i: i
 
         def gen(i=0):
             # TODO: Support 64-bit wide items
@@ -209,7 +226,7 @@ class TrailDB(object):
                 values = []
                 i += 1
                 while i < num.value and buf[i]:
-                    values.append(value(buf[i] & 255, buf[i] >> 8))
+                    values.append(value(buf[i]))
                     i += 1
 
                 # A Null word is inserted between items
@@ -227,16 +244,10 @@ class TrailDB(object):
                     values[field] = value(buf[i] & 255, buf[i] >> 8)
                     i += 1
                 i += 1
-                yield cls(tstamp, *values)
+                yield tstamp, values
 
         return list(gen_edge() if edge_encoded else gen())
 
-    def fold(self, fun, acc=None):
-        db, cls, N = self._db, self._evcls, self.num_fields
-        def fn(tdb, id, items, _):
-            fun(self, id, cls(items[0], *(i >> 8 for i in items[1:N])), acc)
-        lib.tdb_fold(db, tdb_fold_fn(fn), None)
-        return acc
 
     def field(self, fieldish):
         if isinstance(fieldish, basestring):
@@ -263,10 +274,11 @@ class TrailDB(object):
 
     def value(self, fieldish, val):
         field = self.field(fieldish)
-        value = lib.tdb_get_value(self._db, field, val)
+        value_size = c_uint64()
+        value = lib.tdb_get_value(self._db, field, val, value_size)
         if value is None:
             raise TrailDBError(lib.tdb_error(self._db))
-        return value
+        return value[0:value_size.value]
 
     def cookie(self, id, raw=False):
         cookie = lib.tdb_get_uuid(self._db, id)
@@ -319,8 +331,8 @@ class TrailDB(object):
         #    {'field' : 'browser', 'value' : 'Chrome'}],
         #   ['field' : 'is_valud', 'value' : '1'}
         # ]
-        def item(value, field):
-            return lib.tdb_get_item(self._db, field, value)
+        def item(field, value):
+            return lib.tdb_get_item(self._db, field, value, c_uint64(len(value)))
 
         def parse_clause(clause_expr):
             clause = [0]
@@ -331,7 +343,8 @@ class TrailDB(object):
                 try:
                     field = self.field(term['field'])
                     clause.extend((0 if op == 'equal' else 1,
-                                   item(term['value'], field)))
+                                   item(field, term['value'])))
+
                 except ValueError:
                     always_true = (term['value'] == '') == (op == 'equal')
                     clause.extend((1 if always_true else 0, 0))
@@ -341,7 +354,7 @@ class TrailDB(object):
         q = []
         for clause in filter_expr:
             q.extend(parse_clause(clause))
-        return (c_uint32 * len(q))(*q)
+        return (c_uint64 * len(q))(*q)
 
     def set_filter(self, filter_expr):
         q = self._parse_filter(filter_expr)
