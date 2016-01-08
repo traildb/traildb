@@ -63,8 +63,11 @@ def cat(args, opts):
 
     for arg in args:
         tdb = TrailDB(arg)
+        if filter_expr:
+            tdb.set_filter(filter_expr)
+
         if opts.field:
-            for cookie, trail in tdb.crumbs(filter_expr = filter_expr):
+            for cookie, trail in tdb.crumbs():
                 for event in trail:
                     try:
                         print '%s\t%s' % (cookie, tabify(getattr(event, f) for f in opts.field))
