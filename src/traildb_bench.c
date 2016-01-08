@@ -6,6 +6,8 @@
 #include "traildb.h"
 
 
+//#define DEBUG 1
+
 #define LLU(val) ((unsigned long long)(val))
 
 #define REPORT_ERROR(fmt, ...)				\
@@ -27,6 +29,23 @@ static inline const char** const_quirk(char** argv) {
 	void* p;
 	memcpy(&p, &argv, sizeof(argv));
 	return p;
+}
+
+/// dump "raw" in groups of 4 bytes to stdout
+static void dump_hex(const char* raw, uint64_t length)
+{
+/*	for(unsigned int i = 0; i < length; i += 4) {
+		printf("%02x%02x%02x%02x ",
+		       raw[i+0], raw[i+1], raw[i+2], raw[i+3]);
+	}
+
+	for(uint64_t i = length - (length % 4); i < length; ++i) {
+		printf("%02x", raw[i]);
+	}
+*/
+	for(uint64_t i = 0; i < length; ++i) {
+		printf("%02x ", raw[i]);
+	}
 }
 
 /**
@@ -107,15 +126,18 @@ static int resolve_fieldids(tdb_field** field_ids, const tdb* db,
 				(unsigned)(names_length - skipped - i));
 		}
 	}
+	assert(names_length >= skipped); /// debugging
 
 	if(skipped) {
 		REPORT_WARNING("Skipping %u duplicate field names\n", skipped);
 	}
 
+#ifdef DEBUG
 	for(int i = 0; i < names_length - skipped; ++i) {
 		REPORT_WARNING("field_id[%i] = %i\n",
 			       i, out[i]);
 	}
+#endif
 
 	*field_ids = out;
 	return names_length - skipped;
@@ -173,7 +195,7 @@ static int cmd_recode(const char* output_path, const char* input,
 	 *     insert the record
 	 */
 	const uint64_t num_trails = tdb_num_trails(db);
-	for(uint64_t trail_id = 0; trail_id < num_trails; ++trail_id) {
+	for(uint64_t trail_id = 0; trail_id < num_trails && trail_id < 1000; ++trail_id) {
 		uint64_t num_items;
 
 		err = tdb_get_trail(db, trail_id, &items, &items_len, &num_items, 0);
@@ -184,18 +206,38 @@ static int cmd_recode(const char* output_path, const char* input,
 		}
 		assert((num_items % (num_fields + 1)) == 0);
 
-		const tdb_item* record = items;
-		for(uint64_t record_id = 0; record_id < (num_items / num_fields); ++record_id) {
-			/// assert record is indeed pointing to the beginning of a new record :)
+#ifdef DEBUG
+		{
+#define HEX4 "%02x%02x%02x%02x"
+			const uint8_t* uuid = tdb_get_uuid(db, trail_id);
+			printf("cookie " HEX4 HEX4 HEX4 HEX4 "\n",
+			       uuid[0],  uuid[1],  uuid[2],  uuid[3],
+			       uuid[4],  uuid[5],  uuid[6],  uuid[7],
+			       uuid[8],  uuid[9],  uuid[10], uuid[11],
+			       uuid[12], uuid[13], uuid[14], uuid[15]);
+#undef HEX4
+		}
+#endif		
+
+		for(uint64_t record_id = 0; record_id < num_items; record_id += num_fields + 1) {
+			const tdb_item* const record = items + record_id;
+
+			/// assert record is indeed pointing to the
+			/// beginning of a new record :)
 			assert(record[num_fields] == 0);
 
 			/* extract step */
 			for(int field = 0; field < names_length; ++field) {
-				const tdb_field rid = field_ids[field];
-
-				values[rid] = tdb_get_item_value(
-					db, record[rid],
-					&value_lengths[rid]);
+				assert(record_id + field_ids[field] < num_items);
+				values[field] = tdb_get_item_value(
+					db, record[field_ids[field]],
+					&value_lengths[field]);
+				if(values[field]) {
+#ifdef DEBUG
+					printf("values[%llu][%i] = (%u)%s\n",
+					       LLU(record_id), field, (unsigned)value_lengths[field], values[field]);
+#endif
+				}
 			}
 
 			err = tdb_cons_add(cons, tdb_get_uuid(db, trail_id),
@@ -205,11 +247,11 @@ static int cmd_recode(const char* output_path, const char* input,
 					     LLU(trail_id), LLU(record_id), err);
 				goto out;
 			}
+//			goto breaker;
 		}
-		record += num_fields + 1;
-		records_decoded += num_items / num_fields;
+		records_decoded += num_items / (num_fields + 1);
 	}
-
+//breaker:
 	err = tdb_cons_finalize(cons, 0);
 	if(err) {
 		REPORT_ERROR("Failed to finalize output DB. error=%i\n", err);
@@ -303,19 +345,6 @@ free_fieldids:
 	return err ? 1 : 0;
 }
 
-/// dump "raw" in groups of 4 bytes to stdout
-static void dump_hex(const char* raw, uint64_t length)
-{
-	for(unsigned int i = 0; i < length; i += 4) {
-		printf("%02x%02x%02x%02x ",
-		       raw[i+0], raw[i+1], raw[i+2], raw[i+3]);
-	}
-
-	for(uint64_t i = length - (length % 4); i < length; ++i) {
-		printf("%02x", raw[i]);
-	}
-}
-
 static void dump_trail(const tdb* db, const uint8_t* uuid,
 		       tdb_item* items, uint64_t items_length)
 {
@@ -331,7 +360,7 @@ static void dump_trail(const tdb* db, const uint8_t* uuid,
 	for(unsigned int i = 0; i < items_length; ++i) {
 		if(print_timestamp) {
 			/* every record starts with the timestamp */
-			printf("ts=%llu: ", items[i]);
+			printf("ts=%llu:\n", LLU(items[i]));
 			print_timestamp = 0;
 		}
 		else if(items[i] == 0) {
@@ -342,7 +371,7 @@ static void dump_trail(const tdb* db, const uint8_t* uuid,
 		else {
 			uint64_t value_length = 0;
 			const char* value = tdb_get_item_value(db, items[i], &value_length);
-			printf(" field[%s]=",
+			printf(" %s=",
 			       tdb_get_field_name(db, tdb_item_field(items[i])));
 			dump_hex(value, value_length);
 			putchar('\n');
@@ -425,9 +454,9 @@ static int cmd_info(const char* db_path)
 static void print_help(void)
 {
 	printf(
-"Usage: traildb_bench <decode-all|append-all> [<mode-specific options>*]\n"
+"Usage: traildb_bench <command> [<mode-specific options>*]\n"
 "\n"
-"Synopsis:\n"
+"Available commands:\n"
 "  decode-all <database directory>*\n"
 "  :: iterates over the complete DB, decoding\n"
 "     every value encountered\n"
