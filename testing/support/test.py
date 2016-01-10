@@ -39,7 +39,7 @@ class Testing:
             except:
                 pass
 
-    def runCTests(self):
+    def runCTests(self, include_all):
         def walk(node):
             if os.path.isfile(node):
                 if node.endswith(".c"):
@@ -49,10 +49,12 @@ class Testing:
                 for f in files:
                     walk(os.path.join(node, f))
 
-        return walk("c-tests")
+        walk("c-tests")
+        if include_all:
+            walk("c-tests-large")
 
-    def runTests(self):
-        self.runCTests()
+    def runTests(self, include_all=False):
+        self.runCTests(include_all)
 
         if len(self.failed_tests) > 0:
             print("Tests that failed:")
@@ -68,5 +70,5 @@ class Testing:
 
 if __name__ == '__main__':
     t = Testing()
-    sys.exit(t.runTests())
+    sys.exit(t.runTests(len(sys.argv) > 1 and sys.argv[1] == 'all'))
 

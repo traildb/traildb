@@ -45,7 +45,7 @@ def cleanup_gcda_gcno():
     if files:
         print("Cleaned up some .gcda and .gcno files.")
 
-def run_coverage_test(coverage):
+def run_coverage_test(coverage, test_args):
     # Here's what happens:
     # 1. We create a temporary directory
     # 2. We run ./configure from this project but build objects and stuff to
@@ -83,7 +83,7 @@ def run_coverage_test(coverage):
         expect_zero_exit_code("cd %s && %s --prefix %s && make install" % (temp_dir_path, os.path.join(upper_path, "configure"), temp_dir_path))
         ld_lib_path = os.getenv("LD_LIBRARY_PATH", '')
         os.putenv("LD_LIBRARY_PATH", "%s:%s" % (os.path.join(temp_dir_path, "lib"), ld_lib_path))
-        result = os.system("cd %s && ./support/test.py" % script_path)
+        result = os.system("cd %s && ./support/test.py %s" % (script_path, test_args))
 
         if has_coverage and coverage:
             expect_zero_exit_code("cd %s && lcov --capture --directory . --output-file gcov.info" % temp_dir_path)
@@ -101,8 +101,6 @@ def run_coverage_test(coverage):
     return result
 
 if __name__ == '__main__':
-    if '--no-coverage' in sys.argv:
-        sys.exit(run_coverage_test(coverage=False))
-    else:
-        sys.exit(run_coverage_test(coverage=True))
-
+    test_args = 'all' if '--all' in sys.argv else ''
+    coverage = '--coverage' in sys.argv
+    sys.exit(run_coverage_test(coverage, test_args))
