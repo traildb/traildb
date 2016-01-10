@@ -18,7 +18,6 @@ struct judy_str_map{
     char *buffer;
     uint64_t buffer_offset;
     uint64_t buffer_size;
-    Pvoid_t small_map;
     Pvoid_t large_map;
     uint64_t num_keys;
     XXH64_state_t hash_state;

@@ -21,25 +21,6 @@ struct jsm_item{
     char value[0];
 } __attribute__((packed));
 
-static uint64_t jsm_get_small(const struct judy_str_map *jsm,
-                              const char *buf,
-                              uint64_t length)
-{
-    uint8_t keybuf[8] = {};
-    Word_t *ptr;
-    Word_t key;
-
-    keybuf[0] = (uint8_t)length;
-    memcpy(&keybuf[1], buf, length);
-    memcpy(&key, keybuf, 8);
-
-    JLG(ptr, jsm->small_map, key);
-    if (ptr)
-        return *ptr;
-    else
-        return 0;
-}
-
 static uint64_t jsm_get_large(struct judy_str_map *jsm,
                               const char *buf,
                               uint64_t length,
@@ -63,28 +44,6 @@ static uint64_t jsm_get_large(struct judy_str_map *jsm,
         else if (++num_retries < MAX_NUM_RETRIES)
             return jsm_get_large(jsm, buf, length, num_retries);
     }
-    return 0;
-}
-
-static uint64_t jsm_insert_small(struct judy_str_map *jsm,
-                                 const char *buf,
-                                 uint64_t length)
-{
-    uint8_t keybuf[8] = {};
-    Word_t *ptr;
-    Word_t key;
-
-    keybuf[0] = (uint8_t)length;
-    memcpy(&keybuf[1], buf, length);
-    memcpy(&key, keybuf, 8);
-
-    JLI(ptr, jsm->small_map, key);
-    if (!*ptr)
-        *ptr = ++jsm->num_keys;
-
-    return *ptr;
-
-out_of_memory:
     return 0;
 }
 
@@ -145,18 +104,7 @@ void *jsm_fold(const struct judy_str_map *jsm,
                judy_str_fold_fn fun,
                void *state)
 {
-    uint8_t buf[8];
-    Word_t *ptr;
-    Word_t key = 0;
-
     uint64_t offset = 0;
-
-    JLF(ptr, jsm->small_map, key);
-    while (ptr){
-        memcpy(buf, &key, 8);
-        state = fun(*ptr, (const char*)&buf[1], buf[0], state);
-        JLN(ptr, jsm->small_map, key);
-    }
 
     while (offset < jsm->buffer_offset){
         const struct jsm_item *item =
@@ -167,22 +115,13 @@ void *jsm_fold(const struct judy_str_map *jsm,
     }
 
     return state;
-
-out_of_memory:
-    /* this really should be impossible:
-       iterating shouldn't consume extra memory */
-    fprintf(stderr, "jsm_fold out of memory! this shouldn't happen\n");
-    exit(1);
 }
 
 uint64_t jsm_insert(struct judy_str_map *jsm, const char *buf, uint64_t length)
 {
     if (length == 0)
         return 0;
-    else if (length > 7)
-        return jsm_insert_large(jsm, buf, length, 0);
-    else
-        return jsm_insert_small(jsm, buf, length);
+    return jsm_insert_large(jsm, buf, length, 0);
 }
 
 uint64_t jsm_get(struct judy_str_map *jsm,
@@ -191,10 +130,7 @@ uint64_t jsm_get(struct judy_str_map *jsm,
 {
     if (length == 0)
         return 0;
-    else if (length > 7)
-        return jsm_get_large(jsm, buf, length, 0);
-    else
-        return jsm_get_small(jsm, buf, length);
+    return jsm_get_large(jsm, buf, length, 0);
 }
 
 int jsm_init(struct judy_str_map *jsm)
@@ -210,9 +146,7 @@ void jsm_free(struct judy_str_map *jsm)
 {
     Word_t tmp;
 
-    JLFA(tmp, jsm->small_map);
     JLFA(tmp, jsm->large_map);
-
     free(jsm->buffer);
 
 out_of_memory:
