@@ -9,7 +9,6 @@ libtraildb_la_CFLAGS = -std=c99 \
                        -Wextra \
                        -Wconversion \
                        -Wcast-qual \
-                       -Wcast-align \
                        -Wformat-security \
                        -Wmissing-declarations \
                        -Wmissing-prototypes \
