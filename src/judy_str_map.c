@@ -100,6 +100,10 @@ out_of_memory:
     return 0;
 }
 
+/*
+fold must return IDs in the ascending order, e.g store_lexicon()
+relies on this
+*/
 void *jsm_fold(const struct judy_str_map *jsm,
                judy_str_fold_fn fun,
                void *state)
