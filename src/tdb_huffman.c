@@ -301,7 +301,7 @@ static inline void encode_gram(const struct judy_128_map *codemap,
 
     if (ptr){
         /* codeword: prefix code by an up bit */
-        huff_code = 1 | (HUFF_CODE(*ptr) << 1);
+        huff_code = 1U | (((uint32_t)HUFF_CODE(*ptr)) << 1U);
         huff_bits = HUFF_BITS(*ptr) + 1;
     }
 

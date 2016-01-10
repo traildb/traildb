@@ -11,7 +11,7 @@
 
 /* ensure TDB_CODEBOOK_SIZE < UINT32_MAX */
 #define HUFF_CODEBOOK_SIZE 65536
-#define HUFF_CODE(x) ((uint32_t)((x) & 65535LU))
+#define HUFF_CODE(x) ((uint16_t)((x) & 65535LU))
 #define HUFF_BITS(x) ((uint32_t)(((x) & (65535LU << 16LU)) >> 16LU))
 #define HUFF_IS_BIGRAM(x) ((x >> 64) & UINT64_MAX)
 #define HUFF_BIGRAM_TO_ITEM(x) ((tdb_item)(x & UINT64_MAX))
