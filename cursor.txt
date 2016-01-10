@@ -6,7 +6,6 @@ struct tdb_cursor{
     uint64_t trail_id;
 
     const tdb *db;
-    const tdb_options *opt;
     struct tdb_decode_state *decode_state;
 }
 

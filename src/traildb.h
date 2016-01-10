@@ -8,7 +8,7 @@
 #include "tdb_types.h"
 #include "tdb_error.h"
 
-/* add to configure.ac: use jemalloc if available */
+/* TODO add to configure.ac: use jemalloc if available */
 
 #define TDB_VERSION_V0 0LLU
 #define TDB_VERSION_V0_1 1LLU
@@ -34,6 +34,7 @@ int tdb_cons_add(tdb_cons *cons,
 
 /* TODO: rename to tdb_cons_merge() */
 int tdb_cons_append(tdb_cons *cons, const tdb *db);
+/* TODO remove flags */
 int tdb_cons_finalize(tdb_cons *cons, uint64_t flags);
 
 int tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16]);
@@ -45,6 +46,13 @@ int tdb_open(tdb *db, const char *root);
 void tdb_close(tdb *db);
 void tdb_dontneed(const tdb *db);
 void tdb_willneed(const tdb *db);
+
+#if 0
+/* TODO add these */
+/* one value should be null */
+int tdb_set_opt(tdb *db, enum option, const void *value);
+const void *tdb_get_opt(tdb *db, enum option);
+#endif
 
 uint64_t tdb_lexicon_size(const tdb *db, tdb_field field);
 
