@@ -1,6 +1,4 @@
-#ifndef _BSD_SOURCE
-# define _BSD_SOURCE
-#endif
+#define _DEFAULT_SOURCE
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
@@ -128,7 +126,7 @@ free_fieldids:
 	return err ? 1 : 0;
 }
 
-static void print_help()
+static void print_help(void)
 {
 	printf(
 "Usage: traildb_bench <decode-all|append-all> [<mode-specific options>*]\n"
