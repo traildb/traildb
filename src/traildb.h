@@ -77,9 +77,6 @@ const uint8_t *tdb_get_uuid(const tdb *db, uint64_t trail_id);
 
 int tdb_get_trail_id(const tdb *db, const uint8_t uuid[16], uint64_t *trail_id);
 
-/* TODO deprecate this after binary search */
-int tdb_has_uuid_index(const tdb *db);
-
 int tdb_set_filter(tdb *db, const tdb_item *filter, uint64_t filter_len);
 const tdb_item *tdb_get_filter(const tdb *db, uint64_t *filter_len);
 
@@ -92,17 +89,6 @@ uint64_t tdb_min_timestamp(const tdb *db);
 uint64_t tdb_max_timestamp(const tdb *db);
 
 uint64_t tdb_version(const tdb *db);
-
-/* part of public api, to find uuids in partitions */
-/* TODO deprecate this? */
-#if 0
-static inline unsigned int tdb_djb2(const uint8_t *str) {
-  unsigned int hash = 5381, c;
-  while ((c = *str++))
-    hash = ((hash << 5) + hash) + c;
-  return hash;
-}
-#endif
 
 /* TODO pointers to tdb_decode could benefit from 'restrict' */
 int tdb_decode_trail(const tdb *db,
