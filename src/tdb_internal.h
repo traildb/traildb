@@ -58,8 +58,12 @@ struct tdb_file {
 
 struct tdb_lexicon {
     uint64_t version;
-    uint32_t size;
-    const uint32_t *toc;
+    uint64_t size;
+    uint64_t width;
+    union {
+        const uint32_t *toc32;
+        const uint64_t *toc64;
+    } toc;
     const char *data;
 };
 

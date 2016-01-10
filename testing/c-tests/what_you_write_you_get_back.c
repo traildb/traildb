@@ -8,11 +8,13 @@
 
 static uint8_t uuid[16];
 
-static char buffer1[TDB_MAX_VALUE_SIZE];
-static char buffer2[TDB_MAX_VALUE_SIZE];
-static char buffer3[TDB_MAX_VALUE_SIZE];
+#define MAX_VALUE_SIZE  1000000
 
-const uint64_t LENGTHS[] = {0, 1, 2, 1000, TDB_MAX_VALUE_SIZE};
+static char buffer1[MAX_VALUE_SIZE];
+static char buffer2[MAX_VALUE_SIZE];
+static char buffer3[MAX_VALUE_SIZE];
+
+const uint64_t LENGTHS[] = {0, 1, 2, 1000, MAX_VALUE_SIZE};
 
 int main(int argc, char** argv)
 {

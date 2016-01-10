@@ -31,6 +31,7 @@ struct jm_fold_state{
     FILE *out;
     uint64_t offset;
     int ret;
+    uint64_t width;
 };
 
 static void *lexicon_store_fun(uint64_t id,
@@ -45,8 +46,8 @@ static void *lexicon_store_fun(uint64_t id,
         return state;
 
     /* NOTE: vals start at 1, otherwise we would need to +1 */
-    TDB_SEEK(s->out, id * 4);
-    TDB_WRITE(s->out, &s->offset, 4);
+    TDB_SEEK(s->out, id * s->width);
+    TDB_WRITE(s->out, &s->offset, s->width);
 
     TDB_SEEK(s->out, s->offset);
     TDB_WRITE(s->out, value, len);
@@ -61,35 +62,42 @@ static int lexicon_store(const struct judy_str_map *lexicon, const char *path)
 {
     /*
     Lexicon format:
-    [ number of values N ] 4 bytes
-    [ value offsets ...  ] N * 4 bytes
-    [ last value offset  ] 4 bytes
+    [ number of values N ] 4 or 8 bytes
+    [ value offsets ...  ] N * (4 or 8 bytes)
+    [ last value offset  ] 4 or 8 bytes
     [ values ...         ] X bytes
     */
 
     struct jm_fold_state state;
     uint64_t count = jsm_num_keys(lexicon);
-    uint64_t size = (count + 2) * 4;
+    uint64_t size = (count + 2) * 4 + jsm_values_size(lexicon);
     int ret = 0;
 
-    state.out = NULL;
-    state.ret = 0;
     state.offset = (count + 2) * 4;
+    state.width = 4;
 
-    /* TODO remove this limit - we could allow arbitrary-size lexicons */
+    if (size > UINT32_MAX){
+        size = (count + 2) * 8 + jsm_values_size(lexicon);
+        state.offset = (count + 2) * 8;
+        state.width = 8;
+    }
+
     if (size > TDB_MAX_LEXICON_SIZE)
         return TDB_ERR_LEXICON_TOO_LARGE;
 
+    state.out = NULL;
+    state.ret = 0;
+
     TDB_OPEN(state.out, path, "w");
     TDB_TRUNCATE(state.out, (off_t)size);
-    TDB_WRITE(state.out, &count, 4);
+    TDB_WRITE(state.out, &count, state.width);
 
     jsm_fold(lexicon, lexicon_store_fun, &state);
     if ((ret = state.ret))
         goto done;
 
-    TDB_SEEK(state.out, (count + 1) * 4);
-    TDB_WRITE(state.out, &state.offset, 4);
+    TDB_SEEK(state.out, (count + 1) * state.width);
+    TDB_WRITE(state.out, &state.offset, state.width);
 
 done:
     TDB_CLOSE_FINAL(state.out);

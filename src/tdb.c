@@ -53,8 +53,24 @@ void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex)
 {
     lex->version = db->version;
     lex->data = db->lexicons[field - 1].data;
-    memcpy(&lex->size, lex->data, 4);
-    lex->toc = (const uint32_t*)&lex->data[4];
+    lex->size = 0;
+    if (db->lexicons[field - 1].size > UINT32_MAX){
+        lex->width = 8;
+        lex->toc.toc64 = (const uint64_t*)&lex->data[lex->width];
+        memcpy(&lex->size, lex->data, 8);
+    }else{
+        lex->width = 4;
+        lex->toc.toc32 = (const uint32_t*)&lex->data[lex->width];
+        memcpy(&lex->size, lex->data, 4);
+    }
+}
+
+static inline uint64_t tdb_lex_offset(const struct tdb_lexicon *lex, tdb_val i)
+{
+    if (lex->width == 4)
+        return lex->toc.toc32[i];
+    else
+        return lex->toc.toc64[i];
 }
 
 const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
@@ -63,10 +79,10 @@ const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
 {
     if (lex->version == TDB_VERSION_V0){
         /* backwards compatibility with 0-terminated strings in v0 */
-        *length = (uint64_t)strlen(&lex->data[lex->toc[i]]);
+        *length = (uint64_t)strlen(&lex->data[tdb_lex_offset(lex, i)]);
     }else
-        *length = lex->toc[i + 1] - lex->toc[i];
-    return &lex->data[lex->toc[i]];
+        *length = tdb_lex_offset(lex, i + 1) - tdb_lex_offset(lex, i);
+    return &lex->data[tdb_lex_offset(lex, i)];
 }
 
 static int tdb_fields_open(tdb *db, const char *root, char *path)
