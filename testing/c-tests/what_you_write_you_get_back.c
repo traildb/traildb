@@ -46,12 +46,10 @@ int main(int argc, char** argv)
     assert(tdb_open(t, argv[1]) == 0);
 
     for (i = 0; i < sizeof(LENGTHS) / sizeof(LENGTHS[0]); i++){
+        uint64_t trail_id;
         memset(uuid, i, sizeof(uuid));
-        uint64_t trail_id = tdb_get_trail_id(t, uuid);
-        int r;
-        assert(trail_id != -1);
-        r = tdb_get_trail(t, trail_id, &items, &items_len, &n, 0);
-        assert(r == 0 && "Expected tdb_get_trail() to succeed.");
+        assert(tdb_get_trail_id(t, uuid, &trail_id) == 0);
+        assert(tdb_get_trail(t, trail_id, &items, &items_len, &n, 0) == 0);
         assert(n / 5 == NUM_EVENTS && "Invalid number of events returned.");
 
         if (LENGTHS[i] > 0)

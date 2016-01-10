@@ -54,8 +54,7 @@ int main(int argc, char** argv)
         const char *val;
 
         memcpy(uuid, &i, 4);
-        trail_id = tdb_get_trail_id(t, uuid);
-
+        assert(tdb_get_trail_id(t, uuid, &trail_id) == 0);
         assert(tdb_get_trail(t, trail_id, &items, &items_len, &n, 0) == 0);
         assert(n == 4);
 

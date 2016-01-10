@@ -9,12 +9,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#if 0
-#ifdef ENABLE_UUID_INDEX
-#include <cmph.h>
-#endif
-#endif
-
 #include "tdb_internal.h"
 #include "tdb_error.h"
 #include "tdb_io.h"
@@ -461,41 +455,41 @@ const uint8_t *tdb_get_uuid(const tdb *db, uint64_t trail_id)
     return NULL;
 }
 
-int64_t tdb_get_trail_id(const tdb *db, const uint8_t *uuid)
+int tdb_get_trail_id(const tdb *db, const uint8_t *uuid, uint64_t *trail_id)
 {
-    /* TODO implement binary search */
-    /* TODO remove UUID index */
-    uint64_t i;
-#ifdef ENABLE_UUID_INDEX
-    /* (void*) cast is horrible below. I don't know why cmph_search_packed
-       can't have a const modifier. This will segfault loudly if cmph tries to
-       modify the read-only mmap'ed uuid_index. */
-    if (db->uuid_index.data){
-        i = cmph_search_packed((void*)db->uuid_index.data,
-                               (const char*)uuid,
-                               16);
+    __uint128_t cmp, key;
+    memcpy(&key, uuid, 16);
 
-        if (i < db->num_trails){
-            if (!memcmp(tdb_get_uuid(db, i), uuid, 16))
-                return (int64_t)i;
+    if (db->version == TDB_VERSION_V0){
+        /* V0 doesn't guarantee that UUIDs would be ordered */
+        uint64_t idx;
+        for (idx = 0; idx < db->num_trails; idx++){
+            memcpy(&cmp, &db->uuids.data[idx * 16], 16);
+            if (key == cmp){
+                *trail_id = idx;
+                return 0;
+            }
         }
-        return -1;
-    }
-#endif
-    for (i = 0; i < db->num_trails; i++)
-        if (!memcmp(tdb_get_uuid(db, i), uuid, 16))
-            return (int64_t)i;
-    return TDB_ERR_UNKNOWN_UUID;
-}
+    }else{
+        /* note: TDB_MAX_NUM_TRAILS < 2^63, so we can safely use int64_t */
+        int64_t idx;
+        int64_t left = 0;
+        int64_t right = ((int64_t)db->num_trails) - 1LL;
 
-/* TODO obsolete with binary search */
-int tdb_has_uuid_index(const tdb *db __attribute__((unused)))
-{
-#ifdef ENABLE_UUID_INDEX
-    return db->uuid_index.data ? 1 : 0;
-#else
-    return 0;
-#endif
+        while (left <= right){
+            /* compute midpoint in an overflow-safe manner (see Wikipedia) */
+            idx = left + ((right - left) / 2);
+            memcpy(&cmp, &db->uuids.data[idx * 16], 16);
+            if (cmp == key){
+                *trail_id = (uint64_t)idx;
+                return 0;
+            }else if (cmp > key)
+                right = idx - 1;
+            else
+                left = idx + 1;
+        }
+    }
+    return TDB_ERR_UNKNOWN_UUID;
 }
 
 const char *tdb_error(int errcode)

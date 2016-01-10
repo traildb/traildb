@@ -75,7 +75,7 @@ const char *tdb_get_item_value(const tdb *db,
 
 const uint8_t *tdb_get_uuid(const tdb *db, uint64_t trail_id);
 
-int64_t tdb_get_trail_id(const tdb *db, const uint8_t uuid[16]);
+int tdb_get_trail_id(const tdb *db, const uint8_t uuid[16], uint64_t *trail_id);
 
 /* TODO deprecate this after binary search */
 int tdb_has_uuid_index(const tdb *db);
