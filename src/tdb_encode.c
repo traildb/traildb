@@ -38,7 +38,7 @@ struct jm_fold_state{
     uint64_t max_timestamp;
     uint64_t max_timedelta;
 
-    int ret;
+    tdb_error ret;
 };
 
 static int compare(const void *p1, const void *p2)
@@ -129,12 +129,12 @@ done:
     return s;
 }
 
-static int groupby_uuid(FILE *grouped_w,
-                        const tdb_cons_event *events,
-                        tdb_cons *cons,
-                        uint64_t *num_trails,
-                        uint64_t *max_timestamp,
-                        uint64_t *max_timedelta)
+static tdb_error groupby_uuid(FILE *grouped_w,
+                              const tdb_cons_event *events,
+                              tdb_cons *cons,
+                              uint64_t *num_trails,
+                              uint64_t *max_timestamp,
+                              uint64_t *max_timedelta)
 {
     struct jm_fold_state state = {
         .grouped_w = grouped_w,
@@ -156,12 +156,12 @@ static int groupby_uuid(FILE *grouped_w,
     return state.ret;
 }
 
-int edge_encode_items(const tdb_item *items,
-                      tdb_item **encoded,
-                      uint64_t *num_encoded,
-                      uint64_t *encoded_size,
-                      tdb_item *prev_items,
-                      const tdb_event *ev)
+tdb_error edge_encode_items(const tdb_item *items,
+                            tdb_item **encoded,
+                            uint64_t *num_encoded,
+                            uint64_t *encoded_size,
+                            tdb_item *prev_items,
+                            const tdb_event *ev)
 {
     uint64_t n = 0;
     uint64_t j = ev->item_zero;
@@ -183,12 +183,12 @@ int edge_encode_items(const tdb_item *items,
     return 0;
 }
 
-static int store_info(const char *path,
-                      uint64_t num_trails,
-                      uint64_t num_events,
-                      uint64_t min_timestamp,
-                      uint64_t max_timestamp,
-                      uint64_t max_timedelta)
+static tdb_error store_info(const char *path,
+                            uint64_t num_trails,
+                            uint64_t num_events,
+                            uint64_t min_timestamp,
+                            uint64_t max_timestamp,
+                            uint64_t max_timedelta)
 {
     FILE *out = NULL;
     int ret = 0;
@@ -206,16 +206,16 @@ done:
     return ret;
 }
 
-static int encode_trails(const tdb_item *items,
-                         FILE *grouped,
-                         uint64_t num_events,
-                         uint64_t num_trails,
-                         uint64_t num_fields,
-                         const struct judy_128_map *codemap,
-                         const struct judy_128_map *gram_freqs,
-                         const struct field_stats *fstats,
-                         const char *path,
-                         const char *toc_path)
+static tdb_error encode_trails(const tdb_item *items,
+                               FILE *grouped,
+                               uint64_t num_events,
+                               uint64_t num_trails,
+                               uint64_t num_fields,
+                               const struct judy_128_map *codemap,
+                               const struct judy_128_map *gram_freqs,
+                               const struct field_stats *fstats,
+                               const char *path,
+                               const char *toc_path)
 {
     __uint128_t *grams = NULL;
     tdb_item *prev_items = NULL;
@@ -362,7 +362,8 @@ done:
     return ret;
 }
 
-static int store_codebook(const struct judy_128_map *codemap, const char *path)
+static tdb_error store_codebook(const struct judy_128_map *codemap,
+                                const char *path)
 {
     FILE *out = NULL;
     uint32_t size;
@@ -378,7 +379,7 @@ done:
     return ret;
 }
 
-int tdb_encode(tdb_cons *cons, tdb_item *items)
+tdb_error tdb_encode(tdb_cons *cons, tdb_item *items)
 {
     char path[TDB_MAX_PATH_SIZE];
     char grouped_path[TDB_MAX_PATH_SIZE];

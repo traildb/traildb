@@ -101,14 +101,14 @@ const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
                             tdb_val i,
                             uint64_t *length);
 
-int tdb_encode(tdb_cons *cons, tdb_item *items);
+tdb_error tdb_encode(tdb_cons *cons, tdb_item *items);
 
-int edge_encode_items(const tdb_item *items,
-                      tdb_item **encoded,
-                      uint64_t *num_encoded,
-                      uint64_t *encoded_size,
-                      tdb_item *prev_items,
-                      const tdb_event *ev);
+tdb_error edge_encode_items(const tdb_item *items,
+                            tdb_item **encoded,
+                            uint64_t *num_encoded,
+                            uint64_t *encoded_size,
+                            tdb_item *prev_items,
+                            const tdb_event *ev);
 
 int tdb_mmap(const char *path, struct tdb_file *dst);
 

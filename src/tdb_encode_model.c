@@ -59,12 +59,12 @@ static double get_sample_size(void)
     return d;
 }
 
-static int event_fold(event_op op,
-                      FILE *grouped,
-                      uint64_t num_events,
-                      const tdb_item *items,
-                      uint64_t num_fields,
-                      void *state)
+static tdb_error event_fold(event_op op,
+                            FILE *grouped,
+                            uint64_t num_events,
+                            const tdb_item *items,
+                            uint64_t num_fields,
+                            void *state)
 {
     dsfmt_t rand_state;
     tdb_item *prev_items = NULL;
@@ -142,7 +142,7 @@ done:
     return ret;
 }
 
-static int alloc_gram_bufs(struct gram_bufs *b)
+static tdb_error alloc_gram_bufs(struct gram_bufs *b)
 {
     if (!(b->chosen = malloc(b->buf_len * 16)))
         return TDB_ERR_NOMEM;
@@ -153,7 +153,7 @@ static int alloc_gram_bufs(struct gram_bufs *b)
     return 0;
 }
 
-int init_gram_bufs(struct gram_bufs *b, uint64_t num_fields)
+tdb_error init_gram_bufs(struct gram_bufs *b, uint64_t num_fields)
 {
     memset(b, 0, sizeof(struct gram_bufs));
 
@@ -177,13 +177,13 @@ void free_gram_bufs(struct gram_bufs *b)
 /* given a set of edge-encoded values (encoded), choose a set of unigrams
    and bigrams that cover the original set. In essence, this tries to
    solve Weigted Exact Cover Problem for the universe of 'encoded'. */
-int choose_grams_one_event(const tdb_item *encoded,
-                           uint64_t num_encoded,
-                           const struct judy_128_map *gram_freqs,
-                           struct gram_bufs *g,
-                           __uint128_t *grams,
-                           uint64_t *num_grams,
-                           const tdb_event *ev)
+tdb_error choose_grams_one_event(const tdb_item *encoded,
+                                 uint64_t num_encoded,
+                                 const struct judy_128_map *gram_freqs,
+                                 struct gram_bufs *g,
+                                 __uint128_t *grams,
+                                 uint64_t *num_grams,
+                                 const tdb_event *ev)
 {
     uint64_t i, j, k, n = 0;
     Word_t *ptr;
@@ -273,10 +273,10 @@ int choose_grams_one_event(const tdb_item *encoded,
     return ret;
 }
 
-static int choose_grams(const tdb_item *encoded,
-                        uint64_t num_encoded,
-                        const tdb_event *ev,
-                        void *state){
+static tdb_error choose_grams(const tdb_item *encoded,
+                              uint64_t num_encoded,
+                              const tdb_event *ev,
+                              void *state){
 
     struct ngram_state *g = (struct ngram_state*)state;
     uint64_t n;
@@ -304,7 +304,8 @@ static int choose_grams(const tdb_item *encoded,
 }
 
 
-static int find_candidates(const Pvoid_t unigram_freqs, Pvoid_t *candidates0)
+static tdb_error find_candidates(const Pvoid_t unigram_freqs,
+                                 Pvoid_t *candidates0)
 {
     Pvoid_t candidates = NULL;
     Word_t idx = 0;
@@ -339,10 +340,10 @@ out_of_memory:
     return TDB_ERR_NOMEM;
 }
 
-static int all_bigrams(const tdb_item *encoded,
-                       uint64_t n,
-                       const tdb_event *ev,
-                       void *state){
+static tdb_error all_bigrams(const tdb_item *encoded,
+                             uint64_t n,
+                             const tdb_event *ev,
+                             void *state){
 
     struct ngram_state *g = (struct ngram_state *)state;
     Word_t *ptr;
@@ -378,12 +379,12 @@ static int all_bigrams(const tdb_item *encoded,
     return 0;
 }
 
-int make_grams(FILE *grouped,
-               uint64_t num_events,
-               const tdb_item *items,
-               uint64_t num_fields,
-               const Pvoid_t unigram_freqs,
-               struct judy_128_map *final_freqs)
+tdb_error make_grams(FILE *grouped,
+                     uint64_t num_events,
+                     const tdb_item *items,
+                     uint64_t num_fields,
+                     const Pvoid_t unigram_freqs,
+                     struct judy_128_map *final_freqs)
 {
     struct ngram_state g = {.final_freqs = final_freqs};
     Word_t tmp;
@@ -432,10 +433,10 @@ struct unigram_state{
     Pvoid_t freqs;
 };
 
-static int all_freqs(const tdb_item *encoded,
-                     uint64_t n,
-                     const tdb_event *ev,
-                     void *state){
+static tdb_error all_freqs(const tdb_item *encoded,
+                           uint64_t n,
+                           const tdb_event *ev,
+                           void *state){
 
     struct unigram_state *s = (struct unigram_state*)state;
     Word_t *ptr;

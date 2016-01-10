@@ -79,7 +79,7 @@ const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
     return &lex->data[tdb_lex_offset(lex, i)];
 }
 
-static int tdb_fields_open(tdb *db, const char *root, char *path)
+static tdb_error tdb_fields_open(tdb *db, const char *root, char *path)
 {
     FILE *f = NULL;
     char *line = NULL;
@@ -157,7 +157,7 @@ done:
     return ret;
 }
 
-static int init_field_stats(tdb *db)
+static tdb_error init_field_stats(tdb *db)
 {
     uint64_t *field_cardinalities = NULL;
     tdb_field i;
@@ -183,7 +183,7 @@ static int init_field_stats(tdb *db)
     return ret;
 }
 
-static int read_version(tdb *db, const char *path)
+static tdb_error read_version(tdb *db, const char *path)
 {
     FILE *f;
     int ret = 0;
@@ -200,7 +200,7 @@ static int read_version(tdb *db, const char *path)
     return ret;
 }
 
-static int read_info(tdb *db, const char *path)
+static tdb_error read_info(tdb *db, const char *path)
 {
     FILE *f;
     int ret = 0;
@@ -225,10 +225,10 @@ tdb *tdb_init(void)
     return calloc(1, sizeof(tdb));
 }
 
-int tdb_open(tdb *db, const char *root)
+tdb_error tdb_open(tdb *db, const char *root)
 {
     char path[TDB_MAX_PATH_SIZE];
-    int ret = 0;
+    tdb_error ret = 0;
 
     /*
     by handling the "db == NULL" case here gracefully, we allow the return
@@ -365,7 +365,9 @@ uint64_t tdb_lexicon_size(const tdb *db, tdb_field field)
     }
 }
 
-int tdb_get_field(const tdb *db, const char *field_name, tdb_field *field)
+tdb_error tdb_get_field(const tdb *db,
+                        const char *field_name,
+                        tdb_field *field)
 {
     tdb_field i;
     for (i = 0; i < db->num_fields; i++)
@@ -446,7 +448,9 @@ const uint8_t *tdb_get_uuid(const tdb *db, uint64_t trail_id)
     return NULL;
 }
 
-int tdb_get_trail_id(const tdb *db, const uint8_t *uuid, uint64_t *trail_id)
+tdb_error tdb_get_trail_id(const tdb *db,
+                           const uint8_t *uuid,
+                           uint64_t *trail_id)
 {
     __uint128_t cmp, key;
     memcpy(&key, uuid, 16);
@@ -483,7 +487,7 @@ int tdb_get_trail_id(const tdb *db, const uint8_t *uuid, uint64_t *trail_id)
     return TDB_ERR_UNKNOWN_UUID;
 }
 
-const char *tdb_error(int errcode)
+const char *tdb_error_str(tdb_error errcode)
 {
     /* TODO implement this */
     switch (errcode){
@@ -522,7 +526,7 @@ uint64_t tdb_version(const tdb *db)
     return db->version;
 }
 
-int tdb_set_filter(tdb *db, const tdb_item *filter, uint64_t filter_len)
+tdb_error tdb_set_filter(tdb *db, const tdb_item *filter, uint64_t filter_len)
 {
     /* TODO check that filter is valid: sum(clauses) < filter_len */
     free(db->filter);

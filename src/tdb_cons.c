@@ -30,7 +30,7 @@
 struct jm_fold_state{
     FILE *out;
     uint64_t offset;
-    int ret;
+    tdb_error ret;
     uint64_t width;
 };
 
@@ -58,7 +58,8 @@ done:
     return state;
 }
 
-static int lexicon_store(const struct judy_str_map *lexicon, const char *path)
+static tdb_error lexicon_store(const struct judy_str_map *lexicon,
+                               const char *path)
 {
     /*
     Lexicon format:
@@ -104,7 +105,7 @@ done:
     return ret;
 }
 
-static int store_lexicons(tdb_cons *cons)
+static tdb_error store_lexicons(tdb_cons *cons)
 {
     tdb_field i;
     FILE *out = NULL;
@@ -125,7 +126,7 @@ done:
     return ret;
 }
 
-static int store_version(tdb_cons *cons)
+static tdb_error store_version(tdb_cons *cons)
 {
     FILE *out = NULL;
     char path[TDB_MAX_PATH_SIZE];
@@ -151,7 +152,7 @@ done:
     return s;
 }
 
-static int store_uuids(tdb_cons *cons)
+static tdb_error store_uuids(tdb_cons *cons)
 {
     char path[TDB_MAX_PATH_SIZE];
     struct jm_fold_state state = {.ret = 0};
@@ -192,8 +193,8 @@ int is_fieldname_invalid(const char* field)
     return 0;
 }
 
-static int find_duplicate_fieldnames(const char **ofield_names,
-                                     uint64_t num_ofields)
+static tdb_error find_duplicate_fieldnames(const char **ofield_names,
+                                           uint64_t num_ofields)
 {
     Pvoid_t check = NULL;
     tdb_field i;
@@ -221,10 +222,10 @@ tdb_cons *tdb_cons_init(void)
     return calloc(1, sizeof(tdb_cons));
 }
 
-int tdb_cons_open(tdb_cons *cons,
-                  const char *root,
-                  const char **ofield_names,
-                  uint64_t num_ofields)
+tdb_error tdb_cons_open(tdb_cons *cons,
+                        const char *root,
+                        const char **ofield_names,
+                        uint64_t num_ofields)
 {
     tdb_field i;
     int fd;
@@ -337,11 +338,11 @@ void tdb_cons_close(tdb_cons *cons)
 /*
 Append an event in this cons.
 */
-int tdb_cons_add(tdb_cons *cons,
-                 const uint8_t uuid[16],
-                 const uint64_t timestamp,
-                 const char **values,
-                 const uint64_t *value_lengths)
+tdb_error tdb_cons_add(tdb_cons *cons,
+                       const uint8_t uuid[16],
+                       const uint64_t timestamp,
+                       const char **values,
+                       const uint64_t *value_lengths)
 {
     tdb_field i;
     tdb_cons_event *event;
@@ -464,7 +465,7 @@ This is a variation of tdb_cons_add(): Instead of accepting fields as
 strings, it reads them as integer items from an existing TrailDB and
 remaps them to match with this cons.
 */
-int tdb_cons_append(tdb_cons *cons, const tdb *db)
+tdb_error tdb_cons_append(tdb_cons *cons, const tdb *db)
 {
     tdb_val **lexicon_maps = NULL;
     uint64_t trail_id;
@@ -528,7 +529,7 @@ done:
     return ret;
 }
 
-int tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
+tdb_error tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
 {
     struct tdb_file items_mmapped;
     uint64_t num_events = cons->events.next;
