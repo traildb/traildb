@@ -147,45 +147,17 @@ err:
 	return -1;
 }
 
-/**
- * copies a subset of data from one DB into another one. The subset is
- * given by field names
- */
-static int cmd_recode(const char* output_path, const char* input,
-		      const char** field_names, int names_length)
+static int do_recode(tdb_cons* const cons, tdb* const db,
+		     tdb_field* const field_ids, const int num_fieldids)
 {
-	tdb* db = tdb_init(); assert(db);
-	int err = tdb_open(db, input);
-	if(err) {
-		REPORT_ERROR("Failed to open TDB. error=%i\n", err);
-		return 1;
-	}
-
-	tdb_cons* cons = tdb_cons_init();
-	assert(cons);
-
-	err = tdb_cons_open(cons, output_path, field_names, (unsigned)names_length);
-	if(err) {
-		REPORT_ERROR("Failed to create TDB cons. error=%i\n", err);
-		goto free_tdb;
-	}
-
+	int err;
 	const uint64_t num_fields = tdb_num_fields(db);
-	uint64_t       records_decoded = 0;
-	tdb_item*      items = NULL;
-	uint64_t       items_len = 0;
-	tdb_field*     field_ids;
-	const char**   values;
-	uint64_t*      value_lengths;
+	tdb_item*      items      = NULL;
+	uint64_t       items_len  = 0;
+	const uint64_t num_trails = tdb_num_trails(db);
 
-	err = resolve_fieldids(&field_ids, db, field_names, names_length);
-	if(err < 0)
-		return 1;
-
-	names_length = err;
-
-	values        = calloc(num_fields, sizeof(char*));
-	value_lengths = calloc(num_fields, sizeof(uint64_t));
+	const char** const  values =  calloc(num_fields, sizeof(char*));
+	uint64_t*    const  value_lengths =  calloc(num_fields, sizeof(uint64_t));	
 	assert(values); assert(value_lengths);
 
 	/*
@@ -194,7 +166,6 @@ static int cmd_recode(const char* output_path, const char* input,
 	 *     extract/decode the relevant fields that are in field_ids
 	 *     insert the record
 	 */
-	const uint64_t num_trails = tdb_num_trails(db);
 	for(uint64_t trail_id = 0; trail_id < num_trails && trail_id < 1000; ++trail_id) {
 		uint64_t num_items;
 
@@ -202,22 +173,9 @@ static int cmd_recode(const char* output_path, const char* input,
 		if(err) {
 			REPORT_ERROR("Failed to get trail (trail_id=%llu). error=%i\n",
 				     LLU(trail_id), err);
-			goto out;
+			goto free_mem;
 		}
 		assert((num_items % (num_fields + 1)) == 0);
-
-#ifdef DEBUG
-		{
-#define HEX4 "%02x%02x%02x%02x"
-			const uint8_t* uuid = tdb_get_uuid(db, trail_id);
-			printf("cookie " HEX4 HEX4 HEX4 HEX4 "\n",
-			       uuid[0],  uuid[1],  uuid[2],  uuid[3],
-			       uuid[4],  uuid[5],  uuid[6],  uuid[7],
-			       uuid[8],  uuid[9],  uuid[10], uuid[11],
-			       uuid[12], uuid[13], uuid[14], uuid[15]);
-#undef HEX4
-		}
-#endif		
 
 		for(uint64_t record_id = 0; record_id < num_items; record_id += num_fields + 1) {
 			const tdb_item* const record = items + record_id;
@@ -227,17 +185,11 @@ static int cmd_recode(const char* output_path, const char* input,
 			assert(record[num_fields] == 0);
 
 			/* extract step */
-			for(int field = 0; field < names_length; ++field) {
+			for(int field = 0; field < num_fieldids; ++field) {
 				assert(record_id + field_ids[field] < num_items);
 				values[field] = tdb_get_item_value(
 					db, record[field_ids[field]],
 					&value_lengths[field]);
-				if(values[field]) {
-#ifdef DEBUG
-					printf("values[%llu][%i] = (%u)%s\n",
-					       LLU(record_id), field, (unsigned)value_lengths[field], values[field]);
-#endif
-				}
 			}
 
 			err = tdb_cons_add(cons, tdb_get_uuid(db, trail_id),
@@ -245,34 +197,61 @@ static int cmd_recode(const char* output_path, const char* input,
 			if(err) {
 				REPORT_ERROR("Failed to append record (trail_id=%llu, record_id=%llu). error=%i\n",
 					     LLU(trail_id), LLU(record_id), err);
-				goto out;
+				goto free_mem;
 			}
-//			goto breaker;
 		}
-		records_decoded += num_items / (num_fields + 1);
 	}
-//breaker:
+
+free_mem:
+	free(value_lengths);
+	free(values);
+	return err;
+}
+
+/**
+ * copies a subset of data from one DB into another one. The subset is
+ * given by field names
+ */
+static int cmd_recode(const char* output_path, const char* input,
+		      const char** field_names, int names_length)
+{
+	tdb* const db = tdb_init(); assert(db);
+	int err = tdb_open(db, input);
+	if(err) {
+		REPORT_ERROR("Failed to open TDB. error=%i\n", err);
+		return 1;
+	}
+
+	tdb_field* field_ids;
+	err = resolve_fieldids(&field_ids, db, field_names, names_length);
+	if(err < 0) {
+		goto free_tdb;
+	}
+
+	tdb_cons* const cons = tdb_cons_init();
+	assert(cons);
+
+	err = tdb_cons_open(cons, output_path, field_names, (unsigned)names_length);
+	if(err) {
+		REPORT_ERROR("Failed to create TDB cons. error=%i\n", err);
+		goto free_ids;
+	}
+
+	err = do_recode(cons, db, field_ids, err);
+	if(err)
+		goto close_cons;
+
 	err = tdb_cons_finalize(cons, 0);
 	if(err) {
 		REPORT_ERROR("Failed to finalize output DB. error=%i\n", err);
-		goto out;
 	}
 
-	printf("Successfully recoded DB. (#records written: %llu)\n",
-	       LLU(records_decoded));
-
-
-out:
-	if(items != NULL)
-		free(items);
-	free(value_lengths);
-	free(values);
-	free(field_ids);
+close_cons:
 	tdb_cons_close(cons);
-
+free_ids:
+	free(field_ids);
 free_tdb:
 	tdb_close(db);
-
 	return err;
 }
 
