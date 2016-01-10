@@ -271,15 +271,6 @@ int tdb_open(tdb *db, const char *root)
             goto done;
         }
 
-        #if 0
-        /* TODO deprecate .index */
-        tdb_path(path, "%s/cookies.index", root);
-        if (access(path, F_OK))
-            tdb_path(path, "%s/uuids.index", root);
-        if (tdb_mmap(path, &db->uuid_index, db))
-            db->uuid_index.data = NULL;
-        #endif
-
         TDB_PATH(path, "%s/trails.codebook", root);
         if (tdb_mmap(path, &db->codebook)){
             ret = TDB_ERR_INVALID_CODEBOOK_FILE;
