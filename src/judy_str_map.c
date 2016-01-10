@@ -150,7 +150,10 @@ void jsm_free(struct judy_str_map *jsm)
 {
     Word_t tmp;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
     JLFA(tmp, jsm->large_map);
+#pragma GCC diagnostic pop
     free(jsm->buffer);
 
 out_of_memory:

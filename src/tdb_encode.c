@@ -530,7 +530,10 @@ done:
     TDB_CLOSE_FINAL(grouped_r);
     j128m_free(&gram_freqs);
     j128m_free(&codemap);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
     JLFA(tmp, unigram_freqs);
+#pragma GCC diagnostic pop
 
     unlink(grouped_path);
 

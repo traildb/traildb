@@ -200,6 +200,8 @@ static tdb_error find_duplicate_fieldnames(const char **ofield_names,
     tdb_field i;
     Word_t tmp;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
     for (i = 0; i < num_ofields; i++){
         Word_t *ptr;
         JSLI(ptr, check, (const uint8_t*)ofield_names[i]);
@@ -211,6 +213,7 @@ static tdb_error find_duplicate_fieldnames(const char **ofield_names,
         *ptr = 1;
     }
     JSLFA(tmp, check);
+#pragma GCC diagnostic pop
     return 0;
 
 out_of_memory:

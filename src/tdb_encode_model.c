@@ -418,7 +418,10 @@ tdb_error make_grams(FILE *grouped,
         goto done;
 
 done:
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
     J1FA(tmp, g.candidates);
+#pragma GCC diagnostic pop
     j128m_free(&g.ngram_freqs);
     free_gram_bufs(&g.gbufs);
     free(g.grams);

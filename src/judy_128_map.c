@@ -114,6 +114,8 @@ void j128m_free(struct judy_128_map *j128m)
     Word_t *hi_ptr;
     Word_t tmp;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
     JLF(hi_ptr, j128m->hi_map, hi_key);
     while (hi_ptr){
         Pvoid_t lo_map = (Pvoid_t)*hi_ptr;
@@ -121,6 +123,7 @@ void j128m_free(struct judy_128_map *j128m)
         JLN(hi_ptr, j128m->hi_map, hi_key);
     }
     JLFA(tmp, j128m->hi_map);
+#pragma GCC diagnostic pop
     j128m->hi_map = NULL;
 
 out_of_memory:
