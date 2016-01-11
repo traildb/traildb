@@ -53,7 +53,7 @@ typedef struct __attribute__((packed)){
 
 typedef struct{
     struct tdb_decode_state *state;
-    char *next_event;
+    const char *next_event;
     uint64_t num_events_left;
 } tdb_cursor;
 

@@ -105,7 +105,8 @@ static inline const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
 {
     if (cursor->num_events_left > 0 || _tdb_cursor_next_batch(cursor)){
         const tdb_event *e = (const tdb_event*)cursor->next_event;
-        cursor->next_event += (e->num_items + 2) * sizeof(tdb_item);
+        cursor->next_event += sizeof(tdb_event) +
+                              e->num_items * sizeof(tdb_item);
         --cursor->num_events_left;
         return e;
     }else
