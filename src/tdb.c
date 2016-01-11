@@ -114,11 +114,6 @@ static tdb_error tdb_fields_open(tdb *db, const char *root, char *path)
     }else
         db->lexicons = NULL;
 
-    if (!(db->previous_items = calloc(db->num_fields, sizeof(tdb_item)))){
-        ret = TDB_ERR_NOMEM;
-        goto done;
-    }
-
     rewind(f);
 
     db->field_names[0] = "time";
@@ -345,7 +340,6 @@ void tdb_close(tdb *db)
         munmap(db->toc.data, db->toc.size);
 
         free(db->lexicons);
-        free(db->previous_items);
         free(db->field_names);
         free(db->field_stats);
         free(db->filter);
@@ -547,4 +541,3 @@ const tdb_item *tdb_get_filter(const tdb *db, uint64_t *filter_len)
     *filter_len = db->filter_len;
     return db->filter;
 }
-

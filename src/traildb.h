@@ -2,6 +2,7 @@
 #ifndef __TRAILDB_H__
 #define __TRAILDB_H__
 
+#include <stdlib.h>
 #include <stdint.h>
 
 #include "tdb_limits.h"
@@ -13,9 +14,6 @@
 #define TDB_VERSION_V0 0LLU
 #define TDB_VERSION_V0_1 1LLU
 #define TDB_VERSION_LATEST TDB_VERSION_V0_1
-
-typedef struct _tdb_cons tdb_cons;
-typedef struct _tdb tdb;
 
 tdb_cons *tdb_cons_init(void);
 tdb_error tdb_cons_open(tdb_cons *cons,
@@ -96,7 +94,25 @@ uint64_t tdb_max_timestamp(const tdb *db);
 
 uint64_t tdb_version(const tdb *db);
 
-/* TODO pointers to tdb_decode could benefit from 'restrict' */
+tdb_cursor *tdb_cursor_new(const tdb *db);
+void tdb_cursor_free(tdb_cursor *cursor);
+
+tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id);
+
+int _tdb_cursor_next_batch(tdb_cursor *cursor);
+
+static inline const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
+{
+    if (cursor->num_events_left > 0 || _tdb_cursor_next_batch(cursor)){
+        const tdb_event *e = (const tdb_event*)cursor->next_event;
+        cursor->next_event += (e->num_items + 2) * sizeof(tdb_item);
+        --cursor->num_events_left;
+        return e;
+    }else
+        return NULL;
+}
+
+#if 0
 tdb_error tdb_decode_trail(const tdb *db,
                            uint64_t trail_id,
                            tdb_item *dst,
@@ -133,5 +149,6 @@ tdb_error tdb_get_trail_filtered(const tdb *db,
                                  int edge_encoded,
                                  const tdb_item *filter,
                                  uint64_t filter_len);
+#endif
 
 #endif /* __TRAILDB_H__ */

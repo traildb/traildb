@@ -28,6 +28,28 @@ struct tdb_cons_event{
     uint64_t prev_event_idx;
 };
 
+struct tdb_decode_state{
+    const tdb *db;
+
+    /* internal buffer */
+    void *events_buffer;
+    uint64_t events_buffer_len;
+
+    /* trail state */
+    uint64_t trail_id;
+    const char *data;
+    uint64_t size;
+    uint64_t offset;
+    uint64_t tstamp;
+    int first_satisfying;
+    tdb_item previous_items[0];
+
+    /* options */
+    const tdb_item *filter;
+    uint64_t filter_len;
+    int edge_encoded;
+};
+
 struct tdb_grouped_event{
     uint64_t item_zero;
     uint64_t num_items;
@@ -89,9 +111,6 @@ struct _tdb {
     tdb_item *filter;
     /* TODO add and check MAX_FILTER_LEN */
     uint64_t filter_len;
-
-    tdb_item *previous_items;
-
     uint64_t version;
 };
 

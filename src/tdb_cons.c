@@ -395,34 +395,6 @@ tdb_error tdb_cons_add(tdb_cons *cons,
 }
 
 /*
-Append a single event to this cons. The event is a usual srequence
-of (remapped) items. Used by tdb_cons_append().
-*/
-static void append_event(tdb_cons *cons,
-                         const tdb_item *items,
-                         Word_t *uuid_ptr)
-{
-    struct tdb_cons_event *event =
-        (struct tdb_cons_event*)arena_add_item(&cons->events);
-
-    event->item_zero = cons->items.next;
-    event->num_items = 0;
-    event->timestamp = items[0];
-    event->prev_event_idx = *uuid_ptr;
-    *uuid_ptr = cons->events.next;
-
-    tdb_field field;
-    for (field = 1; field < cons->num_ofields + 1; field++){
-        if (items[field]){
-            memcpy(arena_add_item(&cons->items),
-                   &items[field],
-                   sizeof(tdb_item));
-            ++event->num_items;
-        }
-    }
-}
-
-/*
 Append the lexicons of an existing TrailDB, db, to this cons. Used by
 tdb_cons_append().
 */
@@ -465,6 +437,37 @@ error:
 }
 
 /*
+Take an event from the old db, translate its items to new vals
+and append to the new cons
+*/
+static void append_event(tdb_cons *cons,
+                         const tdb_event *event,
+                         Word_t *uuid_ptr,
+                         tdb_val **lexicon_maps)
+{
+    uint64_t i;
+    struct tdb_cons_event *new_event =
+        (struct tdb_cons_event*)arena_add_item(&cons->events);
+
+    new_event->item_zero = cons->items.next;
+    new_event->num_items = 0;
+    new_event->timestamp = event->timestamp;
+    new_event->prev_event_idx = *uuid_ptr;
+    *uuid_ptr = cons->events.next;
+
+    for (i = 0; i < event->num_items; i++){
+        tdb_val val = tdb_item_val(event->items[i]);
+        tdb_field field = tdb_item_field(event->items[i]);
+        /* translate val */
+        tdb_val new_val = lexicon_maps[field - 1][val - 1];
+        tdb_item item = tdb_make_item(field, new_val);
+        memcpy(arena_add_item(&cons->items), &item, sizeof(tdb_item));
+        ++new_event->num_items;
+    }
+}
+
+
+/*
 This is a variation of tdb_cons_add(): Instead of accepting fields as
 strings, it reads them as integer items from an existing TrailDB and
 remaps them to match with this cons.
@@ -472,13 +475,13 @@ remaps them to match with this cons.
 tdb_error tdb_cons_append(tdb_cons *cons, const tdb *db)
 {
     tdb_val **lexicon_maps = NULL;
-    uint64_t trail_id;
-    tdb_item *items = NULL;
-    uint64_t i, e, n, items_len = 0;
+    uint64_t i, trail_id;
     tdb_field field;
     int ret = 0;
-    /* event_width includes the event delimiter, 0 byte */
-    const uint64_t event_width = db->num_fields + 1;
+
+    tdb_cursor *cursor = tdb_cursor_new(db);
+    if (!cursor)
+        return TDB_ERR_NOMEM;
 
     /* NOTE we could be much more permissive with what can be joined:
     we could support "full outer join" and replace all missing fields
@@ -502,26 +505,16 @@ tdb_error tdb_cons_append(tdb_cons *cons, const tdb *db)
     for (trail_id = 0; trail_id < tdb_num_trails(db); trail_id++){
         __uint128_t uuid_key;
         Word_t *uuid_ptr;
+        const tdb_event *event;
 
         memcpy(&uuid_key, tdb_get_uuid(db, trail_id), 16);
         uuid_ptr = j128m_insert(&cons->trails, uuid_key);
 
-        /* TODO this could use an iterator of the trail */
-        if (tdb_get_trail(db, trail_id, &items, &items_len, &n, 0)){
-            ret = TDB_ERR_NOMEM;
+        if ((ret = tdb_get_trail(cursor, trail_id)))
             goto done;
-        }
-        for (e = 0; e < n; e += event_width){
-            for (field = 1; field < cons->num_ofields + 1; field++){
-                uint64_t idx = e + field;
-                tdb_val val = tdb_item_val(items[idx]);
-                if (val)
-                    /* translate non-NULL vals */
-                    val = lexicon_maps[field - 1][val - 1];
-                items[idx] = tdb_make_item(field, val);
-            }
-            append_event(cons, &items[e], uuid_ptr);
-        }
+
+        while ((event = tdb_cursor_next(cursor)))
+            append_event(cons, event, uuid_ptr, lexicon_maps);
     }
 done:
     if (lexicon_maps){
@@ -529,7 +522,7 @@ done:
             free(lexicon_maps[i]);
         free(lexicon_maps);
     }
-    free(items);
+    tdb_cursor_free(cursor);
     return ret;
 }
 

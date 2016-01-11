@@ -42,14 +42,24 @@ typedef uint32_t tdb_field;
 typedef uint64_t tdb_val;
 typedef uint64_t tdb_item;
 
+typedef struct _tdb_cons tdb_cons;
+typedef struct _tdb tdb;
+
+typedef struct __attribute__((packed)){
+    uint64_t timestamp;
+    uint64_t num_items;
+    const tdb_item items[0];
+} tdb_event;
+
+typedef struct{
+    struct tdb_decode_state *state;
+    char *next_event;
+    uint64_t num_events_left;
+} tdb_cursor;
+
 #define tdb_item_field32(item) (item & 127)
 #define tdb_item_val32(item)   ((item >> 8) & UINT32_MAX)
 #define tdb_item_is32(item)    (!(item & 128))
-
-/*
-static tdb_field tdb_item_field(tdb_item item) __attribute__((unused));
-static tdb_val tdb_item_val(tdb_item item) __attribute__((unused));
-*/
 
 static inline tdb_field tdb_item_field(tdb_item item)
 {
@@ -66,11 +76,6 @@ static inline tdb_val tdb_item_val(tdb_item item)
     else
         return (tdb_val)(item >> 16);
 }
-
-/*
-static tdb_item tdb_make_item(tdb_field field,
-                              tdb_val val) __attribute__((unused));
-*/
 
 static inline tdb_item tdb_make_item(tdb_field field, tdb_val val)
 {
