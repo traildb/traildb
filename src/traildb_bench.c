@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include "traildb.h"
+#include "tdb_profile.h"
 
 
 //#define DEBUG 1
@@ -20,6 +21,15 @@
 		fprintf(stderr, ("WARNING: " fmt), ##__VA_ARGS__);	\
 	} while(0)
 
+#define TIMED(msg, err, stmt)			\
+do {						\
+	TDB_TIMER_DEF;				\
+	TDB_TIMER_START;			\
+	(err) = (stmt);				\
+	TDB_TIMER_END("traildb_bench/" msg);	\
+} while(0)
+
+
 /**
  * super dirty hack to make the compiler happy
  *
@@ -31,10 +41,9 @@ static inline const char** const_quirk(char** argv) {
 	return p;
 }
 
-/// dump "raw" in groups of 4 bytes to stdout
 static void dump_hex(const char* raw, uint64_t length)
 {
-/*	for(unsigned int i = 0; i < length; i += 4) {
+	for(unsigned int i = 0; i+4 <= length; i += 4) {
 		printf("%02x%02x%02x%02x ",
 		       raw[i+0], raw[i+1], raw[i+2], raw[i+3]);
 	}
@@ -42,17 +51,14 @@ static void dump_hex(const char* raw, uint64_t length)
 	for(uint64_t i = length - (length % 4); i < length; ++i) {
 		printf("%02x", raw[i]);
 	}
-*/
-	for(uint64_t i = 0; i < length; ++i) {
-		printf("%02x ", raw[i]);
-	}
 }
 
 /**
  * calls tdb_get_trail over the full tdb
  */
-static void get_all_and_decode(const tdb* db)
+static int do_get_all_and_decode(const tdb* db, const char* path)
 {
+	int err;
 	const uint64_t num_trails = tdb_num_trails(db);
 	uint64_t items_decoded = 0;
 	tdb_item* items = NULL;
@@ -60,8 +66,12 @@ static void get_all_and_decode(const tdb* db)
 
 	for(uint64_t trail_id = 0; trail_id < num_trails; ++trail_id) {
 		uint64_t num_items;
-		const int err = tdb_get_trail(db, trail_id, &items, &items_len, &num_items, 0);
-		assert(err == 0);
+		err = tdb_get_trail(db, trail_id, &items, &items_len, &num_items, 0);
+		if(err) {
+			REPORT_ERROR("%s: failed to extract trail %llu. error=%i\n",
+				     path, LLU(trail_id), err);
+			goto err;
+		}
 
 		for(uint64_t i = 1; i < num_items; ++i) {
 			if(tdb_item_val(items[i]) != 0) {
@@ -72,8 +82,11 @@ static void get_all_and_decode(const tdb* db)
 		}
 	}
 
-	free(items);
+err:
+	if(items)
+		free(items);
 	printf("# items decoded: %llu\n", LLU(items_decoded));
+	return err;
 }
 
 static int cmd_get_all_and_decode(char** dbs, int argc)
@@ -86,16 +99,11 @@ static int cmd_get_all_and_decode(char** dbs, int argc)
 			printf("Error code %i while opening TDB at %s\n", err, path);
 			return 1;
 		}
-		get_all_and_decode(db);
+		TIMED("get_all", err, do_get_all_and_decode(db, path));
 		tdb_close(db);
 	}
 
 	return 0;
-}
-
-static int compare_int(const void* lhs, const void* rhs)
-{
-	return *(const int*)lhs - *(const int*)rhs;
 }
 
 static int resolve_fieldids(tdb_field** field_ids, const tdb* db,
@@ -114,33 +122,8 @@ static int resolve_fieldids(tdb_field** field_ids, const tdb* db,
 		}
 	}
 
-	qsort(out, (unsigned)names_length, sizeof(tdb_field), compare_int);
-
-	/* super-naively skip dups ... */
-	int skipped = 0;
-	for(int i = 0; i + 1 < names_length - skipped; ++i)
-	{
-		if(out[i] == out[i+1]) {
-			++skipped;
-			memmove(&out[i], &out[i+1],
-				(unsigned)(names_length - skipped - i));
-		}
-	}
-	assert(names_length >= skipped); /// debugging
-
-	if(skipped) {
-		REPORT_WARNING("Skipping %u duplicate field names\n", skipped);
-	}
-
-#ifdef DEBUG
-	for(int i = 0; i < names_length - skipped; ++i) {
-		REPORT_WARNING("field_id[%i] = %i\n",
-			       i, out[i]);
-	}
-#endif
-
 	*field_ids = out;
-	return names_length - skipped;
+	return 0;
 
 err:
         free(out);
@@ -166,7 +149,7 @@ static int do_recode(tdb_cons* const cons, tdb* const db,
 	 *     extract/decode the relevant fields that are in field_ids
 	 *     insert the record
 	 */
-	for(uint64_t trail_id = 0; trail_id < num_trails && trail_id < 1000; ++trail_id) {
+	for(uint64_t trail_id = 0; trail_id < num_trails; ++trail_id) {
 		uint64_t num_items;
 
 		err = tdb_get_trail(db, trail_id, &items, &items_len, &num_items, 0);
@@ -203,6 +186,8 @@ static int do_recode(tdb_cons* const cons, tdb* const db,
 	}
 
 free_mem:
+	if(items)
+		free(items);
 	free(value_lengths);
 	free(values);
 	return err;
@@ -215,6 +200,8 @@ free_mem:
 static int cmd_recode(const char* output_path, const char* input,
 		      const char** field_names, int names_length)
 {
+	assert(names_length > 0);
+
 	tdb* const db = tdb_init(); assert(db);
 	int err = tdb_open(db, input);
 	if(err) {
@@ -237,7 +224,7 @@ static int cmd_recode(const char* output_path, const char* input,
 		goto free_ids;
 	}
 
-	err = do_recode(cons, db, field_ids, err);
+	TIMED("recode", err, do_recode(cons, db, field_ids, names_length));
 	if(err)
 		goto close_cons;
 
@@ -291,7 +278,7 @@ static int cmd_append_all(const char* output_path, const char* input)
 		goto free_fieldids;
 	}
 
-	err = tdb_cons_append(cons, db);
+	TIMED("tdb_cons_append()", err, tdb_cons_append(cons, db));
 	if(err) {
 		REPORT_ERROR("Failed to append DB. error=%i\n", err);
 		goto close_cons;
