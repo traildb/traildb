@@ -21,19 +21,19 @@ better to fail loudly for now.
     #error "sizeof(off_t) and sizeof(size_t) must be 8"
 #endif
 
-typedef struct {
+struct tdb_cons_event{
     uint64_t item_zero;
     uint64_t num_items;
     uint64_t timestamp;
     uint64_t prev_event_idx;
-} tdb_cons_event;
+};
 
-typedef struct {
+struct tdb_grouped_event{
     uint64_t item_zero;
     uint64_t num_items;
     uint64_t timestamp;
     uint64_t trail_id;
-} tdb_event;
+};
 
 struct _tdb_cons {
     char *root;
@@ -108,7 +108,7 @@ tdb_error edge_encode_items(const tdb_item *items,
                             uint64_t *num_encoded,
                             uint64_t *encoded_size,
                             tdb_item *prev_items,
-                            const tdb_event *ev);
+                            const struct tdb_grouped_event *ev);
 
 int tdb_mmap(const char *path, struct tdb_file *dst);
 

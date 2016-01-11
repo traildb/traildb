@@ -29,7 +29,7 @@ int choose_grams_one_event(const tdb_item *encoded,
                            struct gram_bufs *g,
                            __uint128_t *grams,
                            uint64_t *num_grams,
-                           const tdb_event *ev);
+                           const struct tdb_grouped_event *ev);
 
 int make_grams(FILE *grouped,
                uint64_t num_events,

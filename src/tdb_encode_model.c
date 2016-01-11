@@ -32,7 +32,7 @@
 /* event op handles one *event* (not one trail) */
 typedef int (*event_op)(const tdb_item *encoded,
                         uint64_t n,
-                        const tdb_event *ev,
+                        const struct tdb_grouped_event *ev,
                         void *state);
 
 struct ngram_state{
@@ -72,7 +72,7 @@ static tdb_error event_fold(event_op op,
     uint64_t encoded_size = 0;
     uint64_t i = 1;
     double sample_size = 1.0;
-    tdb_event ev;
+    struct tdb_grouped_event ev;
     int ret = 0;
 
     if (num_events == 0)
@@ -90,7 +90,7 @@ static tdb_error event_fold(event_op op,
     }
 
     rewind(grouped);
-    TDB_READ(grouped, &ev, sizeof(tdb_event));
+    TDB_READ(grouped, &ev, sizeof(struct tdb_grouped_event));
 
     /* this function scans through *all* unencoded data, takes a sample
        of trails, edge-encodes events for a trail, and calls the
@@ -123,7 +123,7 @@ static tdb_error event_fold(event_op op,
                     goto done;
 
                 if (i++ < num_events){
-                    TDB_READ(grouped, &ev, sizeof(tdb_event));
+                    TDB_READ(grouped, &ev, sizeof(struct tdb_grouped_event));
                 }else
                     break;
             }
@@ -131,7 +131,7 @@ static tdb_error event_fold(event_op op,
             /* given that we are sampling trails, we need to skip all events
                related to a trail not included in the sample */
             for (;i < num_events && ev.trail_id == trail_id; i++)
-                TDB_READ(grouped, &ev, sizeof(tdb_event));
+                TDB_READ(grouped, &ev, sizeof(struct tdb_grouped_event));
         }
     }
 
@@ -183,7 +183,7 @@ tdb_error choose_grams_one_event(const tdb_item *encoded,
                                  struct gram_bufs *g,
                                  __uint128_t *grams,
                                  uint64_t *num_grams,
-                                 const tdb_event *ev)
+                                 const struct tdb_grouped_event *ev)
 {
     uint64_t i, j, k, n = 0;
     Word_t *ptr;
@@ -275,7 +275,7 @@ tdb_error choose_grams_one_event(const tdb_item *encoded,
 
 static tdb_error choose_grams(const tdb_item *encoded,
                               uint64_t num_encoded,
-                              const tdb_event *ev,
+                              const struct tdb_grouped_event *ev,
                               void *state){
 
     struct ngram_state *g = (struct ngram_state*)state;
@@ -342,7 +342,7 @@ out_of_memory:
 
 static tdb_error all_bigrams(const tdb_item *encoded,
                              uint64_t n,
-                             const tdb_event *ev,
+                             const struct tdb_grouped_event *ev,
                              void *state){
 
     struct ngram_state *g = (struct ngram_state *)state;
@@ -438,7 +438,7 @@ struct unigram_state{
 
 static tdb_error all_freqs(const tdb_item *encoded,
                            uint64_t n,
-                           const tdb_event *ev,
+                           const struct tdb_grouped_event *ev,
                            void *state){
 
     struct unigram_state *s = (struct unigram_state*)state;

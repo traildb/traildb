@@ -22,18 +22,18 @@
 
 #define EDGE_INCREMENT     1000000
 #define GROUPBUF_INCREMENT 1000000
-#define READ_BUFFER_SIZE  (1000000 * sizeof(tdb_event))
+#define READ_BUFFER_SIZE  (1000000 * sizeof(struct tdb_grouped_event))
 
 #define INITIAL_ENCODING_BUF_BITS 8 * 1024 * 1024
 
 struct jm_fold_state{
     FILE *grouped_w;
 
-    tdb_event *buf;
+    struct tdb_grouped_event *buf;
     uint64_t buf_size;
 
     uint64_t trail_id;
-    const tdb_cons_event *events;
+    const struct tdb_cons_event *events;
     const uint64_t min_timestamp;
     uint64_t max_timestamp;
     uint64_t max_timedelta;
@@ -43,8 +43,8 @@ struct jm_fold_state{
 
 static int compare(const void *p1, const void *p2)
 {
-    const tdb_event *x = (const tdb_event*)p1;
-    const tdb_event *y = (const tdb_event*)p2;
+    const struct tdb_grouped_event *x = (const struct tdb_grouped_event*)p1;
+    const struct tdb_grouped_event *y = (const struct tdb_grouped_event*)p2;
 
     if (x->timestamp > y->timestamp)
         return 1;
@@ -60,7 +60,7 @@ static void *groupby_uuid_handle_one_trail(
 {
     struct jm_fold_state *s = (struct jm_fold_state*)state;
     /* find the last event belonging to this trail */
-    const tdb_cons_event *ev = &s->events[*value - 1];
+    const struct tdb_cons_event *ev = &s->events[*value - 1];
     uint64_t j = 0;
     uint64_t num_events = 0;
     int ret = 0;
@@ -73,7 +73,8 @@ static void *groupby_uuid_handle_one_trail(
     while (1){
         if (j >= s->buf_size){
             s->buf_size += GROUPBUF_INCREMENT;
-            if (!(s->buf = realloc(s->buf, s->buf_size * sizeof(tdb_event)))){
+            if (!(s->buf = realloc(s->buf,
+                    s->buf_size * sizeof(struct tdb_grouped_event)))){
                 ret = TDB_ERR_NOMEM;
                 goto done;
             }
@@ -100,7 +101,7 @@ static void *groupby_uuid_handle_one_trail(
     /* TODO make this stable sort */
     /* TODO this could really benefit from Timsort since raw data
        is often partially sorted */
-    qsort(s->buf, num_events, sizeof(tdb_event), compare);
+    qsort(s->buf, num_events, sizeof(struct tdb_grouped_event), compare);
 
     /* delta-encode timestamps */
     uint64_t prev_timestamp = s->min_timestamp;
@@ -121,7 +122,9 @@ static void *groupby_uuid_handle_one_trail(
         }
     }
 
-    TDB_WRITE(s->grouped_w, s->buf, num_events * sizeof(tdb_event));
+    TDB_WRITE(s->grouped_w,
+              s->buf,
+              num_events * sizeof(struct tdb_grouped_event));
     ++s->trail_id;
 
 done:
@@ -130,7 +133,7 @@ done:
 }
 
 static tdb_error groupby_uuid(FILE *grouped_w,
-                              const tdb_cons_event *events,
+                              const struct tdb_cons_event *events,
                               tdb_cons *cons,
                               uint64_t *num_trails,
                               uint64_t *max_timestamp,
@@ -161,7 +164,7 @@ tdb_error edge_encode_items(const tdb_item *items,
                             uint64_t *num_encoded,
                             uint64_t *encoded_size,
                             tdb_item *prev_items,
-                            const tdb_event *ev)
+                            const struct tdb_grouped_event *ev)
 {
     uint64_t n = 0;
     uint64_t j = ev->item_zero;
@@ -228,7 +231,7 @@ static tdb_error encode_trails(const tdb_item *items,
     uint64_t file_offs = 0;
     uint64_t *toc = NULL;
     struct gram_bufs gbufs;
-    tdb_event ev;
+    struct tdb_grouped_event ev;
     int ret = 0;
 
     if ((ret = init_gram_bufs(&gbufs, num_fields)))
@@ -255,7 +258,7 @@ static tdb_error encode_trails(const tdb_item *items,
 
     rewind(grouped);
     if (num_events)
-        TDB_READ(grouped, &ev, sizeof(tdb_event));
+        TDB_READ(grouped, &ev, sizeof(struct tdb_grouped_event));
 
     while (i <= num_events){
         /* encode trail for one UUID (multiple events) */
@@ -314,7 +317,7 @@ static tdb_error encode_trails(const tdb_item *items,
                               fstats);
 
             if (i++ < num_events){
-                TDB_READ(grouped, &ev, sizeof(tdb_event));
+                TDB_READ(grouped, &ev, sizeof(struct tdb_grouped_event));
             }else
                 break;
         }
@@ -430,7 +433,7 @@ tdb_error tdb_encode(tdb_cons *cons, tdb_item *items)
 
     if (cons->events.data)
         if ((ret = groupby_uuid(grouped_w,
-                                (tdb_cons_event*)cons->events.data,
+                                (struct tdb_cons_event*)cons->events.data,
                                 cons,
                                 &num_trails,
                                 &max_timestamp,

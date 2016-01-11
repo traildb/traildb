@@ -279,7 +279,7 @@ tdb_error tdb_cons_open(tdb_cons *cons,
     cons->min_timestamp = UINT64_MAX;
     cons->num_ofields = num_ofields;
     cons->events.arena_increment = EVENTS_ARENA_INCREMENT;
-    cons->events.item_size = sizeof(tdb_cons_event);
+    cons->events.item_size = sizeof(struct tdb_cons_event);
     cons->items.item_size = sizeof(tdb_item);
 
     /* Opportunistically try to create the output directory.
@@ -348,7 +348,7 @@ tdb_error tdb_cons_add(tdb_cons *cons,
                        const uint64_t *value_lengths)
 {
     tdb_field i;
-    tdb_cons_event *event;
+    struct tdb_cons_event *event;
     Word_t *uuid_ptr;
     __uint128_t uuid_key;
 
@@ -359,7 +359,7 @@ tdb_error tdb_cons_add(tdb_cons *cons,
     memcpy(&uuid_key, uuid, 16);
     uuid_ptr = j128m_insert(&cons->trails, uuid_key);
 
-    if (!(event = (tdb_cons_event*)arena_add_item(&cons->events)))
+    if (!(event = (struct tdb_cons_event*)arena_add_item(&cons->events)))
         return TDB_ERR_NOMEM;
 
     event->item_zero = cons->items.next;
@@ -402,7 +402,8 @@ static void append_event(tdb_cons *cons,
                          const tdb_item *items,
                          Word_t *uuid_ptr)
 {
-    tdb_cons_event *event = (tdb_cons_event*)arena_add_item(&cons->events);
+    struct tdb_cons_event *event =
+        (struct tdb_cons_event*)arena_add_item(&cons->events);
 
     event->item_zero = cons->items.next;
     event->num_items = 0;
