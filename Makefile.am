@@ -1,4 +1,4 @@
-lib_LTLIBRARIES = libtraildb.la
+ylib_LTLIBRARIES = libtraildb.la
 ACLOCAL_AMFLAGS = -I m4
 libtraildb_la_CFLAGS = -std=c99 \
                        -DJUDYERROR=judyerror_macro_missing_fix_this \
@@ -41,7 +41,7 @@ include_HEADERS = \
   src/tdb_types.h \
   src/tdb_limits.h
 
-#bin_PROGRAMS = traildb_bench
-#traildb_bench_SOURCES = src/traildb_bench.c
-#traildb_bench_CFLAGS = ${libtraildb_la_CFLAGS} -Isrc/
-#traildb_bench_LDADD = libtraildb.la
+bin_PROGRAMS = bin/traildb_bench
+bin_traildb_bench_SOURCES = src/bin/traildb_bench.c
+bin_traildb_bench_CFLAGS = ${libtraildb_la_CFLAGS} -Isrc/
+bin_traildb_bench_LDADD = libtraildb.la
