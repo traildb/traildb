@@ -32,7 +32,7 @@ int main(int argc, char** argv)
     massive[0] = 7686;
     assert(tdb_cons_add(c, uuid, 0, values, lengths) == 0);
 
-    assert(tdb_cons_finalize(c, 0) == 0);
+    assert(tdb_cons_finalize(c) == 0);
     tdb_cons_close(c);
 
     tdb *t = tdb_init();

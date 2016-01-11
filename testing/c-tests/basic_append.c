@@ -15,7 +15,7 @@ static void empty_tdb_append(const char *root)
     tdb_path(path, "%s.%u", root, 1);
     tdb_cons* c1 = tdb_cons_init();
     assert(tdb_cons_open(c1, path, fields, 0) == 0);
-    assert(tdb_cons_finalize(c1, 0) == 0);
+    assert(tdb_cons_finalize(c1) == 0);
     tdb* t1 = tdb_init();
     assert(tdb_open(t1, path) == 0);
 
@@ -23,7 +23,7 @@ static void empty_tdb_append(const char *root)
     tdb_cons* c2 = tdb_cons_init();
     assert(tdb_cons_open(c2, path, fields, 0) == 0);
     assert(tdb_cons_append(c2, t1) == 0);
-    assert(tdb_cons_finalize(c2, 0) == 0);
+    assert(tdb_cons_finalize(c2) == 0);
 
     tdb* t2 = tdb_init();
     assert(tdb_open(t2, path) == 0);
@@ -40,7 +40,7 @@ static void mismatching_fields(const char *root)
     tdb_path(path, "%s.%u", root, 1);
     tdb_cons* c1 = tdb_cons_init();
     assert(tdb_cons_open(c1, path, fields1, 2) == 0);
-    assert(tdb_cons_finalize(c1, 0) == 0);
+    assert(tdb_cons_finalize(c1) == 0);
     tdb* t1 = tdb_init();
     assert(tdb_open(t1, path) == 0);
 
@@ -49,14 +49,14 @@ static void mismatching_fields(const char *root)
     tdb_cons* c2 = tdb_cons_init();
     assert(tdb_cons_open(c2, path, fields1, 3) == 0);
     assert(tdb_cons_append(c2, t1) == TDB_ERR_APPEND_FIELDS_MISMATCH);
-    assert(tdb_cons_finalize(c2, 0) == 0);
+    assert(tdb_cons_finalize(c2) == 0);
 
     /* mismatching field names - this should fail */
     tdb_path(path, "%s.%u", root, 2);
     c2 = tdb_cons_init();
     assert(tdb_cons_open(c2, path, fields2, 2) == 0);
     assert(tdb_cons_append(c2, t1) == TDB_ERR_APPEND_FIELDS_MISMATCH);
-    assert(tdb_cons_finalize(c2, 0) == 0);
+    assert(tdb_cons_finalize(c2) == 0);
 }
 
 struct event{
@@ -99,7 +99,7 @@ static void simple_append(const char *root)
                             lengths) == 0);
     }
 
-    assert(tdb_cons_finalize(c, 0) == 0);
+    assert(tdb_cons_finalize(c) == 0);
     tdb* db = tdb_init();
     assert(tdb_open(db, path) == 0);
 
@@ -128,7 +128,7 @@ static void simple_append(const char *root)
                             lengths) == 0);
     }
 
-    assert(tdb_cons_finalize(c, 0) == 0);
+    assert(tdb_cons_finalize(c) == 0);
     tdb_close(db);
 
     db = tdb_init();

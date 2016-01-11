@@ -25,7 +25,7 @@ int main(int argc, char** argv)
 
     c = tdb_cons_init();
     assert(tdb_cons_open(c, argv[1], fields_ptr, TDB_MAX_NUM_FIELDS) == 0);
-    assert(tdb_cons_finalize(c, 0) == 0);
+    assert(tdb_cons_finalize(c) == 0);
 
     tdb* t = tdb_init();
     assert(tdb_open(t, argv[1]) == 0);

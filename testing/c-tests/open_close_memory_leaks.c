@@ -37,7 +37,7 @@ static void do_cons(const char *root, int do_finalize)
     assert(tdb_cons_add(c, uuid, 0, fields_ptr, lengths) == 0);
 
     if (do_finalize)
-        assert(tdb_cons_finalize(c, 0) == 0);
+        assert(tdb_cons_finalize(c) == 0);
     tdb_cons_close(c);
 
     free(lengths);

@@ -17,7 +17,6 @@
 typedef struct _tdb_cons tdb_cons;
 typedef struct _tdb tdb;
 
-/* TODO: move flags from finalize() to new() */
 tdb_cons *tdb_cons_init(void);
 tdb_error tdb_cons_open(tdb_cons *cons,
                         const char *root,
@@ -33,8 +32,7 @@ tdb_error tdb_cons_add(tdb_cons *cons,
                        const uint64_t *value_lengths);
 
 tdb_error tdb_cons_append(tdb_cons *cons, const tdb *db);
-/* TODO remove flags */
-tdb_error tdb_cons_finalize(tdb_cons *cons, uint64_t flags);
+tdb_error tdb_cons_finalize(tdb_cons *cons);
 
 tdb_error tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16]);
 tdb_error tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32]);

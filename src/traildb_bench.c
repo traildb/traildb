@@ -99,7 +99,7 @@ static int cmd_append_all(const char* output_path, const char* input)
 		goto close_cons;
 	}
 
-	err = tdb_cons_finalize(cons, 0);
+	err = tdb_cons_finalize(cons);
 	if(err) {
 		REPORT_ERROR("Failed to finalize output DB. error=%i\n", err);
 		goto close_cons;

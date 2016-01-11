@@ -21,7 +21,7 @@ static tdb *make_tdb(const char *root,
     for (i = 0; i < num; i++)
         assert(tdb_cons_add(c, uuid, tstamps[i], fields, &zero) == 0);
 
-    assert(tdb_cons_finalize(c, 0) ==
+    assert(tdb_cons_finalize(c) ==
            (should_fail ? TDB_ERR_TIMESTAMP_TOO_LARGE: 0));
     tdb_cons_close(c);
 

@@ -39,7 +39,7 @@ int main(int argc, char** argv)
         for (j = 0; j < NUM_EVENTS; j++)
             tdb_cons_add(c, uuid, i, values, lengths);
     }
-    assert(tdb_cons_finalize(c, 0) == 0);
+    assert(tdb_cons_finalize(c) == 0);
     tdb_cons_close(c);
 
     tdb* t = tdb_init();

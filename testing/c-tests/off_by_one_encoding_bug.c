@@ -42,7 +42,7 @@ int main(int argc, char** argv)
         assert(tdb_cons_add(c, uuid, EVENTS[i].time, values, lengths) == 0);
     }
 
-    assert(tdb_cons_finalize(c, 0) == 0);
+    assert(tdb_cons_finalize(c) == 0);
     tdb_cons_close(c);
 
     tdb* t = tdb_init();

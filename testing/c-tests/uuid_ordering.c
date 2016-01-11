@@ -54,7 +54,7 @@ int main(int argc, char **argv)
     }
     J1C(key, uuids, 0, -1);
     assert(key == NUM_TRAILS);
-    assert(tdb_cons_finalize(c, 0) == 0);
+    assert(tdb_cons_finalize(c) == 0);
     tdb_cons_close(c);
 
     tdb* t = tdb_init();

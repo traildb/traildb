@@ -9,7 +9,7 @@ int main(int argc, char** argv)
     tdb_field field;
     tdb_cons* c = tdb_cons_init();
     assert(tdb_cons_open(c, argv[1], fields, 5) == 0);
-    assert(tdb_cons_finalize(c, 0) == 0);
+    assert(tdb_cons_finalize(c) == 0);
 
     tdb* t = tdb_init();
     assert(tdb_open(t, argv[1]) == 0);

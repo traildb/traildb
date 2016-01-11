@@ -532,7 +532,7 @@ done:
     return ret;
 }
 
-tdb_error tdb_cons_finalize(tdb_cons *cons, uint64_t flags __attribute__((unused)))
+tdb_error tdb_cons_finalize(tdb_cons *cons)
 {
     struct tdb_file items_mmapped;
     uint64_t num_events = cons->events.next;
