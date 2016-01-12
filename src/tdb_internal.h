@@ -42,12 +42,13 @@ struct tdb_decode_state{
     uint64_t offset;
     uint64_t tstamp;
     int first_satisfying;
-    tdb_item previous_items[0];
 
     /* options */
     const tdb_item *filter;
     uint64_t filter_len;
     int edge_encoded;
+
+    tdb_item previous_items[0];
 };
 
 struct tdb_grouped_event{

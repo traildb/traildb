@@ -329,6 +329,7 @@ int _tdb_cursor_next_batch(tdb_cursor *cursor)
         }
     }
 
+    cursor->next_event = s->events_buffer;
     cursor->num_events_left = num_events;
     return num_events > 0 ? 1: 0;
 }
