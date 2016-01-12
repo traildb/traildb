@@ -45,15 +45,17 @@ int main(int argc, char** argv)
 
     assert(tdb_num_events(t) == num_events);
 
-    for (i = 0; i < NUM_TRAILS; i++){
+    for (num_events = 0, i = 0; i < NUM_TRAILS; i++){
         const tdb_event *event;
         int x = ((i + 1) % 5) + 1;
 
         assert(tdb_get_trail(cursor, i) == 0);
+        uint64_t n = tdb_get_trail_length(cursor);
+        assert(n == (i + 1) * 10);
+        num_events += n;
 
         /* test tdb_get_trail_length */
 
-        assert(tdb_get_trail_length(cursor) == (i + 1) * 10);
         assert(tdb_get_trail_length(cursor) == 0);
 
         /* test cursor */
@@ -80,6 +82,8 @@ int main(int argc, char** argv)
             ++j;
         }
     }
+
+    assert(tdb_num_events(t) == num_events);
 
     tdb_cursor_free(cursor);
     tdb_close(t);
