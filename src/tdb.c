@@ -403,8 +403,9 @@ tdb_item tdb_get_item(const tdb *db,
         for (i = 0; i < lex.size; i++){
             uint64_t length;
             const char *token = tdb_lexicon_get(&lex, i, &length);
-            if (length == value_length && !memcmp(&token, value, length))
+            if (length == value_length && !memcmp(token, value, length)) {
                 return field | ((i + 1) << 8);
+            }
         }
         return 0;
     }
