@@ -50,12 +50,12 @@ int main(int argc, char** argv)
         int x = ((i + 1) % 5) + 1;
 
         assert(tdb_get_trail(cursor, i) == 0);
-        uint64_t n = tdb_get_trail_length(cursor);
-        assert(n == (i + 1) * 10);
-        num_events += n;
 
         /* test tdb_get_trail_length */
 
+        uint64_t n = tdb_get_trail_length(cursor);
+        assert(n == (i + 1) * 10);
+        num_events += n;
         assert(tdb_get_trail_length(cursor) == 0);
 
         /* test cursor */
