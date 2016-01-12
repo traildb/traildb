@@ -10,6 +10,7 @@
 #include "tdb_error.h"
 
 /* TODO add to configure.ac: use jemalloc if available */
+/* TODO add a unique identifer for each traildb (sha?) */
 
 #define TDB_VERSION_V0 0LLU
 #define TDB_VERSION_V0_1 1LLU
@@ -98,6 +99,8 @@ tdb_cursor *tdb_cursor_new(const tdb *db);
 void tdb_cursor_free(tdb_cursor *cursor);
 
 tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id);
+
+uint64_t tdb_get_trail_length(tdb_cursor *cursor);
 
 int _tdb_cursor_next_batch(tdb_cursor *cursor);
 

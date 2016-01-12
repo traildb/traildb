@@ -203,6 +203,14 @@ tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id)
         return TDB_ERR_INVALID_TRAIL_ID;
 }
 
+uint64_t tdb_get_trail_length(tdb_cursor *cursor)
+{
+    uint64_t count = 0;
+    while (_tdb_cursor_next_batch(cursor))
+        count += cursor->num_events_left;
+    return count;
+}
+
 int _tdb_cursor_next_batch(tdb_cursor *cursor)
 {
     struct tdb_decode_state *s = cursor->state;
