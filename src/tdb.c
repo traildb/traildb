@@ -549,6 +549,7 @@ tdb_error tdb_get_opt(tdb *db, tdb_opt_key key, tdb_opt_value *value)
             return 0;
         case TDB_OPT_CURSOR_EVENT_BUFFER_SIZE:
             value->value = db->opt_cursor_event_buffer_size;
+            return 0;
         default:
             return TDB_ERR_UNKNOWN_OPTION;
     }
