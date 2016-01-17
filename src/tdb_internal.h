@@ -108,11 +108,19 @@ struct _tdb {
     char **field_names;
     struct field_stats *field_stats;
 
-    /* move these to a separate tdb_opt object */
-    tdb_item *filter;
-    /* TODO add and check MAX_FILTER_LEN */
-    uint64_t filter_len;
     uint64_t version;
+
+    /* options */
+
+    /* TDB_OPT_CURSOR_EVENT_BUFFER_SIZE */
+    uint64_t opt_cursor_event_buffer_size;
+
+    /* TDB_OPT_ONLY_DIFF_ITEMS */
+    int opt_edge_encoded;
+
+    /* TDB_OPT_EVENT_FILTER */
+    tdb_item *opt_event_filter;
+    uint64_t opt_event_filter_len;
 };
 
 void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex);

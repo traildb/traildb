@@ -14,6 +14,8 @@
 #include "tdb_io.h"
 #include "tdb_huffman.h"
 
+#define DEFAULT_OPT_CURSOR_EVENT_BUFFER_SIZE 1000
+
 int tdb_mmap(const char *path, struct tdb_file *dst)
 {
     int fd, ret = 0;
@@ -240,6 +242,9 @@ tdb_error tdb_open(tdb *db, const char *root)
     if (db->num_fields)
         return TDB_ERR_HANDLE_ALREADY_OPENED;
 
+    /* set default options */
+    db->opt_cursor_event_buffer_size = DEFAULT_OPT_CURSOR_EVENT_BUFFER_SIZE;
+
     TDB_PATH(path, "%s/info", root);
     if ((ret = read_info(db, path)))
         goto done;
@@ -342,7 +347,7 @@ void tdb_close(tdb *db)
         free(db->lexicons);
         free(db->field_names);
         free(db->field_stats);
-        free(db->filter);
+        free(db->opt_event_filter);
         free(db);
     }
 }
@@ -386,7 +391,7 @@ tdb_item tdb_get_item(const tdb *db,
 {
     if (!value_length)
         /* NULL value for this field */
-        return field;
+        return tdb_make_item(field, 0);
     else if (field == 0 || field >= db->num_fields)
         return 0;
     else{
@@ -397,8 +402,8 @@ tdb_item tdb_get_item(const tdb *db,
         for (i = 0; i < lex.size; i++){
             uint64_t length;
             const char *token = tdb_lexicon_get(&lex, i, &length);
-            if (length == value_length && !memcmp(&token, value, length))
-                return field | ((i + 1) << 8);
+            if (length == value_length && !memcmp(token, value, length))
+                return tdb_make_item(field, i + 1);
         }
         return 0;
     }
@@ -520,6 +525,36 @@ uint64_t tdb_version(const tdb *db)
     return db->version;
 }
 
+tdb_error tdb_set_opt(tdb *db, tdb_opt_key key, tdb_opt_value value)
+{
+    switch (key){
+        case TDB_OPT_ONLY_DIFF_ITEMS:
+            db->opt_edge_encoded = value.value ? 1: 0;
+            return 0;
+        case TDB_OPT_CURSOR_EVENT_BUFFER_SIZE:
+            if (value.value > 0)
+                db->opt_cursor_event_buffer_size = value.value;
+            else
+                return TDB_ERR_INVALID_OPTION_VALUE;
+        default:
+            return TDB_ERR_UNKNOWN_OPTION;
+    }
+}
+
+tdb_error tdb_get_opt(tdb *db, tdb_opt_key key, tdb_opt_value *value)
+{
+    switch (key){
+        case TDB_OPT_ONLY_DIFF_ITEMS:
+            *value = db->opt_edge_encoded ? TDB_TRUE: TDB_FALSE;
+            return 0;
+        case TDB_OPT_CURSOR_EVENT_BUFFER_SIZE:
+            value->value = db->opt_cursor_event_buffer_size;
+        default:
+            return TDB_ERR_UNKNOWN_OPTION;
+    }
+}
+
+#if 0
 tdb_error tdb_set_filter(tdb *db, const tdb_item *filter, uint64_t filter_len)
 {
     /* TODO check that filter is valid: sum(clauses) < filter_len */
@@ -541,3 +576,4 @@ const tdb_item *tdb_get_filter(const tdb *db, uint64_t *filter_len)
     *filter_len = db->filter_len;
     return db->filter;
 }
+#endif

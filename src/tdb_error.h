@@ -15,6 +15,8 @@ typedef enum{
     TDB_ERR_INVALID_TRAIL_ID = -6,
     TDB_ERR_HANDLE_IS_NULL = -7,
     TDB_ERR_HANDLE_ALREADY_OPENED = -8,
+    TDB_ERR_UNKNOWN_OPTION = -9,
+    TDB_ERR_INVALID_OPTION_VALUE = -10,
 
     /* io */
 

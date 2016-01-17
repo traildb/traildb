@@ -36,19 +36,14 @@ tdb_error tdb_cons_finalize(tdb_cons *cons);
 tdb_error tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16]);
 tdb_error tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32]);
 
-/* TODO: add uint64_t flags to tdb_new() */
 tdb *tdb_init(void);
 tdb_error tdb_open(tdb *db, const char *root);
 void tdb_close(tdb *db);
 void tdb_dontneed(const tdb *db);
 void tdb_willneed(const tdb *db);
 
-#if 0
-/* TODO add these */
-/* one value should be null */
-int tdb_set_opt(tdb *db, enum option, const void *value);
-const void *tdb_get_opt(tdb *db, enum option);
-#endif
+tdb_error tdb_set_opt(tdb *db, tdb_opt_key key, tdb_opt_value value);
+tdb_error tdb_get_opt(tdb *db, tdb_opt_key key, tdb_opt_value *value);
 
 uint64_t tdb_lexicon_size(const tdb *db, tdb_field field);
 
@@ -79,11 +74,13 @@ tdb_error tdb_get_trail_id(const tdb *db,
                            const uint8_t uuid[16],
                            uint64_t *trail_id);
 
+#if 0
 tdb_error tdb_set_filter(tdb *db,
                          const tdb_item *filter,
                          uint64_t filter_len);
 
 const tdb_item *tdb_get_filter(const tdb *db, uint64_t *filter_len);
+#endif
 
 const char *tdb_error_str(tdb_error errcode);
 
@@ -115,44 +112,5 @@ static inline const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
     }else
         return NULL;
 }
-
-#if 0
-tdb_error tdb_decode_trail(const tdb *db,
-                           uint64_t trail_id,
-                           tdb_item *dst,
-                           uint64_t dst_size,
-                           uint64_t *num_items,
-                           int edge_encoded);
-
-tdb_error tdb_decode_trail_filtered(const tdb *db,
-                                    uint64_t trail_id,
-                                    tdb_item *dst,
-                                    uint64_t dst_size,
-                                    uint64_t *num_items,
-                                    int edge_encoded,
-                                    const tdb_item *filter,
-                                    uint64_t filter_len);
-
-tdb_error tdb_get_trail(const tdb *db,
-                        uint64_t trail_id,
-                        tdb_item **items,
-                        uint64_t *items_buf_len,
-                        uint64_t *num_items,
-                        int edge_encoded);
-
-/*TODO
-change filtered to take a pointer to a ctx struct, including
-edge_encoded. This could be libcurl-style setopt. After adding the
-struct, we can remove _filtered versions of these functions
-*/
-tdb_error tdb_get_trail_filtered(const tdb *db,
-                                 uint64_t trail_id,
-                                 tdb_item **items,
-                                 uint64_t *items_buf_len,
-                                 uint64_t *num_items,
-                                 int edge_encoded,
-                                 const tdb_item *filter,
-                                 uint64_t filter_len);
-#endif
 
 #endif /* __TRAILDB_H__ */
