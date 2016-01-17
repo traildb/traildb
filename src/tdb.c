@@ -386,7 +386,7 @@ tdb_item tdb_get_item(const tdb *db,
 {
     if (!value_length)
         /* NULL value for this field */
-        return field;
+        return tdb_make_item(field, 0);
     else if (field == 0 || field >= db->num_fields)
         return 0;
     else{
@@ -397,8 +397,8 @@ tdb_item tdb_get_item(const tdb *db,
         for (i = 0; i < lex.size; i++){
             uint64_t length;
             const char *token = tdb_lexicon_get(&lex, i, &length);
-            if (length == value_length && !memcmp(&token, value, length))
-                return field | ((i + 1) << 8);
+            if (length == value_length && !memcmp(token, value, length))
+                return tdb_make_item(field, i + 1);
         }
         return 0;
     }
