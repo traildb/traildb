@@ -53,7 +53,6 @@ tdb_error tdb_get_field(const tdb *db,
 
 const char *tdb_get_field_name(const tdb *db, tdb_field field);
 
-/* TODO make this return tdb_error */
 tdb_item tdb_get_item(const tdb *db,
                       tdb_field field,
                       const char *value,
@@ -73,14 +72,6 @@ const uint8_t *tdb_get_uuid(const tdb *db, uint64_t trail_id);
 tdb_error tdb_get_trail_id(const tdb *db,
                            const uint8_t uuid[16],
                            uint64_t *trail_id);
-
-#if 0
-tdb_error tdb_set_filter(tdb *db,
-                         const tdb_item *filter,
-                         uint64_t filter_len);
-
-const tdb_item *tdb_get_filter(const tdb *db, uint64_t *filter_len);
-#endif
 
 const char *tdb_error_str(tdb_error errcode);
 
