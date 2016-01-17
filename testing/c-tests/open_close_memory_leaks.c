@@ -47,16 +47,16 @@ static void do_cons(const char *root, int do_finalize)
 
 static void do_open(const char *path)
 {
-    tdb_item *items;
-    uint64_t n, items_len = 0;
-
     tdb* t = tdb_init();
     assert(tdb_open(t, path) == 0);
-    assert(tdb_get_trail(t, 0, &items, &items_len, &n, 0) == 0);
-    assert(n == NUM_FIELDS + 2);
+    tdb_cursor *cursor = tdb_cursor_new(t);
+    assert(tdb_get_trail(cursor, 0) == 0);
+    assert(tdb_get_trail_length(cursor) == 1);
+    assert(tdb_get_trail(cursor, 0) == 0);
+    const tdb_event *event = tdb_cursor_next(cursor);
+    assert(event->num_items == NUM_FIELDS);
     tdb_close(t);
-
-    free(items);
+    tdb_cursor_free(cursor);
 }
 
 int main(int argc, char** argv)

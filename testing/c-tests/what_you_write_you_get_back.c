@@ -1,8 +1,9 @@
-#include <traildb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+
+#include <traildb.h>
 
 #define NUM_EVENTS 3
 
@@ -23,8 +24,6 @@ int main(int argc, char** argv)
     const char *fields[] = {"a", "b", "c"};
     const char *values[] = {buffer1, buffer2, buffer3};
     uint64_t lengths[3];
-    tdb_item *items;
-    uint64_t n, items_len = 0;
 
     tdb_cons* c = tdb_cons_init();
     assert(tdb_cons_open(c, argv[1], fields, 3) == 0);
@@ -44,32 +43,38 @@ int main(int argc, char** argv)
 
     tdb* t = tdb_init();
     assert(tdb_open(t, argv[1]) == 0);
+    tdb_cursor *cursor = tdb_cursor_new(t);
 
     for (i = 0; i < sizeof(LENGTHS) / sizeof(LENGTHS[0]); i++){
+        const tdb_event *event;
         uint64_t trail_id;
+
         memset(uuid, i, sizeof(uuid));
         assert(tdb_get_trail_id(t, uuid, &trail_id) == 0);
-        assert(tdb_get_trail(t, trail_id, &items, &items_len, &n, 0) == 0);
-        assert(n / 5 == NUM_EVENTS && "Invalid number of events returned.");
+        assert(tdb_get_trail(cursor, trail_id) == 0);
 
         if (LENGTHS[i] > 0)
             memset(buffer1, i, LENGTHS[i]);
         memset(buffer2, i + 10, LENGTHS[i]);
         memset(buffer3, i + 20, LENGTHS[i]);
 
-        for (j = 0; j < n;){
-            assert(items[j++] == i && "Unexpected timestamp.");
+        for (j = 0; (event = tdb_cursor_next(cursor)); j++){
+            assert(event->timestamp == i);
+            assert(event->num_items == 3);
             for (field = 0; field < 3; field++){
                 uint64_t len;
-                const char *p = tdb_get_item_value(t, items[j++], &len);
+                const char *p = tdb_get_item_value(t,
+                                                   event->items[field],
+                                                   &len);
                 assert(p != NULL);
                 assert(len == LENGTHS[i]);
                 assert(memcmp(values[field], p, len) == 0);
             }
-            ++j;
         }
+        assert(j == NUM_EVENTS);
     }
 
+    tdb_cursor_free(cursor);
     tdb_close(t);
     return 0;
 }

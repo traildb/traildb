@@ -29,8 +29,6 @@ int main(int argc, char** argv)
     static uint8_t uuid[16];
     const char *fields[] = {"a", "b"};
     uint64_t lengths[] = {3, 2};
-    tdb_item *items;
-    uint64_t n, items_len = 0;
     uint64_t i;
 
     tdb_cons* c = tdb_cons_init();
@@ -47,6 +45,7 @@ int main(int argc, char** argv)
 
     tdb* t = tdb_init();
     assert(tdb_open(t, argv[1]) == 0);
+    tdb_cursor *cursor = tdb_cursor_new(t);
 
     for (i = 0; i < sizeof(EVENTS) / sizeof(struct event); i++){
         uint64_t trail_id;
@@ -55,17 +54,18 @@ int main(int argc, char** argv)
 
         memcpy(uuid, &i, 4);
         assert(tdb_get_trail_id(t, uuid, &trail_id) == 0);
-        assert(tdb_get_trail(t, trail_id, &items, &items_len, &n, 0) == 0);
-        assert(n == 4);
+        assert(tdb_get_trail(cursor, trail_id) == 0);
+        const tdb_event *event = tdb_cursor_next(cursor);
+        assert(event->num_items == 2);
+        assert(event->timestamp == EVENTS[i].time);
 
-        val = tdb_get_item_value(t, items[2], &len);
+        val = tdb_get_item_value(t, event->items[1], &len);
         assert(len == 2);
-
-        assert(items[0] == EVENTS[i].time);
         assert(memcmp(EVENTS[i].value, val, len) == 0);
     }
 
     tdb_close(t);
+    tdb_cursor_free(cursor);
     return 0;
 }
 

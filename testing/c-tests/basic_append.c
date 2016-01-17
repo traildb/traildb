@@ -71,9 +71,8 @@ static void simple_append(const char *root)
     char path[TDB_MAX_PATH_SIZE];
     const char *fields[] = {"f1", "f2"};
     const uint64_t lengths[] = {1, 1};
-    tdb_item *items;
     char prev;
-    uint64_t len, tstamp, i, n, items_len = 0;
+    uint64_t len, tstamp, i;
 
     struct event EVENTS1[] = {
         {5,   "a", "1"},
@@ -133,11 +132,11 @@ static void simple_append(const char *root)
 
     db = tdb_init();
     assert(tdb_open(db, path) == 0);
+    tdb_cursor *cursor = tdb_cursor_new(db);
     assert(tdb_lexicon_size(db, 1) == 6);
     assert(tdb_lexicon_size(db, 2) == 4);
     assert(tdb_num_trails(db) == 2);
-    assert(tdb_get_trail(db, 0, &items, &items_len, &n, 0) == 0);
-    assert(n == 20);
+    assert(tdb_get_trail(cursor, 0) == 0);
     tstamp = 0;
     prev = 0;
     /* we expect a sequence
@@ -145,19 +144,20 @@ static void simple_append(const char *root)
        i.e. both timestamaps and values are monotonically increasing,
        which we check below
     */
-    for (i = 0; i < n;){
-        assert(tstamp < items[i]);
-        tstamp = items[i++];
-        char c = tdb_get_item_value(db, items[i++], &len)[0];
+    const tdb_event *event;
+    while ((event = tdb_cursor_next(cursor))){
+        assert(tstamp < event->timestamp);
+        tstamp = event->timestamp;
+        char c = tdb_get_item_value(db, event->items[0], &len)[0];
         assert(prev < c);
         prev = c;
-        i += 2;
     }
-    assert(tdb_get_trail(db, 1, &items, &items_len, &n, 0) == 0);
-    assert(items[0] == 100);
-    assert(tdb_get_item_value(db, items[1], &len)[0] == 'a');
+    assert(tdb_get_trail(cursor, 1) == 0);
+    event = tdb_cursor_next(cursor);
+    assert(event->num_items == 2);
+    assert(event->timestamp == EVENTS2[2].time);
+    assert(tdb_get_item_value(db, event->items[0], &len)[0] == *EVENTS2[2].value1);
 
-    free(items);
     tdb_close(db);
 }
 

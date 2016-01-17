@@ -13,8 +13,6 @@ int main(int argc, char** argv)
     assert(tdb_cons_open(c, argv[1], fields, 0) == 0);
     uint64_t i, j, cmp, sum = 0;
     uint64_t zero = 0;
-    tdb_item *items;
-    uint64_t items_len = 0;
     tdb_field field;
 
     memset(uuid, 0, 16);
@@ -32,6 +30,7 @@ int main(int argc, char** argv)
 
     tdb* t = tdb_init();
     assert(tdb_open(t, argv[1]) == 0);
+    tdb_cursor *cursor = tdb_cursor_new(t);
 
     assert(tdb_num_fields(t) == 1);
 
@@ -46,9 +45,10 @@ int main(int argc, char** argv)
     assert(tdb_get_field(t, "bloh", &field) == TDB_ERR_UNKNOWN_FIELD);
 
     for (cmp = 0, i = 0; i < tdb_num_trails(t); i++){
-        assert(tdb_get_trail(t, i, &items, &items_len, &j, 0) == 0);
-        while (j--)
-            cmp += items[j];
+        const tdb_event *event;
+        assert(tdb_get_trail(cursor, i) == 0);
+        while ((event = tdb_cursor_next(cursor)))
+            cmp += event->timestamp;
     }
     assert(cmp == sum);
 
