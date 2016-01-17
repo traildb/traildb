@@ -90,5 +90,19 @@ static inline tdb_item tdb_make_item(tdb_field field, tdb_val val)
         return field | (val << 8);
 }
 
+typedef enum{
+    TDB_OPT_ONLY_DIFF_ITEMS = 100,
+    TDB_OPT_EVENT_FILTER = 101,
+    TDB_OPT_CURSOR_EVENT_BUFFER_SIZE = 102
+} tdb_opt_key;
+
+typedef union{
+    const void *ptr;
+    uint64_t value;
+} tdb_opt_value;
+
+static const tdb_opt_value TDB_TRUE __attribute__((unused)) = {.value = 1};
+static const tdb_opt_value TDB_FALSE __attribute__((unused)) = {.value = 0};
+
 #endif /* __TDB_TYPES_H__ */
 

@@ -1,8 +1,6 @@
 #include "tdb_internal.h"
 #include "tdb_huffman.h"
 
-#define CURSOR_BUFFER_NUM_EVENTS 1000
-
 static inline uint64_t tdb_get_trail_offs(const tdb *db, uint64_t trail_id)
 {
     if (db->trails.size < UINT32_MAX)
@@ -145,10 +143,9 @@ tdb_cursor *tdb_cursor_new(const tdb *db)
         goto err;
 
     c->state->db = db;
-    /*
-    TODO add an option for setting the items_buffer max size
-    (space / time tradeoff) */
-    c->state->events_buffer_len = CURSOR_BUFFER_NUM_EVENTS;
+    c->state->edge_encoded = db->opt_edge_encoded;
+    c->state->events_buffer_len = db->opt_cursor_event_buffer_size;
+
     if (!(c->state->events_buffer = calloc(c->state->events_buffer_len,
                                            (db->num_fields + 1) *
                                            sizeof(tdb_item))))
