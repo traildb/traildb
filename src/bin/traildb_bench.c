@@ -53,7 +53,8 @@ static void dump_hex(const char* raw, uint64_t length)
 /**
  * calls tdb_get_trail over the full tdb
  */
-static int do_get_all_and_decode(const tdb* db, const char* path)
+static int do_get_all_and_decode(const tdb* db, const char* path,
+				 tdb_field* ids, unsigned int ids_length)
 {
 	tdb_error err;
 	tdb_cursor* const c = tdb_cursor_new(db); assert(c);
@@ -70,9 +71,10 @@ static int do_get_all_and_decode(const tdb* db, const char* path)
 
 		const tdb_event* e;
 		while((e = tdb_cursor_next(c))) {
-			for(uint64_t j = 0; j < e->num_items; ++j) {
+			for(unsigned int j = 0; j < ids_length; ++j) {
 				uint64_t dummy;
-				(void)tdb_get_item_value(db, e->items[j], &dummy);
+				const tdb_item item = e->items[ids[j]];
+				(void)tdb_get_item_value(db, item, &dummy);
 				++items_decoded;
 			}
 		}
@@ -95,7 +97,13 @@ static int cmd_get_all_and_decode(char** dbs, int argc)
 			printf("Error code %i while opening TDB at %s\n", err, path);
 			return 1;
 		}
-		TIMED("get_all", err, do_get_all_and_decode(db, path));
+
+		const unsigned int nfields = (unsigned)tdb_num_fields(db) - 1u;
+		tdb_field ids[nfields];
+		for (unsigned int field_id = 0; field_id < nfields; ++field_id)
+			ids[field_id] = field_id;
+
+		TIMED("get_all", err, do_get_all_and_decode(db, path, ids, nfields));
 		tdb_close(db);
 	}
 
@@ -125,6 +133,34 @@ err:
         free(out);
 	return -1;
 }
+
+static int cmd_decode(const char* path, const char** field_names, int names_length)
+{
+	tdb* db = tdb_init(); assert(db);
+	tdb_error err = tdb_open(db, path);
+	if(err) {
+		REPORT_ERROR("Failed to open TDB. error=%i\n", err);
+		return 1;
+	}
+
+	tdb_field* ids;
+	err = resolve_fieldids(&ids, db, field_names, names_length);
+	if(err)
+		goto out;
+
+	/** actual field names (except for timestamp) */
+	for(int i = 0; i < names_length; ++i) {
+		assert(ids[i] > 0 && "reading from timestamp column 0 not supported");
+		--ids[i];
+	}
+
+	TIMED("cmd_decode", err, do_get_all_and_decode(db, path, ids, (unsigned)names_length));
+
+out:
+	tdb_close(db);
+	return err;
+}
+
 
 static int do_recode(tdb_cons* const cons, tdb* const db,
 		     tdb_field* const field_ids, const int num_fieldids)
@@ -408,6 +444,9 @@ static void print_help(void)
 "  decode-all <database directory>*\n"
 "  :: iterates over the complete DB, decoding\n"
 "     every value encountered\n"
+"  decode <database directory> <field name>+\n"
+"  :: iterates over the complete DB, decoding\n"
+"     the values of each given field\n"
 "  append-all <output path> <input path>\n"
 "  :: copies data from one DB into a new or\n"
 "     existing database. Has multiple use-cases,\n"
@@ -427,23 +466,24 @@ static void print_help(void)
 
 int main(int argc, char** argv)
 {
-	const char* command;
-   
 	if(argc < 2) {
 		print_help();
 		return 1;
 	}
 
-	command = argv[1];
+	const char*  const command = argv[1];
+	const char** const cargv   = const_quirk(argv);
 	if(IS_CMD("decode-all", 1)) {
 		return cmd_get_all_and_decode(argv + 2, argc - 2);
+	}
+	else if(IS_CMD("decode", 2)) {
+		return cmd_decode(argv[2], cargv + 3, argc - 3);
 	}
 	else if(IS_CMD("append-all", 2)) {
 		return cmd_append_all(argv[2], argv[3]);
 	}
 	else if(IS_CMD("recode", 3)) {
-		return cmd_recode(
-			argv[2], argv[3], const_quirk(argv + 4), argc - 4);
+		return cmd_recode(argv[2], argv[3], cargv + 4, argc - 4);
 	}
 	else if(IS_CMD("info", 1)) {
 		return cmd_info(argv[2]);
