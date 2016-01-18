@@ -1,5 +1,3 @@
-#define _GNU_SOURCE /* mkostemp() */
-
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -422,7 +420,7 @@ tdb_error tdb_encode(tdb_cons *cons, tdb_item *items)
     TDB_TIMER_START
 
     TDB_PATH(grouped_path, "%s/tmp.grouped.XXXXXX", root);
-    if ((fd = mkostemp(grouped_path, 0)) == -1){
+    if ((fd = mkstemp(grouped_path)) == -1){
         ret = TDB_ERR_IO_OPEN;
         goto done;
     }

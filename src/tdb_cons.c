@@ -1,5 +1,4 @@
 #define _DEFAULT_SOURCE /* ftruncate() */
-#define _GNU_SOURCE /* mkostemp() */
 
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -286,7 +285,7 @@ tdb_error tdb_cons_open(tdb_cons *cons,
        We don't care if it fails, e.g. because it already exists */
     mkdir(root, 0755);
     TDB_PATH(cons->tempfile, "%s/tmp.items.XXXXXX", root);
-    if ((fd = mkostemp(cons->tempfile, 0)) == -1){
+    if ((fd = mkstemp(cons->tempfile)) == -1){
         ret = TDB_ERR_IO_OPEN;
         goto done;
     }
