@@ -72,13 +72,11 @@ static int do_get_all_and_decode(const tdb* db, const char* path)
 			goto err;
 		}
 
-		const uint64_t trail_len = tdb_get_trail_length(c);
-		for(uint64_t i = 1; i < trail_len; ++i) {
-			const tdb_event* const e = tdb_cursor_next(c);
-			assert(e);
+		const tdb_event* e;
+		while((e = tdb_cursor_next(c))) {
 			for(uint64_t j = 0; j < e->num_items; ++j) {
 				uint64_t dummy;
-				tdb_get_item_value(db, e->items[i], &dummy);
+				(void)tdb_get_item_value(db, e->items[j], &dummy);
 				++items_decoded;
 			}
 		}
@@ -135,7 +133,7 @@ err:
 static int do_recode(tdb_cons* const cons, tdb* const db,
 		     tdb_field* const field_ids, const int num_fieldids)
 {
-	int err;
+	tdb_error err;
 	const uint64_t num_fields = tdb_num_fields(db);
 	const uint64_t num_trails = tdb_num_trails(db);
 
@@ -158,11 +156,8 @@ static int do_recode(tdb_cons* const cons, tdb* const db,
 			goto free_mem;
 		}
 
-		const uint64_t ev_len = tdb_get_trail_length(c);
-		for(uint64_t ev_id = 0; ev_id < ev_len; ++ev_id) {
-			const tdb_event* const e = tdb_cursor_next(c);
-			assert(e);
-
+		const tdb_event* e;
+		for(uint64_t ev_id = 0; (e = tdb_cursor_next(c)); ++ev_id) {
 			/* extract step */
 			for(int field = 0; field < num_fieldids; ++field) {
 				assert(0 < field_ids[field]);
@@ -185,9 +180,6 @@ static int do_recode(tdb_cons* const cons, tdb* const db,
 				goto free_mem;
 			}
 		}
-
-		/* assert, all events from this trail were indeed processed */
-		assert(tdb_cursor_next(c) == NULL);
 	}
 
 free_mem:
