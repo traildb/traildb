@@ -8,10 +8,6 @@
 #include "tdb_profile.h"
 
 
-//#define DEBUG 1
-
-#define LLU(val) ((unsigned long long)(val))
-
 #define REPORT_ERROR(fmt, ...)				\
 	do {						\
 		fprintf(stderr, (fmt), ##__VA_ARGS__);	\
@@ -67,8 +63,8 @@ static int do_get_all_and_decode(const tdb* db, const char* path)
 	for(uint64_t trail_id = 0; trail_id < num_trails; ++trail_id) {
 		err = tdb_get_trail(c, trail_id);
 		if(err) {
-			REPORT_ERROR("%s: failed to extract trail %llu. error=%i\n",
-				     path, LLU(trail_id), err);
+			REPORT_ERROR("%s: failed to extract trail %" PRIu64 ". error=%i\n",
+				     path, trail_id, err);
 			goto err;
 		}
 
@@ -82,7 +78,7 @@ static int do_get_all_and_decode(const tdb* db, const char* path)
 		}
 	}
 
-	printf("# items decoded: %llu\n", LLU(items_decoded));
+	printf("# items decoded: %" PRIu64 "\n", items_decoded);
 
 err:
 	tdb_cursor_free(c);
@@ -151,8 +147,8 @@ static int do_recode(tdb_cons* const cons, tdb* const db,
 	for(uint64_t trail_id = 0; trail_id < num_trails; ++trail_id) {
 		err = tdb_get_trail(c, trail_id);
 		if(err) {
-			REPORT_ERROR("Failed to get trail (trail_id=%llu). error=%i\n",
-				     LLU(trail_id), err);
+			REPORT_ERROR("Failed to get trail (trail_id=%" PRIu64 "). error=%i\n",
+				     trail_id, err);
 			goto free_mem;
 		}
 
@@ -175,8 +171,8 @@ static int do_recode(tdb_cons* const cons, tdb* const db,
 			err = tdb_cons_add(cons, tdb_get_uuid(db, trail_id),
 					   e->timestamp, values, value_lengths);
 			if(err) {
-				REPORT_ERROR("Failed to append record (trail_id=%llu, ev_id=%llu). error=%i\n",
-					     LLU(trail_id), LLU(ev_id), err);
+				REPORT_ERROR("Failed to append record (trail_id=%" PRIu64 ", ev_id=%" PRIu64 "). error=%i\n",
+					     trail_id, ev_id, err);
 				goto free_mem;
 			}
 		}
@@ -351,8 +347,8 @@ static int cmd_dump(const char* db_path)
 	for(uint64_t trail_id = 0; trail_id < num_trails; ++trail_id) {
 		err = tdb_get_trail(c, trail_id);
 		if(err) {
-			REPORT_ERROR("Failed to decode trail %llu. error=%i\n",
-				     LLU(trail_id), err);
+			REPORT_ERROR("Failed to decode trail %" PRIu64 ". error=%i\n",
+				     trail_id, err);
 
 			goto out;
 		}
@@ -378,20 +374,20 @@ static int cmd_info(const char* db_path)
 	}
 
 	printf("DB at %s:\n"
-	       " version: %llu\n"
-	       " #trails: %llu\n"
-	       " #events: %llu\n"
-	       " #fields: %llu\n"
+	       " version: %" PRIu64 "\n"
+	       " #trails: %" PRIu64 "\n"
+	       " #events: %" PRIu64 "\n"
+	       " #fields: %" PRIu64 "\n"
 	       "\n"
-	       " min timestamp: %llu\n"
-	       " max timestamp: %llu\n",
+	       " min timestamp: %" PRIu64 "\n"
+	       " max timestamp: %" PRIu64 "\n",
 	       db_path,
-	       LLU(tdb_version(db)),
-	       LLU(tdb_num_trails(db)),
-	       LLU(tdb_num_events(db)),
-	       LLU(tdb_num_fields(db)),
-	       LLU(tdb_min_timestamp(db)),
-	       LLU(tdb_max_timestamp(db)));
+	       tdb_version(db),
+	       tdb_num_trails(db),
+	       tdb_num_events(db),
+	       tdb_num_fields(db),
+	       tdb_min_timestamp(db),
+	       tdb_max_timestamp(db));
 
        printf("\nColumns: \n");
        printf(" field[00] = %s (implicit)\n", tdb_get_field_name(db, 0 ));
