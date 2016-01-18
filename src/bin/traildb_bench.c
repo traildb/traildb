@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include "traildb.h"
 #include "tdb_profile.h"
 
@@ -58,34 +59,35 @@ static void dump_hex(const char* raw, uint64_t length)
  */
 static int do_get_all_and_decode(const tdb* db, const char* path)
 {
-	int err;
-	const uint64_t num_trails = tdb_num_trails(db);
+	tdb_error err;
+	tdb_cursor* const c = tdb_cursor_new(db); assert(c);
 	uint64_t items_decoded = 0;
-	tdb_item* items = NULL;
-	uint64_t items_len = 0;
 
+	const uint64_t num_trails = tdb_num_trails(db);
 	for(uint64_t trail_id = 0; trail_id < num_trails; ++trail_id) {
-		uint64_t num_items;
-		err = tdb_get_trail(db, trail_id, &items, &items_len, &num_items, 0);
+		err = tdb_get_trail(c, trail_id);
 		if(err) {
 			REPORT_ERROR("%s: failed to extract trail %llu. error=%i\n",
 				     path, LLU(trail_id), err);
 			goto err;
 		}
 
-		for(uint64_t i = 1; i < num_items; ++i) {
-			if(tdb_item_val(items[i]) != 0) {
+		const uint64_t trail_len = tdb_get_trail_length(c);
+		for(uint64_t i = 1; i < trail_len; ++i) {
+			const tdb_event* const e = tdb_cursor_next(c);
+			assert(e);
+			for(uint64_t j = 0; j < e->num_items; ++j) {
 				uint64_t dummy;
-				tdb_get_item_value(db, items[i], &dummy);
+				tdb_get_item_value(db, e->items[i], &dummy);
 				++items_decoded;
 			}
 		}
 	}
 
-err:
-	if(items)
-		free(items);
 	printf("# items decoded: %llu\n", LLU(items_decoded));
+
+err:
+	tdb_cursor_free(c);
 	return err;
 }
 
@@ -135,13 +137,12 @@ static int do_recode(tdb_cons* const cons, tdb* const db,
 {
 	int err;
 	const uint64_t num_fields = tdb_num_fields(db);
-	tdb_item*      items      = NULL;
-	uint64_t       items_len  = 0;
 	const uint64_t num_trails = tdb_num_trails(db);
 
-	const char** const  values =  calloc(num_fields, sizeof(char*));
-	uint64_t*    const  value_lengths =  calloc(num_fields, sizeof(uint64_t));	
-	assert(values); assert(value_lengths);
+	const char** const  values        = calloc(num_fields, sizeof(char*));
+	uint64_t*    const  value_lengths = calloc(num_fields, sizeof(uint64_t));
+	tdb_cursor*  const  c             = tdb_cursor_new(db);
+	assert(values); assert(value_lengths); assert(c);
 
 	/*
 	 * for each trail
@@ -150,44 +151,47 @@ static int do_recode(tdb_cons* const cons, tdb* const db,
 	 *     insert the record
 	 */
 	for(uint64_t trail_id = 0; trail_id < num_trails; ++trail_id) {
-		uint64_t num_items;
-
-		err = tdb_get_trail(db, trail_id, &items, &items_len, &num_items, 0);
+		err = tdb_get_trail(c, trail_id);
 		if(err) {
 			REPORT_ERROR("Failed to get trail (trail_id=%llu). error=%i\n",
 				     LLU(trail_id), err);
 			goto free_mem;
 		}
-		assert((num_items % (num_fields + 1)) == 0);
 
-		for(uint64_t record_id = 0; record_id < num_items; record_id += num_fields + 1) {
-			const tdb_item* const record = items + record_id;
-
-			/// assert record is indeed pointing to the
-			/// beginning of a new record :)
-			assert(record[num_fields] == 0);
+		const uint64_t ev_len = tdb_get_trail_length(c);
+		for(uint64_t ev_id = 0; ev_id < ev_len; ++ev_id) {
+			const tdb_event* const e = tdb_cursor_next(c);
+			assert(e);
 
 			/* extract step */
 			for(int field = 0; field < num_fieldids; ++field) {
-				assert(record_id + field_ids[field] < num_items);
+				assert(0 < field_ids[field]);
+				assert(field_ids[field] <= e->num_items);
+
+				/** field ids start by '1' as column 0
+				    historically is the timestamp
+				    column. With tdb_event, the actual
+				    fields are 0-indexed */
 				values[field] = tdb_get_item_value(
-					db, record[field_ids[field]],
+					db, e->items[field_ids[field] - 1],
 					&value_lengths[field]);
 			}
 
 			err = tdb_cons_add(cons, tdb_get_uuid(db, trail_id),
-					   record[0], values, value_lengths);
+					   e->timestamp, values, value_lengths);
 			if(err) {
-				REPORT_ERROR("Failed to append record (trail_id=%llu, record_id=%llu). error=%i\n",
-					     LLU(trail_id), LLU(record_id), err);
+				REPORT_ERROR("Failed to append record (trail_id=%llu, ev_id=%llu). error=%i\n",
+					     LLU(trail_id), LLU(ev_id), err);
 				goto free_mem;
 			}
 		}
+
+		/* assert, all events from this trail were indeed processed */
+		assert(tdb_cursor_next(c) == NULL);
 	}
 
 free_mem:
-	if(items)
-		free(items);
+	tdb_cursor_free(c);
 	free(value_lengths);
 	free(values);
 	return err;
@@ -228,7 +232,7 @@ static int cmd_recode(const char* output_path, const char* input,
 	if(err)
 		goto close_cons;
 
-	err = tdb_cons_finalize(cons, 0);
+	err = tdb_cons_finalize(cons);
 	if(err) {
 		REPORT_ERROR("Failed to finalize output DB. error=%i\n", err);
 	}
@@ -311,8 +315,7 @@ free_fieldids:
 	return err ? 1 : 0;
 }
 
-static void dump_trail(const tdb* db, const uint8_t* uuid,
-		       tdb_item* items, uint64_t items_length)
+static void dump_trail(const tdb* db, const uint8_t* uuid, tdb_cursor* c)
 {
 #define HEX4 "%02x%02x%02x%02x"
 	printf("cookie " HEX4 HEX4 HEX4 HEX4 "\n",
@@ -322,26 +325,21 @@ static void dump_trail(const tdb* db, const uint8_t* uuid,
 	       uuid[12], uuid[13], uuid[14], uuid[15]);
 #undef HEX4
 
-	int print_timestamp = 1;
-	for(unsigned int i = 0; i < items_length; ++i) {
-		if(print_timestamp) {
-			/* every record starts with the timestamp */
-			printf("ts=%llu:\n", LLU(items[i]));
-			print_timestamp = 0;
-		}
-		else if(items[i] == 0) {
-			/* int(0) marks a new record */
-			putchar('\n');
-			print_timestamp = 1;
-		}
-		else {
-			uint64_t value_length = 0;
-			const char* value = tdb_get_item_value(db, items[i], &value_length);
-			printf(" %s=",
-			       tdb_get_field_name(db, tdb_item_field(items[i])));
-			dump_hex(value, value_length);
+	const tdb_event* e;
+	while((e = tdb_cursor_next(c))) {
+		printf("ts=%" PRIu64 ":\n", e->timestamp);
+		for(uint64_t i = 0; i < e->num_items; ++i) {
+			const char* name = tdb_get_field_name(
+				db, tdb_item_field(e->items[i]));
+			uint64_t     v_len = 0;
+			const char*  v     = tdb_get_item_value(
+				db, e->items[i], &v_len);
+
+			printf(" %s=", name);
+			dump_hex(v, v_len);
 			putchar('\n');
 		}
+		putchar('\n');
 	}
 }
 
@@ -355,14 +353,11 @@ static int cmd_dump(const char* db_path)
 		return 1;
 	}
 
-	tdb_item* items = NULL;
-	uint64_t items_len = 0;
+	tdb_cursor* const c = tdb_cursor_new(db);
 	const uint64_t num_trails = tdb_num_trails(db);
 
 	for(uint64_t trail_id = 0; trail_id < num_trails; ++trail_id) {
-		uint64_t items_decoded = 0;
-
-		err = tdb_get_trail(db, trail_id, &items, &items_len, &items_decoded, 0);
+		err = tdb_get_trail(c, trail_id);
 		if(err) {
 			REPORT_ERROR("Failed to decode trail %llu. error=%i\n",
 				     LLU(trail_id), err);
@@ -370,13 +365,12 @@ static int cmd_dump(const char* db_path)
 			goto out;
 		}
 
-		dump_trail(db, tdb_get_uuid(db, trail_id), items, items_decoded);
+		dump_trail(db, tdb_get_uuid(db, trail_id), c);
 		putchar('\n');
 	}
 
 out:
-	if(items != NULL)
-		free(items);
+	tdb_cursor_free(c);
 	tdb_close(db);
 	return err;
 }
