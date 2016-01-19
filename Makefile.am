@@ -31,6 +31,7 @@ libtraildb_la_SOURCES = \
   src/tdb_queue.c \
   src/tdb_huffman.c \
   src/tdb_cons_package.c \
+  src/tdb_package.c \
   src/arena.c \
   src/judy_str_map.c \
   src/judy_128_map.c

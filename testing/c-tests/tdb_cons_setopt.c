@@ -15,7 +15,6 @@ int main(int argc, char** argv)
     const uint64_t lengths[] = {3, 2};
     tdb_opt_value val = {.value = UINT64_MAX};
     uint64_t i;
-
     tdb_cons* c = tdb_cons_init();
     assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
 
@@ -40,10 +39,9 @@ int main(int argc, char** argv)
 
     assert(tdb_cons_finalize(c) == 0);
     tdb_cons_close(c);
-    return 0;
-
     tdb* t = tdb_init();
     assert(tdb_open(t, argv[1]) == 0);
+
     tdb_cursor *cursor = tdb_cursor_new(t);
     const tdb_event *event;
     assert(tdb_get_trail(cursor, 0) == 0);

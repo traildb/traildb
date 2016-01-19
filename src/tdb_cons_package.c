@@ -13,7 +13,7 @@
 #include <archive.h>
 #include <archive_entry.h>
 
-#include "tdb_internal.h"
+#include "tdb_package.h"
 
 /*
 NOTE! DO NOT change HEADER_FILES since we guarantee that these files
@@ -177,7 +177,7 @@ static tdb_error init_tar_toc(struct archive *tar,
     */
     static const uint64_t VALUE_SIZE = 22; /* = len(' %d\n' % 2**64) */
     static const uint64_t LEXICON_PREFIX_LEN = 8; /* = len("lexicon.") */
-    uint64_t i, size = strlen(TOC_FILE) + VALUE_SIZE;
+    uint64_t i, size = strlen(TOC_FILE) + VALUE_SIZE + strlen(TDB_TAR_MAGIC);
     char *buffer = NULL;
     int ret = 0;
 
@@ -312,7 +312,7 @@ done:
     return ret;
 }
 
-tdb_error make_tarball(const tdb_cons *cons)
+tdb_error cons_package(const tdb_cons *cons)
 {
     char dst_path[TDB_MAX_PATH_SIZE];
     char path[TDB_MAX_PATH_SIZE];
@@ -354,6 +354,7 @@ tdb_error make_tarball(const tdb_cons *cons)
     /* open TOC_FILE */
     TDB_PATH(path, "%s/%s", cons->root, TOC_FILE);
     TDB_OPEN(toc_file, path, "w+");
+    TDB_FPRINTF(toc_file, TDB_TAR_MAGIC);
 
     /* 2) write header files */
     if ((ret = write_entries(tar,

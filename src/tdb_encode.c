@@ -386,7 +386,7 @@ done:
     return ret;
 }
 
-tdb_error tdb_encode(tdb_cons *cons, tdb_item *items)
+tdb_error tdb_encode(tdb_cons *cons, const tdb_item *items)
 {
     char path[TDB_MAX_PATH_SIZE];
     char grouped_path[TDB_MAX_PATH_SIZE];
