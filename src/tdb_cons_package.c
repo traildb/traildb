@@ -31,8 +31,6 @@ static const char *DATA_FILES[] = {"fields",
 
 static const char TOC_FILE[] = "tar.toc";
 
-#define TOC_FILE_OFFSET 2560 /* = (len(HEADER_FILES) * 2 + 1) * 512 */
-
 static inline void debug_print(char __attribute__((unused)) *fmt, ...)
 {
 #ifdef TDB_PACKAGE_DEBUG
