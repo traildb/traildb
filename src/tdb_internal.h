@@ -72,6 +72,10 @@ struct _tdb_cons {
     struct judy_str_map *lexicons;
 
     char tempfile[TDB_MAX_PATH_SIZE];
+
+    /* options */
+
+    uint64_t output_format;
 };
 
 struct tdb_file {

@@ -325,8 +325,6 @@ void tdb_cons_close(tdb_cons *cons)
     free(cons->lexicons);
     if (cons->items.fd)
         fclose(cons->items.fd);
-    if (strcmp(cons->tempfile, ""))
-        unlink(cons->tempfile);
     if (cons->events.data)
         free(cons->events.data);
     if (cons->items.data)
@@ -536,7 +534,7 @@ tdb_error tdb_cons_finalize(tdb_cons *cons)
 
     /* finalize event items */
     if ((ret = arena_flush(&cons->items)))
-        goto error;
+        goto done;
 
     if (cons->items.fd && fclose(cons->items.fd)) {
         cons->items.fd = NULL;
@@ -553,26 +551,70 @@ tdb_error tdb_cons_finalize(tdb_cons *cons)
 
     TDB_TIMER_START
     if ((ret = store_lexicons(cons)))
-        goto error;
+        goto done;
     TDB_TIMER_END("encoder/store_lexicons")
 
     TDB_TIMER_START
     if ((ret = store_uuids(cons)))
-        goto error;
+        goto done;
     TDB_TIMER_END("encoder/store_uuids")
 
     TDB_TIMER_START
     if ((ret = store_version(cons)))
-        goto error;
+        goto done;
     TDB_TIMER_END("encoder/store_version")
 
     TDB_TIMER_START
     if ((ret = tdb_encode(cons, (tdb_item*)items_mmapped.data)))
-        goto error;
+        goto done;
     TDB_TIMER_END("encoder/encode")
 
-error:
+done:
     if (items_mmapped.data)
         munmap(items_mmapped.data, items_mmapped.size);
+
+    if (cons->tempfile)
+        unlink(cons->tempfile);
+
+    if (!ret){
+        #ifdef HAVE_ARCHIVE_H
+        if (cons->output_format == TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE)
+            ret = make_tarball(cons);
+        #endif
+    }
     return ret;
+}
+
+tdb_error tdb_cons_set_opt(tdb_cons *cons,
+                           tdb_opt_key key,
+                           tdb_opt_value value)
+{
+    switch (key){
+        case TDB_OPT_CONS_OUTPUT_FORMAT:
+            switch (value.value){
+                #ifdef HAVE_ARCHIVE_H
+                case TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE:
+                #endif
+                case TDB_OPT_CONS_OUTPUT_FORMAT_DIR:
+                    cons->output_format = value.value;
+                    return 0;
+                default:
+                    return TDB_ERR_INVALID_OPTION_VALUE;
+            }
+        default:
+            return TDB_ERR_UNKNOWN_OPTION;
+    }
+}
+
+tdb_error tdb_cons_get_opt(tdb_cons *cons,
+                           tdb_opt_key key,
+                           tdb_opt_value *value)
+{
+    switch (key){
+        case TDB_OPT_CONS_OUTPUT_FORMAT:
+            value->value = cons->output_format;
+            return 0;
+        default:
+            return TDB_ERR_UNKNOWN_OPTION;
+    }
 }

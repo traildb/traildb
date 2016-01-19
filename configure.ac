@@ -18,6 +18,26 @@ AC_CHECK_HEADERS([Judy.h], [], [
   AC_MSG_ERROR([unable to find Judy.h, from Judy library])
 ])
 
+AC_CHECK_LIB(archive, archive_write_new, [
+  AC_CHECK_HEADERS([archive.h], [
+    AC_MSG_RESULT([libarchive found! tdb_cons_package enabled])
+  ], [
+    AC_MSG_RESULT([
+      ---- NOTE ----
+      Found libarchive but archive.h was not found. tdb_cons_package() disabled.
+      This is ok if you don't need to create one-file TrailDBs, reading still works.
+      -------------
+    ])
+  ])
+], [
+  AC_MSG_RESULT([
+    ---- NOTE ----
+    libarchive not found! tdb_cons_package() disabled.
+    This is ok if you don't need to create one-file TrailDBs, reading still works.
+    -------------
+  ])
+], [])
+
 AC_CHECK_TYPE(__uint128_t, [], [
   AC_MSG_ERROR([__uint128_t not defined])
 ])

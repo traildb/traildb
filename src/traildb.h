@@ -24,6 +24,14 @@ tdb_error tdb_cons_open(tdb_cons *cons,
 
 void tdb_cons_close(tdb_cons *cons);
 
+tdb_error tdb_cons_set_opt(tdb_cons *cons,
+                           tdb_opt_key key,
+                           tdb_opt_value value);
+
+tdb_error tdb_cons_get_opt(tdb_cons *cons,
+                           tdb_opt_key key,
+                           tdb_opt_value *value);
+
 tdb_error tdb_cons_add(tdb_cons *cons,
                        const uint8_t uuid[16],
                        const uint64_t timestamp,
