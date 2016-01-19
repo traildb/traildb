@@ -146,4 +146,6 @@ int tdb_mmap(const char *path, struct tdb_file *dst);
 
 int is_fieldname_invalid(const char* field);
 
+tdb_error make_tarball(const tdb_cons *cons);
+
 #endif /* __TDB_INTERNAL_H__ */

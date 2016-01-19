@@ -25,6 +25,7 @@ typedef enum{
     TDB_ERR_IO_WRITE = -67,
     TDB_ERR_IO_READ = -68,
     TDB_ERR_IO_TRUNCATE = -69,
+    TDB_ERR_IO_PACKAGE = -70,
 
     /* tdb_open */
 

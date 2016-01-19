@@ -195,7 +195,11 @@ static tdb_error store_info(const char *path,
 {
     FILE *out = NULL;
     int ret = 0;
-
+    /*
+    NOTE - this file shouldn't grow to be more than 512
+    bytes, so it occupies a constant amount of space in a
+    tar package.
+    */
     TDB_OPEN(out, path, "w");
     TDB_FPRINTF(out,
                 "%"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64"\n",
