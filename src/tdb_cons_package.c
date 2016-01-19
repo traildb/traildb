@@ -175,7 +175,8 @@ static tdb_error init_tar_toc(struct archive *tar,
     know the exact offsets yet, we allocate the absolute maximum the toc
     can take.
     */
-    static const uint64_t VALUE_SIZE = 22; /* = len(' %d\n' % 2**64) */
+    /* VALUE_SIZE = len(' %d %d\n' % (2**64, 2**64)) */
+    static const uint64_t VALUE_SIZE = 43;
     static const uint64_t LEXICON_PREFIX_LEN = 8; /* = len("lexicon.") */
     uint64_t i, size = strlen(TOC_FILE) + VALUE_SIZE + strlen(TDB_TAR_MAGIC);
     char *buffer = NULL;
