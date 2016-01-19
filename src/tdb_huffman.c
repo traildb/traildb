@@ -392,7 +392,7 @@ int huff_convert_v0_codebook(struct tdb_file *codebook)
     void *p = mmap(NULL,
                    size,
                    PROT_READ | PROT_WRITE,
-                   MAP_PRIVATE | MAP_ANONYMOUS,
+                   MAP_PRIVATE | MAP_ANON,
                    -1,
                    0);
 
