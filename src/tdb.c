@@ -334,15 +334,18 @@ void tdb_close(tdb *db)
 {
     if (db){
         tdb_field i;
-        for (i = 0; i < db->num_fields - 1; i++){
-            free(db->field_names[i + 1]);
-            munmap(db->lexicons[i].data, db->lexicons[i].size);
+
+        if (db->num_fields > 0){
+            for (i = 0; i < db->num_fields - 1; i++){
+                free(db->field_names[i + 1]);
+                if (db->lexicons[i].data) munmap(db->lexicons[i].data, db->lexicons[i].size);
+            }
         }
 
-        munmap(db->uuids.data, db->uuids.size);
-        munmap(db->codebook.data, db->codebook.size);
-        munmap(db->trails.data, db->trails.size);
-        munmap(db->toc.data, db->toc.size);
+        if (db->uuids.data)    munmap(db->uuids.data, db->uuids.size);
+        if (db->codebook.data) munmap(db->codebook.data, db->codebook.size);
+        if (db->trails.data)   munmap(db->trails.data, db->trails.size);
+        if (db->toc.data)      munmap(db->toc.data, db->toc.size);
 
         free(db->lexicons);
         free(db->field_names);
