@@ -300,34 +300,38 @@ done:
 
 void tdb_willneed(const tdb *db)
 {
-    if (db){
-        tdb_field i;
-        for (i = 0; i < db->num_fields - 1; i++)
-            madvise(db->lexicons[i].data,
-                    db->lexicons[i].size,
-                    MADV_WILLNEED);
-
-        madvise(db->uuids.data, db->uuids.size, MADV_WILLNEED);
-        madvise(db->codebook.data, db->codebook.size, MADV_WILLNEED);
-        madvise(db->trails.data, db->trails.size, MADV_WILLNEED);
-        madvise(db->toc.data, db->toc.size, MADV_WILLNEED);
+    if (!db || db->num_fields == 0){
+        return;
     }
+
+    tdb_field i;
+    for (i = 0; i < db->num_fields - 1; i++)
+        madvise(db->lexicons[i].data,
+                db->lexicons[i].size,
+                MADV_WILLNEED);
+
+    madvise(db->uuids.data, db->uuids.size, MADV_WILLNEED);
+    madvise(db->codebook.data, db->codebook.size, MADV_WILLNEED);
+    madvise(db->trails.data, db->trails.size, MADV_WILLNEED);
+    madvise(db->toc.data, db->toc.size, MADV_WILLNEED);
 }
 
 void tdb_dontneed(const tdb *db)
 {
-    if (db){
-        tdb_field i;
-        for (i = 0; i < db->num_fields - 1; i++)
-            madvise(db->lexicons[i].data,
-                    db->lexicons[i].size,
-                    MADV_DONTNEED);
-
-        madvise(db->uuids.data, db->uuids.size, MADV_DONTNEED);
-        madvise(db->codebook.data, db->codebook.size, MADV_DONTNEED);
-        madvise(db->trails.data, db->trails.size, MADV_DONTNEED);
-        madvise(db->toc.data, db->toc.size, MADV_DONTNEED);
+    if (!db || db->num_fields == 0){
+        return;
     }
+
+    tdb_field i;
+    for (i = 0; i < db->num_fields - 1; i++)
+        madvise(db->lexicons[i].data,
+                db->lexicons[i].size,
+                MADV_DONTNEED);
+
+    madvise(db->uuids.data, db->uuids.size, MADV_DONTNEED);
+    madvise(db->codebook.data, db->codebook.size, MADV_DONTNEED);
+    madvise(db->trails.data, db->trails.size, MADV_DONTNEED);
+    madvise(db->toc.data, db->toc.size, MADV_DONTNEED);
 }
 
 void tdb_close(tdb *db)
