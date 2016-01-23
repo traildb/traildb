@@ -224,7 +224,17 @@ out_of_memory:
 
 tdb_cons *tdb_cons_init(void)
 {
-    return calloc(1, sizeof(tdb_cons));
+    tdb_cons *c = calloc(1, sizeof(tdb_cons));
+    if (c){
+        /*
+        this will fail if libarchive is not found but it is ok, we just
+        fall back to the directory mode
+        */
+        tdb_cons_set_opt(c,
+                         TDB_OPT_CONS_OUTPUT_FORMAT,
+                         opt_val(TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE));
+    }
+    return c;
 }
 
 tdb_error tdb_cons_open(tdb_cons *cons,
