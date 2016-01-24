@@ -157,21 +157,22 @@ tdb_error init_gram_bufs(struct gram_bufs *b, uint64_t num_fields)
 {
     memset(b, 0, sizeof(struct gram_bufs));
 
-    if (!(b->covered = malloc(num_fields)))
-        return TDB_ERR_NOMEM;
+    if (num_fields){
+        if (!(b->covered = malloc(num_fields)))
+            return TDB_ERR_NOMEM;
 
-    b->buf_len = MIN(num_fields * num_fields, INITIAL_GRAM_BUF_LEN);
-    b->num_fields = num_fields;
-    return alloc_gram_bufs(b);
+        b->buf_len = MIN(num_fields * num_fields, INITIAL_GRAM_BUF_LEN);
+        b->num_fields = num_fields;
+        return alloc_gram_bufs(b);
+    }
+    return 0;
 }
 
 void free_gram_bufs(struct gram_bufs *b)
 {
-    if (b){
-        free(b->chosen);
-        free(b->scores);
-        free(b->covered);
-    }
+    free(b->chosen);
+    free(b->scores);
+    free(b->covered);
 }
 
 /* given a set of edge-encoded values (encoded), choose a set of unigrams
