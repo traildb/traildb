@@ -411,9 +411,9 @@ int huff_convert_v0_codebook(struct tdb_file *codebook)
         new[i].bits = old[i].bits;
     }
 
-    munmap(codebook->data, codebook->size);
-    codebook->data = p;
-    codebook->size = size;
+    munmap(codebook->ptr, codebook->mmap_size);
+    codebook->data = codebook->ptr = p;
+    codebook->size = codebook->mmap_size = size;
 
     return 0;
 }

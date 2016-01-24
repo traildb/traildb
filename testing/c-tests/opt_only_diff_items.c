@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 #define NUM_EVENTS 1234
 
@@ -17,6 +18,7 @@ static void simple_case(const char *root)
     tdb_opt_value value = {.value = 0};
 
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, root, fields, 1) == 0);
     for (i = 0; i < NUM_EVENTS; i++)
         assert(tdb_cons_add(c, uuid, i, values, lengths) == 0);
@@ -70,6 +72,7 @@ static void two_field_case(const char *root)
     const tdb_event *event;
 
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, root, fields, 2) == 0);
     for (i = 0; i < NUM_EVENTS; i++){
         val1 = i;

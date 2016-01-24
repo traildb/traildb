@@ -20,6 +20,7 @@
 #include "tdb_internal.h"
 #include "tdb_error.h"
 #include "tdb_io.h"
+#include "tdb_package.h"
 #include "arena.h"
 
 #ifndef EVENTS_ARENA_INCREMENT
@@ -120,6 +121,7 @@ static tdb_error store_lexicons(tdb_cons *cons)
             goto done;
         TDB_FPRINTF(out, "%s\n", cons->ofield_names[i]);
     }
+    TDB_FPRINTF(out, "\n");
 done:
     TDB_CLOSE_FINAL(out);
     return ret;
@@ -221,7 +223,17 @@ out_of_memory:
 
 tdb_cons *tdb_cons_init(void)
 {
-    return calloc(1, sizeof(tdb_cons));
+    tdb_cons *c = calloc(1, sizeof(tdb_cons));
+    if (c){
+        /*
+        this will fail if libarchive is not found but it is ok, we just
+        fall back to the directory mode
+        */
+        tdb_cons_set_opt(c,
+                         TDB_OPT_CONS_OUTPUT_FORMAT,
+                         opt_val(TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE));
+    }
+    return c;
 }
 
 tdb_error tdb_cons_open(tdb_cons *cons,
@@ -324,8 +336,6 @@ void tdb_cons_close(tdb_cons *cons)
     free(cons->lexicons);
     if (cons->items.fd)
         fclose(cons->items.fd);
-    if (strcmp(cons->tempfile, ""))
-        unlink(cons->tempfile);
     if (cons->events.data)
         free(cons->events.data);
     if (cons->items.data)
@@ -535,7 +545,7 @@ tdb_error tdb_cons_finalize(tdb_cons *cons)
 
     /* finalize event items */
     if ((ret = arena_flush(&cons->items)))
-        goto error;
+        goto done;
 
     if (cons->items.fd && fclose(cons->items.fd)) {
         cons->items.fd = NULL;
@@ -544,7 +554,7 @@ tdb_error tdb_cons_finalize(tdb_cons *cons)
     cons->items.fd = NULL;
 
     if (num_events && cons->num_ofields) {
-        if (tdb_mmap(cons->tempfile, &items_mmapped))
+        if (file_mmap(cons->tempfile, NULL, &items_mmapped, NULL))
             return TDB_ERR_IO_READ;
     }
 
@@ -552,26 +562,70 @@ tdb_error tdb_cons_finalize(tdb_cons *cons)
 
     TDB_TIMER_START
     if ((ret = store_lexicons(cons)))
-        goto error;
+        goto done;
     TDB_TIMER_END("encoder/store_lexicons")
 
     TDB_TIMER_START
     if ((ret = store_uuids(cons)))
-        goto error;
+        goto done;
     TDB_TIMER_END("encoder/store_uuids")
 
     TDB_TIMER_START
     if ((ret = store_version(cons)))
-        goto error;
+        goto done;
     TDB_TIMER_END("encoder/store_version")
 
     TDB_TIMER_START
-    if ((ret = tdb_encode(cons, (tdb_item*)items_mmapped.data)))
-        goto error;
+    if ((ret = tdb_encode(cons, (const tdb_item*)items_mmapped.data)))
+        goto done;
     TDB_TIMER_END("encoder/encode")
 
-error:
-    if (items_mmapped.data)
-        munmap(items_mmapped.data, items_mmapped.size);
+done:
+    if (items_mmapped.ptr)
+        munmap(items_mmapped.ptr, items_mmapped.mmap_size);
+
+    if (cons->tempfile)
+        unlink(cons->tempfile);
+
+    if (!ret){
+        #ifdef HAVE_ARCHIVE_H
+        if (cons->output_format == TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE)
+            ret = cons_package(cons);
+        #endif
+    }
     return ret;
+}
+
+tdb_error tdb_cons_set_opt(tdb_cons *cons,
+                           tdb_opt_key key,
+                           tdb_opt_value value)
+{
+    switch (key){
+        case TDB_OPT_CONS_OUTPUT_FORMAT:
+            switch (value.value){
+                #ifdef HAVE_ARCHIVE_H
+                case TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE:
+                #endif
+                case TDB_OPT_CONS_OUTPUT_FORMAT_DIR:
+                    cons->output_format = value.value;
+                    return 0;
+                default:
+                    return TDB_ERR_INVALID_OPTION_VALUE;
+            }
+        default:
+            return TDB_ERR_UNKNOWN_OPTION;
+    }
+}
+
+tdb_error tdb_cons_get_opt(tdb_cons *cons,
+                           tdb_opt_key key,
+                           tdb_opt_value *value)
+{
+    switch (key){
+        case TDB_OPT_CONS_OUTPUT_FORMAT:
+            value->value = cons->output_format;
+            return 0;
+        default:
+            return TDB_ERR_UNKNOWN_OPTION;
+    }
 }

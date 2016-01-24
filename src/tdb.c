@@ -1,4 +1,4 @@
-#define _GNU_SOURCE /* for getline() */
+#define _DEFAULT_SOURCE /* for getline() */
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -13,13 +13,36 @@
 #include "tdb_error.h"
 #include "tdb_io.h"
 #include "tdb_huffman.h"
+#include "tdb_package.h"
 
 #define DEFAULT_OPT_CURSOR_EVENT_BUFFER_SIZE 1000
 
-int tdb_mmap(const char *path, struct tdb_file *dst)
+struct io_ops{
+    FILE* (*fopen)(const char *fname, const char *root, const tdb *db);
+
+    int (*fclose)(FILE *f);
+
+    int (*mmap)(const char *fname,
+                const char *root,
+                struct tdb_file *dst,
+                const tdb *db);
+};
+
+int file_mmap(const char *fname,
+              const char *root,
+              struct tdb_file *dst,
+              const tdb *db __attribute__((unused)))
 {
-    int fd, ret = 0;
+    char path[TDB_MAX_PATH_SIZE];
+    int fd = 0;
+    int ret = 0;
     struct stat stats;
+
+    if (root){
+        TDB_PATH(path, "%s/%s", root, fname);
+    }else{
+        TDB_PATH(path, "%s", fname);
+    }
 
     if ((fd = open(path, O_RDONLY)) == -1)
         return -1;
@@ -29,20 +52,45 @@ int tdb_mmap(const char *path, struct tdb_file *dst)
         goto done;
     }
 
-    dst->size = (uint64_t)stats.st_size;
-    dst->data = MAP_FAILED;
+    dst->size = dst->mmap_size = (uint64_t)stats.st_size;
+    dst->data = dst->ptr = MAP_FAILED;
 
     if (dst->size > 0)
-        dst->data = mmap(NULL, dst->size, PROT_READ, MAP_SHARED, fd, 0);
+        dst->ptr = mmap(NULL, dst->size, PROT_READ, MAP_SHARED, fd, 0);
 
-    if (dst->data == MAP_FAILED){
+    if (dst->ptr == MAP_FAILED){
         ret = -1;
         goto done;
     }
 
+    dst->data = dst->ptr;
 done:
-    close(fd);
+    if (fd)
+        close(fd);
     return ret;
+}
+
+static FILE *file_fopen(const char *fname,
+                        const char *root,
+                        const tdb *db __attribute__((unused)))
+{
+    char path[TDB_MAX_PATH_SIZE];
+    int ret = 0;
+    FILE *f;
+
+    TDB_PATH(path, "%s/%s", root, fname);
+    TDB_OPEN(f, path, "r");
+
+done:
+    if (ret)
+        return NULL;
+    else
+        return f;
+}
+
+static int file_fclose(FILE *f)
+{
+    return fclose(f);
 }
 
 void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex)
@@ -81,27 +129,36 @@ const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
     return &lex->data[tdb_lex_offset(lex, i)];
 }
 
-static tdb_error tdb_fields_open(tdb *db, const char *root, char *path)
+static tdb_error fields_open(tdb *db, const char *root, struct io_ops *io)
 {
+    char path[TDB_MAX_PATH_SIZE];
     FILE *f = NULL;
     char *line = NULL;
     size_t n = 0;
     tdb_field i, num_ofields = 0;
     int ret = 0;
+    int ok = 0;
 
-    TDB_PATH(path, "%s/fields", root);
-    if (!(f = fopen(path, "r")))
+    if (!(f = io->fopen("fields", root, db)))
         return TDB_ERR_INVALID_FIELDS_FILE;
 
-    while (getline(&line, &n, f) != -1)
+    while (getline(&line, &n, f) != -1){
+        if (line[0] == '\n'){
+            /*
+            V0 tdbs don't have the extra newline,
+            they should read until EOF
+            */
+            ok = 1;
+            break;
+        }
         ++num_ofields;
-    db->num_fields = num_ofields + 1U;
-
-    if (!feof(f)){
+    }
+    if (!(ok || feof(f))){
         /* we can get here if malloc fails inside getline() */
         ret = TDB_ERR_NOMEM;
         goto done;
     }
+    db->num_fields = num_ofields + 1U;
 
     if (!(db->field_names = calloc(db->num_fields, sizeof(char*)))){
         ret = TDB_ERR_NOMEM;
@@ -116,7 +173,12 @@ static tdb_error tdb_fields_open(tdb *db, const char *root, char *path)
     }else
         db->lexicons = NULL;
 
-    rewind(f);
+    /* io_ops doesn't support rewind(), so we have to close and reopen */
+    io->fclose(f);
+    if (!(f = io->fopen("fields", root, db))){
+        ret = TDB_ERR_IO_OPEN;
+        goto done;
+    }
 
     db->field_names[0] = "time";
 
@@ -135,8 +197,8 @@ static tdb_error tdb_fields_open(tdb *db, const char *root, char *path)
             goto done;
         }
 
-        TDB_PATH(path, "%s/lexicon.%s", root, line);
-        if (tdb_mmap(path, &db->lexicons[i - 1])){
+        TDB_PATH(path, "lexicon.%s", line);
+        if (io->mmap(path, root, &db->lexicons[i - 1], db)){
             ret = TDB_ERR_INVALID_LEXICON_FILE;
             goto done;
         }
@@ -150,7 +212,7 @@ static tdb_error tdb_fields_open(tdb *db, const char *root, char *path)
 done:
     free(line);
     if (f)
-        fclose(f);
+        io->fclose(f);
     return ret;
 }
 
@@ -180,29 +242,29 @@ static tdb_error init_field_stats(tdb *db)
     return ret;
 }
 
-static tdb_error read_version(tdb *db, const char *path)
+static tdb_error read_version(tdb *db, const char *root, struct io_ops *io)
 {
     FILE *f;
     int ret = 0;
 
-    if (!(f = fopen(path, "r")))
-        return TDB_ERR_INVALID_VERSION_FILE;
-
-    if (fscanf(f, "%"PRIu64, &db->version) != 1)
-        ret = TDB_ERR_INVALID_VERSION_FILE;
-    else if (db->version > TDB_VERSION_LATEST)
-        ret = TDB_ERR_INCOMPATIBLE_VERSION;
-
-    fclose(f);
+    if (!(f = io->fopen("version", root, db)))
+        db->version = 0;
+    else{
+        if (fscanf(f, "%"PRIu64, &db->version) != 1)
+            ret = TDB_ERR_INVALID_VERSION_FILE;
+        else if (db->version > TDB_VERSION_LATEST)
+            ret = TDB_ERR_INCOMPATIBLE_VERSION;
+        io->fclose(f);
+    }
     return ret;
 }
 
-static tdb_error read_info(tdb *db, const char *path)
+static tdb_error read_info(tdb *db, const char *root, struct io_ops *io)
 {
     FILE *f;
     int ret = 0;
 
-    if (!(f = fopen(path, "r")))
+    if (!(f = io->fopen("info", root, db)))
         return TDB_ERR_INVALID_INFO_FILE;
 
     if (fscanf(f,
@@ -213,7 +275,8 @@ static tdb_error read_info(tdb *db, const char *path)
                &db->max_timestamp,
                &db->max_timestamp_delta) != 5)
         ret = TDB_ERR_INVALID_INFO_FILE;
-    fclose(f);
+
+    io->fclose(f);
     return ret;
 }
 
@@ -222,10 +285,12 @@ tdb *tdb_init(void)
     return calloc(1, sizeof(tdb));
 }
 
-tdb_error tdb_open(tdb *db, const char *root)
+tdb_error tdb_open(tdb *db, const char *orig_root)
 {
-    char path[TDB_MAX_PATH_SIZE];
+    char root[TDB_MAX_PATH_SIZE];
+    struct stat stats;
     tdb_error ret = 0;
+    struct io_ops io;
 
     /*
     by handling the "db == NULL" case here gracefully, we allow the return
@@ -245,17 +310,35 @@ tdb_error tdb_open(tdb *db, const char *root)
     /* set default options */
     db->opt_cursor_event_buffer_size = DEFAULT_OPT_CURSOR_EVENT_BUFFER_SIZE;
 
-    TDB_PATH(path, "%s/info", root);
-    if ((ret = read_info(db, path)))
+    TDB_PATH(root, "%s", orig_root);
+    if (stat(root, &stats) == -1){
+        TDB_PATH(root, "%s.tdb", orig_root);
+        if (stat(root, &stats) == -1){
+            ret = TDB_ERR_IO_OPEN;
+            goto done;
+        }
+    }
+    if (S_ISDIR(stats.st_mode)){
+        /* open tdb in a directory */
+        io.fopen = file_fopen;
+        io.fclose = file_fclose;
+        io.mmap = file_mmap;
+    }else{
+        /* open tdb in a tarball */
+        io.fopen = package_fopen;
+        io.fclose = package_fclose;
+        io.mmap = package_mmap;
+        if ((ret = open_package(db, root)))
+            goto done;
+    }
+
+    if ((ret = read_info(db, root, &io)))
         goto done;
 
-    TDB_PATH(path, "%s/version", root);
-    if (access(path, F_OK))
-        db->version = TDB_VERSION_V0;
-    else if ((ret = read_version(db, path)))
+    if ((ret = read_version(db, root, &io)))
         goto done;
 
-    if ((ret = tdb_fields_open(db, root, path)))
+    if ((ret = fields_open(db, root, &io)))
         goto done;
 
     if ((ret = init_field_stats(db)))
@@ -263,75 +346,72 @@ tdb_error tdb_open(tdb *db, const char *root)
 
     if (db->num_trails) {
         /* backwards compatibility: UUIDs used to be called cookies */
-        TDB_PATH(path, "%s/cookies", root);
-        if (access(path, F_OK))
-            TDB_PATH(path, "%s/uuids", root);
-        if (tdb_mmap(path, &db->uuids)){
-            ret = TDB_ERR_INVALID_UUIDS_FILE;
-            goto done;
+        if (db->version == TDB_VERSION_V0){
+            if (io.mmap("cookies", root, &db->uuids, db)){
+                ret = TDB_ERR_INVALID_UUIDS_FILE;
+                goto done;
+            }
+        }else{
+            if (io.mmap("uuids", root, &db->uuids, db)){
+                ret = TDB_ERR_INVALID_UUIDS_FILE;
+                goto done;
+            }
         }
 
-        TDB_PATH(path, "%s/trails.codebook", root);
-        if (tdb_mmap(path, &db->codebook)){
+        if (io.mmap("trails.codebook", root, &db->codebook, db)){
             ret = TDB_ERR_INVALID_CODEBOOK_FILE;
             goto done;
         }
+
         if (db->version == TDB_VERSION_V0)
             if ((ret = huff_convert_v0_codebook(&db->codebook)))
                 goto done;
 
-        TDB_PATH(path, "%s/trails.data", root);
-        if (tdb_mmap(path, &db->trails)){
+        if (io.mmap("trails.toc", root, &db->toc, db)){
             ret = TDB_ERR_INVALID_TRAILS_FILE;
             goto done;
         }
 
-        TDB_PATH(path, "%s/trails.toc", root);
-        if (access(path, F_OK)) // backwards compat
-            TDB_PATH(path, "%s/trails.data", root);
-        if (tdb_mmap(path, &db->toc)){
+        if (io.mmap("trails.data", root, &db->trails, db)){
             ret = TDB_ERR_INVALID_TRAILS_FILE;
             goto done;
         }
     }
 done:
+    free_package(db);
     return ret;
 }
 
 void tdb_willneed(const tdb *db)
 {
-    if (!db || db->num_fields == 0){
-        return;
+    if (db && db->num_fields > 0){
+        tdb_field i;
+        for (i = 0; i < db->num_fields - 1; i++)
+            madvise(db->lexicons[i].ptr,
+                    db->lexicons[i].mmap_size,
+                    MADV_WILLNEED);
+
+        madvise(db->uuids.ptr, db->uuids.mmap_size, MADV_WILLNEED);
+        madvise(db->codebook.ptr, db->codebook.mmap_size, MADV_WILLNEED);
+        madvise(db->toc.ptr, db->toc.mmap_size, MADV_WILLNEED);
+        madvise(db->trails.ptr, db->trails.mmap_size, MADV_WILLNEED);
     }
-
-    tdb_field i;
-    for (i = 0; i < db->num_fields - 1; i++)
-        madvise(db->lexicons[i].data,
-                db->lexicons[i].size,
-                MADV_WILLNEED);
-
-    madvise(db->uuids.data, db->uuids.size, MADV_WILLNEED);
-    madvise(db->codebook.data, db->codebook.size, MADV_WILLNEED);
-    madvise(db->trails.data, db->trails.size, MADV_WILLNEED);
-    madvise(db->toc.data, db->toc.size, MADV_WILLNEED);
 }
 
 void tdb_dontneed(const tdb *db)
 {
-    if (!db || db->num_fields == 0){
-        return;
+    if (db && db->num_fields > 0){
+        tdb_field i;
+        for (i = 0; i < db->num_fields - 1; i++)
+            madvise(db->lexicons[i].ptr,
+                    db->lexicons[i].mmap_size,
+                    MADV_DONTNEED);
+
+        madvise(db->uuids.ptr, db->uuids.mmap_size, MADV_DONTNEED);
+        madvise(db->codebook.ptr, db->codebook.mmap_size, MADV_DONTNEED);
+        madvise(db->toc.ptr, db->toc.mmap_size, MADV_DONTNEED);
+        madvise(db->trails.ptr, db->trails.mmap_size, MADV_DONTNEED);
     }
-
-    tdb_field i;
-    for (i = 0; i < db->num_fields - 1; i++)
-        madvise(db->lexicons[i].data,
-                db->lexicons[i].size,
-                MADV_DONTNEED);
-
-    madvise(db->uuids.data, db->uuids.size, MADV_DONTNEED);
-    madvise(db->codebook.data, db->codebook.size, MADV_DONTNEED);
-    madvise(db->trails.data, db->trails.size, MADV_DONTNEED);
-    madvise(db->toc.data, db->toc.size, MADV_DONTNEED);
 }
 
 void tdb_close(tdb *db)
@@ -342,19 +422,19 @@ void tdb_close(tdb *db)
         if (db->num_fields > 0){
             for (i = 0; i < db->num_fields - 1; i++){
                 free(db->field_names[i + 1]);
-                if (db->lexicons[i].data)
-                    munmap(db->lexicons[i].data, db->lexicons[i].size);
+                if (db->lexicons[i].ptr)
+                    munmap(db->lexicons[i].ptr, db->lexicons[i].mmap_size);
             }
         }
 
-        if (db->uuids.data)
-            munmap(db->uuids.data, db->uuids.size);
-        if (db->codebook.data)
-            munmap(db->codebook.data, db->codebook.size);
-        if (db->trails.data)
-            munmap(db->trails.data, db->trails.size);
-        if (db->toc.data)
-            munmap(db->toc.data, db->toc.size);
+        if (db->uuids.ptr)
+            munmap(db->uuids.ptr, db->uuids.mmap_size);
+        if (db->codebook.ptr)
+            munmap(db->codebook.ptr, db->codebook.mmap_size);
+        if (db->toc.ptr)
+            munmap(db->toc.ptr, db->toc.mmap_size);
+        if (db->trails.ptr)
+            munmap(db->trails.ptr, db->trails.mmap_size);
 
         free(db->lexicons);
         free(db->field_names);

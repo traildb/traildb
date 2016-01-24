@@ -17,9 +17,6 @@ These are defined by autoconf
 Nothing has been tested on 32-bit systems so it is
 better to fail loudly for now.
 */
-#if SIZEOF_OFF_T != 8 || SIZEOF_SIZE_T != 8
-    #error "sizeof(off_t) and sizeof(size_t) must be 8"
-#endif
 
 struct tdb_cons_event{
     uint64_t item_zero;
@@ -72,11 +69,17 @@ struct _tdb_cons {
     struct judy_str_map *lexicons;
 
     char tempfile[TDB_MAX_PATH_SIZE];
+
+    /* options */
+
+    uint64_t output_format;
 };
 
 struct tdb_file {
-    char *data;
+    char *ptr;
+    const char *data;
     uint64_t size;
+    uint64_t mmap_size;
 };
 
 struct tdb_lexicon {
@@ -99,7 +102,6 @@ struct _tdb {
     uint64_t num_fields;
 
     struct tdb_file uuids;
-    struct tdb_file uuid_index;
     struct tdb_file codebook;
     struct tdb_file trails;
     struct tdb_file toc;
@@ -109,6 +111,11 @@ struct _tdb {
     struct field_stats *field_stats;
 
     uint64_t version;
+
+    /* tdb_package */
+
+    FILE *package_handle;
+    void *package_toc;
 
     /* options */
 
@@ -129,7 +136,7 @@ const char *tdb_lexicon_get(const struct tdb_lexicon *lex,
                             tdb_val i,
                             uint64_t *length);
 
-tdb_error tdb_encode(tdb_cons *cons, tdb_item *items);
+tdb_error tdb_encode(tdb_cons *cons, const tdb_item *items);
 
 tdb_error edge_encode_items(const tdb_item *items,
                             tdb_item **encoded,
@@ -138,7 +145,10 @@ tdb_error edge_encode_items(const tdb_item *items,
                             tdb_item *prev_items,
                             const struct tdb_grouped_event *ev);
 
-int tdb_mmap(const char *path, struct tdb_file *dst);
+int file_mmap(const char *path,
+              const char *root,
+              struct tdb_file *dst,
+              const tdb *db);
 
 int is_fieldname_invalid(const char* field);
 

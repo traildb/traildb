@@ -195,7 +195,11 @@ static tdb_error store_info(const char *path,
 {
     FILE *out = NULL;
     int ret = 0;
-
+    /*
+    NOTE - this file shouldn't grow to be more than 512
+    bytes, so it occupies a constant amount of space in a
+    tar package.
+    */
     TDB_OPEN(out, path, "w");
     TDB_FPRINTF(out,
                 "%"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64" %"PRIu64"\n",
@@ -382,7 +386,7 @@ done:
     return ret;
 }
 
-tdb_error tdb_encode(tdb_cons *cons, tdb_item *items)
+tdb_error tdb_encode(tdb_cons *cons, const tdb_item *items)
 {
     char path[TDB_MAX_PATH_SIZE];
     char grouped_path[TDB_MAX_PATH_SIZE];
@@ -397,7 +401,7 @@ tdb_error tdb_encode(tdb_cons *cons, tdb_item *items)
     uint64_t max_timedelta = 0;
     uint64_t *field_cardinalities = NULL;
     uint64_t i;
-    Pvoid_t unigram_freqs;
+    Pvoid_t unigram_freqs = NULL;
     struct judy_128_map gram_freqs;
     struct judy_128_map codemap;
     Word_t tmp;

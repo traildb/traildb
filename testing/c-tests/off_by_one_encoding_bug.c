@@ -6,6 +6,7 @@
 #include <assert.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 struct event{
     uint32_t time;
@@ -32,6 +33,7 @@ int main(int argc, char** argv)
     uint64_t i;
 
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
 
     for (i = 0; i < sizeof(EVENTS) / sizeof(struct event); i++){

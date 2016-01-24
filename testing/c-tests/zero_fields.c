@@ -4,12 +4,14 @@
 #include <string.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 int main(int argc, char** argv)
 {
     uint8_t uuid[16];
     const char *fields[] = {};
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], fields, 0) == 0);
     uint64_t i, j, cmp, sum = 0;
     uint64_t zero = 0;

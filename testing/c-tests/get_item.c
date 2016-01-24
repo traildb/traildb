@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 #define NUM_FIELDS 1000
 
@@ -21,6 +22,7 @@ int main(int argc, char** argv)
     }
 
     tdb_cons *c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], fields_ptr, NUM_FIELDS) == 0);
     assert(tdb_cons_add(c, uuid, 0, fields_ptr, lengths) == 0);
     assert(tdb_cons_finalize(c) == 0);

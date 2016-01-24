@@ -212,7 +212,7 @@ int _tdb_cursor_next_batch(tdb_cursor *cursor)
 {
     struct tdb_decode_state *s = cursor->state;
     const struct huff_codebook *codebook =
-        (struct huff_codebook*)s->db->codebook.data;
+        (const struct huff_codebook*)s->db->codebook.data;
     const struct field_stats *fstats = s->db->field_stats;
     uint64_t *dst = (uint64_t*)s->events_buffer;
     uint64_t i = 0;

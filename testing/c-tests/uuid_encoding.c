@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 int main(int argc, char** argv)
 {

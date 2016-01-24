@@ -7,6 +7,7 @@
 #include <sys/resource.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 /* this is a hack that allows us to check arena_increment below */
 #define SIZEOF_OFF_T 8
@@ -37,6 +38,7 @@ int main(int argc, char** argv)
         assert(setrlimit(RLIMIT_AS, &limit) == 0);
 
         tdb_cons* c = tdb_cons_init();
+        test_cons_settings(c);
         assert(tdb_cons_open(c, argv[1], fields, 1) == 0);
 
         /* the reason for this check is to ensure that we are using a
