@@ -12,6 +12,7 @@
 #include <Judy.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 #define NUM_TRAILS 100000
 #define NUM_EVENTS 10
@@ -30,6 +31,7 @@ int main(int argc, char **argv)
     dsfmt_t state;
     Pvoid_t uuids = NULL;
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     uint64_t i, j;
     __uint128_t prev_uuid = 0;
     Word_t key;

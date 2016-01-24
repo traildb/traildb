@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 #define NUM_EVENTS 11
 

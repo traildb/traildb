@@ -12,6 +12,8 @@
 #include <Judy.h>
 #include <judy_str_map.h>
 
+#include "tdb_test.h"
+
 #define NUM_ITER 100000
 
 static void *fold_fun(uint64_t id, const char *value, uint64_t len, void *state)

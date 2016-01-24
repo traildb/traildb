@@ -2,12 +2,14 @@
 #include <assert.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 int main(int argc, char** argv)
 {
     const char *fields[] = {"hello", "world", "what", "is", "this"};
     tdb_field field;
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], fields, 5) == 0);
     assert(tdb_cons_finalize(c) == 0);
 

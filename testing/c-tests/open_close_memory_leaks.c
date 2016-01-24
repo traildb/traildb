@@ -7,6 +7,7 @@
 #include <sys/resource.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 #define NUM_CONS_ITER 10
 #define NUM_OPEN_ITER 100
@@ -33,6 +34,7 @@ static void do_cons(const char *root, int do_finalize)
     }
 
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, root, fields_ptr, NUM_FIELDS) == 0);
     assert(tdb_cons_add(c, uuid, 0, fields_ptr, lengths) == 0);
 

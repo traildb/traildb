@@ -1,8 +1,10 @@
-#include <traildb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+
+#include <traildb.h>
+#include "tdb_test.h"
 
 static uint8_t uuid[16];
 
@@ -25,6 +27,7 @@ int main(int argc, char** argv)
     uint64_t len;
 
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
 
     tdb_cons_add(c, uuid, 0, values1, lengths1);

@@ -10,6 +10,7 @@
 #include <dsfmt/dSFMT.h>
 
 #include <tdb_bits.h>
+#include "tdb_test.h"
 
 #define NUM_WORDS 1000
 

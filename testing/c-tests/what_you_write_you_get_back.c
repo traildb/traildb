@@ -5,6 +5,8 @@
 
 #include <traildb.h>
 
+#include "tdb_test.h"
+
 #define NUM_EVENTS 3
 
 static uint8_t uuid[16];
@@ -27,6 +29,7 @@ int main(int argc, char** argv)
 
     tdb_cons* c = tdb_cons_init();
     assert(tdb_cons_open(c, argv[1], fields, 3) == 0);
+    test_cons_settings(c);
 
     for (i = 0; i < sizeof(LENGTHS) / sizeof(LENGTHS[0]); i++){
         lengths[0] = lengths[1] = lengths[2] = LENGTHS[i];

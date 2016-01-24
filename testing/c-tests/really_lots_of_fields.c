@@ -1,10 +1,12 @@
 /* DESCRIPTION: Tests that creating a tdb with huge number of fields works ok. */
 
-#include <traildb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+
+#include <traildb.h>
+#include "tdb_test.h"
 
 int main(int argc, char** argv)
 {
@@ -17,6 +19,7 @@ int main(int argc, char** argv)
     }
 
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c,
                          argv[1],
                          fields_ptr,
@@ -24,6 +27,7 @@ int main(int argc, char** argv)
     tdb_cons_close(c);
 
     c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], fields_ptr, TDB_MAX_NUM_FIELDS) == 0);
     assert(tdb_cons_finalize(c) == 0);
 

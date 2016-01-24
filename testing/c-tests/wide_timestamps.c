@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 static tdb *make_tdb(const char *root,
                      const uint64_t *tstamps,
@@ -13,6 +14,7 @@ static tdb *make_tdb(const char *root,
     static uint8_t uuid[16];
     const char *fields[] = {};
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     uint64_t zero = 0;
     uint32_t i;
 

@@ -6,6 +6,7 @@
 #include <assert.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 #define NUM_TRAILS 1000
 
@@ -20,6 +21,7 @@ int main(int argc, char** argv)
     uint64_t i, j, num_events = 0;
 
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
 
     assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
 

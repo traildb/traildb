@@ -7,6 +7,8 @@
 #include <traildb.h>
 #include <tdb_io.h>
 
+#include "tdb_test.h"
+
 static void empty_tdb_append(const char *root)
 {
     char path[TDB_MAX_PATH_SIZE];
@@ -14,6 +16,7 @@ static void empty_tdb_append(const char *root)
 
     tdb_path(path, "%s.%u", root, 1);
     tdb_cons* c1 = tdb_cons_init();
+    test_cons_settings(c1);
     assert(tdb_cons_open(c1, path, fields, 0) == 0);
     assert(tdb_cons_finalize(c1) == 0);
     tdb* t1 = tdb_init();
@@ -21,6 +24,7 @@ static void empty_tdb_append(const char *root)
 
     tdb_path(path, "%s.%u", root, 2);
     tdb_cons* c2 = tdb_cons_init();
+    test_cons_settings(c2);
     assert(tdb_cons_open(c2, path, fields, 0) == 0);
     assert(tdb_cons_append(c2, t1) == 0);
     assert(tdb_cons_finalize(c2) == 0);
@@ -39,6 +43,7 @@ static void mismatching_fields(const char *root)
 
     tdb_path(path, "%s.%u", root, 1);
     tdb_cons* c1 = tdb_cons_init();
+    test_cons_settings(c1);
     assert(tdb_cons_open(c1, path, fields1, 2) == 0);
     assert(tdb_cons_finalize(c1) == 0);
     tdb* t1 = tdb_init();
@@ -47,6 +52,7 @@ static void mismatching_fields(const char *root)
     /* mismatching number of fields - this should fail */
     tdb_path(path, "%s.%u", root, 2);
     tdb_cons* c2 = tdb_cons_init();
+    test_cons_settings(c2);
     assert(tdb_cons_open(c2, path, fields1, 3) == 0);
     assert(tdb_cons_append(c2, t1) == TDB_ERR_APPEND_FIELDS_MISMATCH);
     assert(tdb_cons_finalize(c2) == 0);
@@ -54,6 +60,7 @@ static void mismatching_fields(const char *root)
     /* mismatching field names - this should fail */
     tdb_path(path, "%s.%u", root, 2);
     c2 = tdb_cons_init();
+    test_cons_settings(c2);
     assert(tdb_cons_open(c2, path, fields2, 2) == 0);
     assert(tdb_cons_append(c2, t1) == TDB_ERR_APPEND_FIELDS_MISMATCH);
     assert(tdb_cons_finalize(c2) == 0);
@@ -87,6 +94,7 @@ static void simple_append(const char *root)
     };
     tdb_path(path, "%s.%u", root, 1);
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, path, fields, 2) == 0);
 
     for (i = 0; i < 3; i++){
@@ -104,6 +112,7 @@ static void simple_append(const char *root)
 
     tdb_path(path, "%s.%u", root, 2);
     c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, path, fields, 2) == 0);
 
     for (i = 0; i < 2; i++){

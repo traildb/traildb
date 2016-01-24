@@ -6,6 +6,7 @@
 #include <assert.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 int main(int argc, char** argv)
 {
@@ -17,6 +18,7 @@ int main(int argc, char** argv)
 
     /* too many fields */
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c,
                         argv[1],
                         bad,
@@ -26,6 +28,7 @@ int main(int argc, char** argv)
     /* an empty field name */
     buf[0] = 0;
     c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], bad, 1) == TDB_ERR_INVALID_FIELDNAME);
     tdb_cons_close(c);
 
@@ -33,12 +36,14 @@ int main(int argc, char** argv)
     buf[0] = 'a';
     buf[1] = 0;
     c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], bad, 2) == TDB_ERR_DUPLICATE_FIELDS);
     tdb_cons_close(c);
 
     /* time is a reserved field name */
     sprintf(buf, "time");
     c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], bad, 1) == TDB_ERR_INVALID_FIELDNAME);
     tdb_cons_close(c);
 
@@ -46,6 +51,7 @@ int main(int argc, char** argv)
     memset(buf, 'a', TDB_MAX_FIELDNAME_LENGTH);
     buf[TDB_MAX_FIELDNAME_LENGTH] = 0;
     c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], bad, 1) == TDB_ERR_INVALID_FIELDNAME);
     tdb_cons_close(c);
 
@@ -55,6 +61,7 @@ int main(int argc, char** argv)
             buf[0] = i;
             buf[1] = 0;
             c = tdb_cons_init();
+            test_cons_settings(c);
             assert(tdb_cons_open(c,
                                 argv[1],
                                 bad,
@@ -68,12 +75,14 @@ int main(int argc, char** argv)
     buf[0] = '/';
     buf[1] = 0;
     c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], bad, 1) == TDB_ERR_INVALID_FIELDNAME);
     tdb_cons_close(c);
 
     buf[0] = '.';
     buf[1] = 0;
     c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], bad, 1) == TDB_ERR_INVALID_FIELDNAME);
     tdb_cons_close(c);
 

@@ -15,6 +15,8 @@
 #include <Judy.h>
 #include <judy_128_map.h>
 
+#include "tdb_test.h"
+
 #define MEM_LIMIT (128 * 1024)
 #define NUM_ITER 1000000
 #define NUM_OOM_ITER 100000000

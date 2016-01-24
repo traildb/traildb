@@ -9,6 +9,7 @@
 #include <Judy.h>
 
 #include <traildb.h>
+#include "tdb_test.h"
 
 #define DSFMT_MEXP 521
 #include <dsfmt/dSFMT.h>
@@ -27,6 +28,7 @@ int main(int argc, char **argv)
 
     dsfmt_init_gen_rand(&state, 23489);
     tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
     assert(tdb_cons_open(c, argv[1], NULL, 0) == 0);
 
     for (i = 0; i < NUM_ITER; i++){

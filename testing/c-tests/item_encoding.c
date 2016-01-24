@@ -6,6 +6,7 @@
 
 #include <tdb_types.h>
 #include <tdb_limits.h>
+#include "tdb_test.h"
 
 static void check_item(tdb_field field, tdb_val val)
 {
