@@ -45,7 +45,7 @@ def cleanup_gcda_gcno():
     if files:
         print("Cleaned up some .gcda and .gcno files.")
 
-def run_coverage_test(coverage, test_args):
+def run_coverage_test(test_args):
     # Here's what happens:
     # 1. We create a temporary directory
     # 2. We run ./configure from this project but build objects and stuff to
@@ -75,22 +75,25 @@ def run_coverage_test(coverage, test_args):
         cflags = "%s -DEVENTS_ARENA_INCREMENT=100 -I%s/src/ -L%s/.libs" %\
                  (os.getenv('CFLAGS', ''), upper_path, temp_dir_path)
 
-        if has_coverage and coverage:
-            os.putenv("CFLAGS", cflags + " --coverage")
-        else:
-            os.putenv("CFLAGS", cflags)
+        if test_args.get('package_tests'):
+            cflags += ' -larchive'
+        if has_coverage and test_args.get('coverage'):
+            cflags += ' --coverage'
+
+        os.putenv("CFLAGS", cflags)
 
         expect_zero_exit_code("cd %s && %s --prefix %s && make install" % (temp_dir_path, os.path.join(upper_path, "configure"), temp_dir_path))
         ld_lib_path = os.getenv("LD_LIBRARY_PATH", '')
         os.putenv("LD_LIBRARY_PATH", "%s:%s" % (os.path.join(temp_dir_path, "lib"), ld_lib_path))
-        result = os.system("cd %s && ./support/test.py %s" % (script_path, test_args))
+        result = os.system("cd %s && ./support/test.py %s" %\
+                           (script_path, ' '.join(test_args)))
 
-        if has_coverage and coverage:
+        if has_coverage and test_args.get('coverage'):
             expect_zero_exit_code("cd %s && lcov --capture --directory . --output-file gcov.info" % temp_dir_path)
             expect_zero_exit_code("cd %s && genhtml gcov.info --output-directory %s" % (temp_dir_path, os.path.join(old_cwd, "coverage-html")))
             print("Generated coverage information to current working directory in coverage-html. If you don't want to generate coverage information, run with --no-coverage.")
         else:
-            if coverage and not has_coverage:
+            if test_args.get('coverage') and not has_coverage:
                 print("I will not generate coverage information because 'lcov' and/or 'gcov' is missing.")
     finally:
         os.chdir(old_cwd)
@@ -101,6 +104,9 @@ def run_coverage_test(coverage, test_args):
     return result
 
 if __name__ == '__main__':
-    test_args = 'all' if '--all' in sys.argv else ''
-    coverage = '--coverage' in sys.argv
-    sys.exit(run_coverage_test(coverage, test_args))
+    test_args = {}
+    for arg in ('large_tests', 'package_tests', 'coverage'):
+        if '--%s' % arg in sys.argv:
+            test_args[arg] = True
+
+    sys.exit(run_coverage_test(test_args))
