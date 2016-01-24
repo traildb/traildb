@@ -59,6 +59,9 @@ Word_t *j128m_get(const struct judy_128_map *j128m, __uint128_t key)
     return NULL;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
+
 void *j128m_fold(const struct judy_128_map *j128m,
                  judy_128_fold_fn fun,
                  void *state)
@@ -93,6 +96,8 @@ out_of_memory:
     exit(1);
 }
 
+#pragma GCC diagnostic pop
+
 static void *num_keys_fun(__uint128_t key __attribute__((unused)),
                           Word_t *value __attribute__((unused)),
                           void *state)
@@ -116,6 +121,7 @@ void j128m_free(struct judy_128_map *j128m)
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
     JLF(hi_ptr, j128m->hi_map, hi_key);
     while (hi_ptr){
         Pvoid_t lo_map = (Pvoid_t)*hi_ptr;
