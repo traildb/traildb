@@ -17,6 +17,7 @@ typedef enum{
     TDB_ERR_HANDLE_ALREADY_OPENED = -8,
     TDB_ERR_UNKNOWN_OPTION = -9,
     TDB_ERR_INVALID_OPTION_VALUE = -10,
+    TDB_ERR_INVALID_UUID = -11,
 
     /* io */
 

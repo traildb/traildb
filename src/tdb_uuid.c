@@ -56,17 +56,16 @@ int tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16])
         if (c1 && c2)
             uuid[i / 2] = (uint8_t)(((c1 - 1) << 4) | (c2 - 1));
         else
-            return 1;
+            return TDB_ERR_INVALID_UUID;
     }
     return 0;
 }
 
-int tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32])
+void tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32])
 {
     int i;
     for (i = 0; i < 16; i++){
         hexuuid[i * 2] = HEXCHARS[uuid[i] * 2];
         hexuuid[i * 2 + 1] = HEXCHARS[uuid[i] * 2 + 1];
     }
-    return 0;
 }

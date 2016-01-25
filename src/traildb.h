@@ -42,7 +42,7 @@ tdb_error tdb_cons_append(tdb_cons *cons, const tdb *db);
 tdb_error tdb_cons_finalize(tdb_cons *cons);
 
 tdb_error tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16]);
-tdb_error tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32]);
+void tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32]);
 
 tdb *tdb_init(void);
 tdb_error tdb_open(tdb *db, const char *root);
