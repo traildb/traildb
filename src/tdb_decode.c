@@ -330,3 +330,13 @@ int _tdb_cursor_next_batch(tdb_cursor *cursor)
     cursor->num_events_left = num_events;
     return num_events > 0 ? 1: 0;
 }
+
+/*
+the following ensures that tdb_cursor_next() is exported to
+libtraildb.so
+
+this is "strategy 3" from
+http://www.greenend.org.uk/rjk/tech/inline.html
+*/
+extern const tdb_event *tdb_cursor_next(tdb_cursor *cursor);
+
