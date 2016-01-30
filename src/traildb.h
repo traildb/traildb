@@ -100,7 +100,7 @@ uint64_t tdb_get_trail_length(tdb_cursor *cursor);
 
 int _tdb_cursor_next_batch(tdb_cursor *cursor);
 
-static inline const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
+inline const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
 {
     if (cursor->num_events_left > 0 || _tdb_cursor_next_batch(cursor)){
         const tdb_event *e = (const tdb_event*)cursor->next_event;
