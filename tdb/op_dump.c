@@ -15,53 +15,58 @@ static void populate_fields(const tdb_event *event,
                             const char *hexuuid,
                             const tdb *db,
                             const struct tdbcli_options *opt,
-                            const char **out_fields,
-                            uint64_t *out_len,
-                            uint64_t max_out_field)
+                            const char **out_values,
+                            uint64_t *out_lengths)
 {
     static char tstamp_str[21];
     uint64_t idx, len, i;
 
-    len = sprintf(tstamp_str, "%"PRIu64, event->timestamp);
-    memset(out_len, 0, max_out_field * 8);
+    memset(out_lengths, 0, opt->num_fields * 8);
 
-    out_fields[opt->field_map[0] - 1] = hexuuid;
-    out_len[opt->field_map[0] - 1] = 32;
-    out_fields[opt->field_map[1] - 1] = tstamp_str;
-    out_len[opt->field_map[1] - 1] = len;
-
+    if (opt->output_fields[0]){
+        out_values[opt->output_fields[0] - 1] = hexuuid;
+        out_lengths[opt->output_fields[0] - 1] = 32;
+    }
+    if (opt->output_fields[1]){
+        len = sprintf(tstamp_str, "%"PRIu64, event->timestamp);
+        out_values[opt->output_fields[1] - 1] = tstamp_str;
+        out_lengths[opt->output_fields[1] - 1] = len;
+    }
     for (i = 0; i < event->num_items; i++){
-        idx = opt->field_map[tdb_item_field(event->items[i]) + 1] - 1;
-        out_fields[idx] = tdb_get_item_value(db, event->items[i], &len);
-        out_len[idx] = len;
+        idx = opt->output_fields[tdb_item_field(event->items[i]) + 1];
+        if (idx){
+            out_values[idx - 1] = tdb_get_item_value(db, event->items[i], &len);
+            out_lengths[idx - 1] = len;
+        }
     }
 }
 
 static void dump_csv_event(FILE *output,
                            const struct tdbcli_options *opt,
-                           const char **out_fields,
-                           uint64_t *out_len,
-                           uint64_t max_out_field)
+                           const char **out_values,
+                           const uint64_t *out_lengths)
 {
     uint64_t i;
 
-    if (out_len[0] > INT32_MAX)
+    if (out_lengths[0] > INT32_MAX)
         DIE("Field too large");
 
-    SAFE_FPRINTF("%.*s", (int)out_len[0], out_fields[0]);
-    for (i = 1; i < max_out_field; i++){
-        if (out_len[i] > INT32_MAX)
+    SAFE_FPRINTF("%.*s", (int)out_lengths[0], out_values[0]);
+    for (i = 1; i < opt->num_fields; i++){
+        if (out_lengths[i] > INT32_MAX)
             DIE("Field too large");
-        SAFE_FPRINTF("%s%.*s", opt->delimiter, (int)out_len[i], out_fields[i]);
+        SAFE_FPRINTF("%s%.*s",
+                     opt->delimiter,
+                     (int)out_lengths[i],
+                     out_values[i]);
     }
     SAFE_FPRINTF("\n");
 }
 
 static void dump_json_event(FILE *output,
                             const struct tdbcli_options *opt,
-                            const char **out_fields,
-                            uint64_t *out_len,
-                            uint64_t max_out_field)
+                            const char **out_values,
+                            uint64_t *out_lengths)
 {
 
 }
@@ -69,9 +74,9 @@ static void dump_json_event(FILE *output,
 static void dump_header(FILE *output, const struct tdbcli_options *opt)
 {
     uint64_t i;
-    SAFE_FPRINTF("%s", opt->fieldnames[0]);
+    SAFE_FPRINTF("%s", opt->field_names[0]);
     for (i = 1; i < opt->num_fields; i++){
-        SAFE_FPRINTF("%s%s", opt->delimiter, opt->fieldnames[i]);
+        SAFE_FPRINTF("%s%s", opt->delimiter, opt->field_names[i]);
     }
     SAFE_FPRINTF("\n");
 }
@@ -80,24 +85,19 @@ static void dump_trails(const tdb *db,
                         FILE *output,
                         const struct tdbcli_options *opt)
 {
-    const char **out_fields = NULL;
-    uint64_t *out_len = NULL;
-    uint64_t max_out_field = 0;
-    uint64_t i, trail_id;
-    int err;
+    const char **out_values = NULL;
+    uint64_t *out_lengths = NULL;
+    uint64_t trail_id;
     uint8_t hexuuid[32];
+    int err;
 
     tdb_cursor *cursor = tdb_cursor_new(db);
     if (!cursor)
         DIE("Out of memory.");
 
-    for (i = 0; i < opt->field_map_size; i++)
-        if (opt->field_map[i] > max_out_field)
-            max_out_field = opt->field_map[i];
-
-    if (!(out_fields = malloc(max_out_field * sizeof(char*))))
+    if (!(out_values = malloc(opt->num_fields * sizeof(char*))))
         DIE("Out of memory.");
-    if (!(out_len = malloc(max_out_field * 8)))
+    if (!(out_lengths = malloc(opt->num_fields * 8)))
         DIE("Out of memory.");
 
     if (opt->format == FORMAT_CSV && opt->csv_has_header)
@@ -118,22 +118,58 @@ static void dump_trails(const tdb *db,
                             (const char*)hexuuid,
                             db,
                             opt,
-                            out_fields,
-                            out_len,
-                            max_out_field);
+                            out_values,
+                            out_lengths);
             if (opt->format == FORMAT_CSV)
-                dump_csv_event(output, opt, out_fields, out_len, max_out_field);
+                dump_csv_event(output, opt, out_values, out_lengths);
             else
-                dump_json_event(output, opt, out_fields, out_len, max_out_field);
+                dump_json_event(output, opt, out_values, out_lengths);
         }
     }
 
-    free(out_fields);
-    free(out_len);
+    free(out_values);
+    free(out_lengths);
     tdb_cursor_free(cursor);
 }
 
-int op_dump(const struct tdbcli_options *opt)
+static void init_fields_from_arg(struct tdbcli_options *opt, const tdb *db)
+{
+    char *fieldstr;
+    tdb_field field;
+    uint64_t idx = 1;
+
+    if (opt->fields_arg){
+
+        if (index(opt->fields_arg, ':'))
+            DIE("Field indices in --field are not supported with dump");
+
+        while ((fieldstr = strsep(&opt->fields_arg, ","))){
+            if (!strcmp(fieldstr, "uuid"))
+                opt->output_fields[0] = idx;
+            else if (!strcmp(fieldstr, "time"))
+                opt->output_fields[1] = idx;
+            else if (tdb_get_field(db, fieldstr, &field))
+                DIE("Field not found: '%s'", fieldstr);
+            else
+                opt->output_fields[field + 1] = idx;
+            opt->field_names[idx - 1] = fieldstr;
+            if (++idx == TDB_MAX_NUM_FIELDS + 2)
+                DIE("Too many fields");
+        }
+        opt->num_fields = idx - 1;
+    }else{
+        opt->field_names[0] = "uuid";
+        opt->output_fields[0] = 1;
+
+        for (field = 0; field < tdb_num_fields(db); field++){
+            opt->field_names[field + 1] = tdb_get_field_name(db, field);
+            opt->output_fields[field + 1] = field + 2;
+        }
+        opt->num_fields = tdb_num_fields(db) + 1;
+    }
+}
+
+int op_dump(struct tdbcli_options *opt)
 {
     FILE *output = stdout;
     int err;
@@ -157,6 +193,7 @@ int op_dump(const struct tdbcli_options *opt)
             opt->input,
             tdb_error_str(err));
 
+    init_fields_from_arg(opt, db);
     dump_trails(db, output, opt);
 
     if (output != stdout)

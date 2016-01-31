@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <errno.h>
 
 #include <traildb.h>
 
@@ -19,17 +20,54 @@ static const char *OPS[] = {"make", "dump"};
 #define OP_MAKE 0
 #define OP_DUMP 1
 
+long int safely_to_int(const char *str, const char *field)
+{
+    char *end = NULL;
+    errno = 0;
+    long int x = strtol(str, &end, 10);
+    if (errno || *end)
+        DIE("Invalid %s: %s", field, str);
+    return x;
+}
+
 static void print_usage_and_exit()
 {
     printf("Usage\n");
     exit(1);
 }
 
+#if 0
 static void parse_fields(const char *fields_arg, int op)
 {
     static const char *DEFAULT_FIELDNAMES[] = {"uuid", "time"};
+    static const uint32_t DEFAULT_FIELD_MAP[] = {1, 2};
+
+    /* four ways to define fields:
+
+    0) no options
+       * uuid and time are expected to be found at columns 1 and 2
+
+    1) --fields uuid,time,field1,field2
+       * Read / output first K fields
+       * Extract the defined fields from / to JSON.
+
+    2) --fields 2:uuid,3:time,20:field1,30:field2
+       * Explicit column IDs for CSV.
+       * Incompatible with JSON.
+       * Incompatible with dump.
+
+    3) --csv-header
+       * Read/output fields from/to a csv header.
+       * Incompatible with --fields.
+       * Incompatible with JSON.
+    */
 
     if (fields_arg){
+    if (options.csv_has_header)
+        /* mode 3) */
+        DIE("Can't specify both --fields and --csv-header");
+
+
     /*
     if op == make,
         opt->fieldnames = tdb field names
@@ -39,10 +77,11 @@ static void parse_fields(const char *fields_arg, int op)
         return tdb_field -> output_field mapping
     */
     }else if (op == OP_DUMP){
-        options.fieldnames = DEFAULT_FIELDNAMES;
-        options.num_fields = 2;
+    }else if (op == OP_MAKE){
+        
     }
 }
+#endif
 
 static void initialize(int argc, char **argv, int op)
 {
@@ -51,7 +90,6 @@ static void initialize(int argc, char **argv, int op)
     static const char DEFAULT_DUMP_INPUT[] = "a";
     static const char DEFAULT_DUMP_OUTPUT[] = "-";
     static const char DEFAULT_DELIMITER[] = " ";
-    static const uint32_t DEFAULT_FIELD_MAP[] = {1, 2};
 
     static struct option long_options[] = {
         {"csv", no_argument, 0, 'c'},
@@ -61,12 +99,12 @@ static void initialize(int argc, char **argv, int op)
         {"delimiter", required_argument, 0, 'd'},
         {"fields", required_argument, 0, 'f'},
         {"tdb-format", required_argument, 0, 't'},
+        {"urlencode", no_argument, 0, 'u'},
         {"csv-header", no_argument, 0, -2},
         {0, 0, 0, 0}
     };
 
     int c, option_index = 1;
-    char *fields_arg = NULL;
 
     /* defaults */
 
@@ -80,8 +118,6 @@ static void initialize(int argc, char **argv, int op)
 
     options.format = FORMAT_CSV;
     options.delimiter = DEFAULT_DELIMITER;
-    options.field_map = DEFAULT_FIELD_MAP;
-    options.field_map_size = 2;
 
     do{
         c = getopt_long(argc,
@@ -111,7 +147,7 @@ static void initialize(int argc, char **argv, int op)
                 options.delimiter = optarg;
                 break;
             case 'f':
-                fields_arg = optarg;
+                options.fields_arg = optarg;
                 break;
             case 't':
                 options.output_format_is_set = 1;
@@ -120,9 +156,8 @@ static void initialize(int argc, char **argv, int op)
                 else if (!strcmp(optarg, "dir"))
                     options.output_format = TDB_OPT_CONS_OUTPUT_FORMAT_DIR;
                 else{
-                    printf("Unknown output format: '%s'.\n"
-                           "Expected 'pkg' or 'dir'.\n", optarg);
-                    exit(1);
+                    DIE("Unknown output format: '%s'.\n"
+                        "Expected 'pkg' or 'dir'.\n", optarg);
                 }
                 break;
             case -2:
@@ -132,8 +167,6 @@ static void initialize(int argc, char **argv, int op)
                 print_usage_and_exit();
         }
     }while (c != -1);
-
-    parse_fields(fields_arg, op);
 }
 
 int main(int argc, char **argv)
