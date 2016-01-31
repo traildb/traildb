@@ -36,6 +36,8 @@ static void populate_fields(const tdb_event *event,
         idx = opt->output_fields[tdb_item_field(event->items[i]) + 1];
         if (idx){
             out_values[idx - 1] = tdb_get_item_value(db, event->items[i], &len);
+            if (len > INT32_MAX)
+                DIE("Value too large (over 2GB!)");
             out_lengths[idx - 1] = len;
         }
     }
@@ -48,13 +50,9 @@ static void dump_csv_event(FILE *output,
 {
     uint64_t i;
 
-    if (out_lengths[0] > INT32_MAX)
-        DIE("Field too large");
-
-    SAFE_FPRINTF("%.*s", (int)out_lengths[0], out_values[0]);
+    if (out_lengths[0])
+        SAFE_FPRINTF("%.*s", (int)out_lengths[0], out_values[0]);
     for (i = 1; i < opt->num_fields; i++){
-        if (out_lengths[i] > INT32_MAX)
-            DIE("Field too large");
         SAFE_FPRINTF("%s%.*s",
                      opt->delimiter,
                      (int)out_lengths[i],
@@ -68,7 +66,22 @@ static void dump_json_event(FILE *output,
                             const char **out_values,
                             uint64_t *out_lengths)
 {
+    const char PREFIX1[] = "";
+    const char PREFIX2[] = ", ";
+    const char *prefix = PREFIX1;
+    uint64_t i;
 
+    SAFE_FPRINTF("{");
+    for (i = 0; i < opt->num_fields; i++)
+        if (out_lengths[i] || !opt->json_no_empty){
+            SAFE_FPRINTF("%s\"%s\": \"%.*s\"",
+                         prefix,
+                         opt->field_names[i],
+                         (int)out_lengths[i],
+                         out_values[i]);
+            prefix = PREFIX2;
+        }
+    SAFE_FPRINTF("}\n");
 }
 
 static void dump_header(FILE *output, const struct tdbcli_options *opt)
@@ -184,7 +197,7 @@ int op_dump(struct tdbcli_options *opt)
     if (!access(opt->output, W_OK))
         DIE("Output file %s already exists.", opt->output);
     if (strcmp(opt->output, "-")){
-        if (!(output = fopen(opt->input, "w")))
+        if (!(output = fopen(opt->output, "w")))
             DIE("Could not open output file %s", opt->output);
     }
 
@@ -194,7 +207,8 @@ int op_dump(struct tdbcli_options *opt)
             tdb_error_str(err));
 
     init_fields_from_arg(opt, db);
-    dump_trails(db, output, opt);
+    if (opt->num_fields)
+        dump_trails(db, output, opt);
 
     if (output != stdout)
         if (fclose(output))

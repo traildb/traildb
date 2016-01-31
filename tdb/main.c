@@ -32,16 +32,9 @@ long int safely_to_int(const char *str, const char *field)
 
 static void print_usage_and_exit()
 {
+    /* TODO add this */
     printf("Usage\n");
     exit(1);
-}
-
-#if 0
-static void parse_fields(const char *fields_arg, int op)
-{
-    static const char *DEFAULT_FIELDNAMES[] = {"uuid", "time"};
-    static const uint32_t DEFAULT_FIELD_MAP[] = {1, 2};
-
     /* four ways to define fields:
 
     0) no options
@@ -61,27 +54,7 @@ static void parse_fields(const char *fields_arg, int op)
        * Incompatible with --fields.
        * Incompatible with JSON.
     */
-
-    if (fields_arg){
-    if (options.csv_has_header)
-        /* mode 3) */
-        DIE("Can't specify both --fields and --csv-header");
-
-
-    /*
-    if op == make,
-        opt->fieldnames = tdb field names
-        return input_field -> tdb_field mapping
-    if op == dump
-        opt->fieldnames = output field names
-        return tdb_field -> output_field mapping
-    */
-    }else if (op == OP_DUMP){
-    }else if (op == OP_MAKE){
-        
-    }
 }
-#endif
 
 static void initialize(int argc, char **argv, int op)
 {
@@ -99,8 +72,8 @@ static void initialize(int argc, char **argv, int op)
         {"delimiter", required_argument, 0, 'd'},
         {"fields", required_argument, 0, 'f'},
         {"tdb-format", required_argument, 0, 't'},
-        {"urlencode", no_argument, 0, 'u'},
         {"csv-header", no_argument, 0, -2},
+        {"json-no-empty", no_argument, 0, -3},
         {0, 0, 0, 0}
     };
 
@@ -162,6 +135,9 @@ static void initialize(int argc, char **argv, int op)
                 break;
             case -2:
                 options.csv_has_header = 1;
+                break;
+            case -3:
+                options.json_no_empty = 1;
                 break;
             default:
                 print_usage_and_exit();

@@ -26,6 +26,9 @@ struct tdbcli_options{
     /* csv */
     int csv_has_header;
 
+    /* json */
+    int json_no_empty;
+
     const char *delimiter;
     uint64_t output_format;
     int output_format_is_set;
