@@ -390,6 +390,7 @@ tdb_error make_grams(FILE *grouped,
     struct ngram_state g = {.final_freqs = final_freqs};
     Word_t tmp;
     int ret = 0;
+    TDB_TIMER_DEF
 
     j128m_init(&g.ngram_freqs);
     if ((ret = init_gram_bufs(&g.gbufs, num_fields)))
@@ -404,19 +405,25 @@ tdb_error make_grams(FILE *grouped,
        for finding frequent sets (bigrams) */
 
     /* find unigrams that are sufficiently frequent */
+    TDB_TIMER_START
     if ((ret = find_candidates(unigram_freqs, &g.candidates)))
         goto done;
+    TDB_TIMER_END("encode_model/find_candidates")
 
     /* collect frequencies of *all* occurring bigrams of candidate unigrams */
+    TDB_TIMER_START
     ret = event_fold(all_bigrams, grouped, num_events, items, num_fields, &g);
     if (ret)
         goto done;
+    TDB_TIMER_END("encode_model/all_bigrams")
 
     /* collect frequencies of non-overlapping bigrams and unigrams
        (exact covering set for each event), store in final_freqs */
+    TDB_TIMER_START
     ret = event_fold(choose_grams, grouped, num_events, items, num_fields, &g);
     if (ret)
         goto done;
+    TDB_TIMER_END("encode_model/choose_grams")
 
 done:
 #pragma GCC diagnostic push
