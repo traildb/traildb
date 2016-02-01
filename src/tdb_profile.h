@@ -11,9 +11,9 @@
 #define TDB_TIMER_START gettimeofday(&__start, NULL);
 #define TDB_TIMER_END(msg)\
         gettimeofday(&__end, NULL);\
-        fprintf(stderr, "PROF: %s took %2.4fms\n", msg,\
-            ((__end.tv_sec * 1000000LLU + __end.tv_usec) -\
-             (__start.tv_sec * 1000000LLU + __start.tv_usec)) / (double)1000.0);
+        fprintf(stderr, "PROF: %s took %ldms\n", msg,\
+            ((__end.tv_sec * 1000000L + __end.tv_usec) -\
+             (__start.tv_sec * 1000000L + __start.tv_usec)) / 1000);
 #else
 #ifdef TDB_PROFILE_CPU
 
