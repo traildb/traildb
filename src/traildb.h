@@ -100,6 +100,10 @@ uint64_t tdb_get_trail_length(tdb_cursor *cursor);
 
 int _tdb_cursor_next_batch(tdb_cursor *cursor);
 
+/*
+the pragma is a workaround for older GCCs that have this issue:
+https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54113
+*/
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-prototypes"
 inline const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
