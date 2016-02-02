@@ -100,6 +100,8 @@ uint64_t tdb_get_trail_length(tdb_cursor *cursor);
 
 int _tdb_cursor_next_batch(tdb_cursor *cursor);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
 inline const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
 {
     if (cursor->num_events_left > 0 || _tdb_cursor_next_batch(cursor)){
@@ -111,5 +113,6 @@ inline const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
     }else
         return NULL;
 }
+#pragma GCC diagnostic pop
 
 #endif /* __TRAILDB_H__ */
