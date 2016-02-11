@@ -1,4 +1,5 @@
 #define _DEFAULT_SOURCE /* ftruncate() */
+#define _GNU_SOURCE
 
 #include <sys/mman.h>
 #include <sys/stat.h>

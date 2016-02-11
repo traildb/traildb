@@ -1,4 +1,6 @@
 #define _DEFAULT_SOURCE /* getline() */
+#define _GNU_SOURCE
+
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>

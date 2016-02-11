@@ -1,5 +1,6 @@
-
 #define _DEFAULT_SOURCE /* mkstemp */
+#define _GNU_SOURCE
+
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>

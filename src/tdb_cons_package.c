@@ -1,6 +1,8 @@
 #ifdef HAVE_ARCHIVE_H
 
 #define _DEFAULT_SOURCE /* mkstemp() */
+#define _GNU_SOURCE
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
