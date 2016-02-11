@@ -1,5 +1,6 @@
 #define _DEFAULT_SOURCE /* for getline() */
 #define _BSD_SOURCE /* for madvise() */
+#define _GNU_SOURCE /* for getline() - older compiles()? */
 
 #include <fcntl.h>
 #include <sys/mman.h>
