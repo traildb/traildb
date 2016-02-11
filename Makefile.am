@@ -40,6 +40,7 @@ EXTRA_libtraildb_la_SOURCES = src/xxhash/xxhash.c src/dsfmt/dSFMT.c
 
 include_HEADERS = \
   src/traildb.h \
+  src/tdb_error.h \
   src/tdb_types.h \
   src/tdb_limits.h
 
