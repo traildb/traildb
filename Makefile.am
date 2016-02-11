@@ -5,7 +5,6 @@ libtraildb_la_CFLAGS = -std=c99 \
                        -O3 \
                        -g \
                        -Wall \
-                       -Werror \
                        -Wextra \
                        -Wconversion \
                        -Wcast-qual \
