@@ -1,4 +1,5 @@
 #define _DEFAULT_SOURCE /* for getline() */
+#define _BSD_SOURCE /* for madvise() */
 
 #include <fcntl.h>
 #include <sys/mman.h>
