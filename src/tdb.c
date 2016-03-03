@@ -582,8 +582,77 @@ tdb_error tdb_get_trail_id(const tdb *db,
 
 const char *tdb_error_str(tdb_error errcode)
 {
-    /* TODO implement this */
     switch (errcode){
+        case        TDB_ERR_OK:
+            return "TDB_ERR_OK";
+        case        TDB_ERR_NOMEM:
+            return "TDB_ERR_NOMEM";
+        case        TDB_ERR_PATH_TOO_LONG:
+            return "TDB_ERR_PATH_TOO_LONG";
+        case        TDB_ERR_UNKNOWN_FIELD:
+            return "TDB_ERR_UNKNOWN_FIELD";
+        case        TDB_ERR_UNKNOWN_UUID:
+            return "TDB_ERR_UNKNOWN_UUID";
+        case        TDB_ERR_INVALID_TRAIL_ID:
+            return "TDB_ERR_INVALID_TRAIL_ID";
+        case        TDB_ERR_HANDLE_IS_NULL:
+            return "TDB_ERR_HANDLE_IS_NULL";
+        case        TDB_ERR_HANDLE_ALREADY_OPENED:
+            return "TDB_ERR_HANDLE_ALREADY_OPENED";
+        case        TDB_ERR_UNKNOWN_OPTION:
+            return "TDB_ERR_UNKNOWN_OPTION";
+        case        TDB_ERR_INVALID_OPTION_VALUE:
+            return "TDB_ERR_INVALID_OPTION_VALUE";
+        case        TDB_ERR_INVALID_UUID:
+            return "TDB_ERR_INVALID_UUID";
+        case        TDB_ERR_IO_OPEN:
+            return "TDB_ERR_IO_OPEN";
+        case        TDB_ERR_IO_CLOSE:
+            return "TDB_ERR_IO_CLOSE";
+        case        TDB_ERR_IO_WRITE:
+            return "TDB_ERR_IO_WRITE";
+        case        TDB_ERR_IO_READ:
+            return "TDB_ERR_IO_READ";
+        case        TDB_ERR_IO_TRUNCATE:
+            return "TDB_ERR_IO_TRUNCATE";
+        case        TDB_ERR_IO_PACKAGE:
+            return "TDB_ERR_IO_PACKAGE";
+        case        TDB_ERR_INVALID_INFO_FILE:
+            return "TDB_ERR_INVALID_INFO_FILE";
+        case        TDB_ERR_INVALID_VERSION_FILE:
+            return "TDB_ERR_INVALID_VERSION_FILE";
+        case        TDB_ERR_INCOMPATIBLE_VERSION:
+            return "TDB_ERR_INCOMPATIBLE_VERSION";
+        case        TDB_ERR_INVALID_FIELDS_FILE:
+            return "TDB_ERR_INVALID_FIELDS_FILE";
+        case        TDB_ERR_INVALID_UUIDS_FILE:
+            return "TDB_ERR_INVALID_UUIDS_FILE";
+        case        TDB_ERR_INVALID_CODEBOOK_FILE:
+            return "TDB_ERR_INVALID_CODEBOOK_FILE";
+        case        TDB_ERR_INVALID_TRAILS_FILE:
+            return "TDB_ERR_INVALID_TRAILS_FILE";
+        case        TDB_ERR_INVALID_LEXICON_FILE:
+            return "TDB_ERR_INVALID_LEXICON_FILE";
+        case        TDB_ERR_INVALID_PACKAGE:
+            return "TDB_ERR_INVALID_PACKAGE";
+        case        TDB_ERR_TOO_MANY_FIELDS:
+            return "TDB_ERR_TOO_MANY_FIELDS";
+        case        TDB_ERR_DUPLICATE_FIELDS:
+            return "TDB_ERR_DUPLICATE_FIELDS";
+        case        TDB_ERR_INVALID_FIELDNAME:
+            return "TDB_ERR_INVALID_FIELDNAME";
+        case        TDB_ERR_TOO_MANY_TRAILS:
+            return "TDB_ERR_TOO_MANY_TRAILS";
+        case        TDB_ERR_VALUE_TOO_LONG:
+            return "TDB_ERR_VALUE_TOO_LONG";
+        case        TDB_ERR_APPEND_FIELDS_MISMATCH:
+            return "TDB_ERR_APPEND_FIELDS_MISMATCH";
+        case        TDB_ERR_LEXICON_TOO_LARGE:
+            return "TDB_ERR_LEXICON_TOO_LARGE";
+        case        TDB_ERR_TIMESTAMP_TOO_LARGE:
+            return "TDB_ERR_TIMESTAMP_TOO_LARGE";
+        case        TDB_ERR_TRAIL_TOO_LONG:
+            return "TDB_ERR_TRAIL_TOO_LONG";
         default:
             return "Unknown error";
     }
