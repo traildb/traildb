@@ -13,15 +13,18 @@ integer timestamp.
 
 #### Terms
 
-**traildb**: a single traildb, stored on disk as a directory.
 
-**trail**: a sequence of **events**, identified by an **uuid**.
+* **traildb**: a single traildb, stored on disk as a directory.
 
-**cookie**: each **trail** in a TrailDB has a unique 16-byte identifier called **uuid**.
+* **trail**: a sequence of events, identified by an uuid.
 
-**event**: single item in a **trail**. Has a timestamp and a set of named **fields**.
+* **uuid**: each trail in a TrailDB has a unique 16-byte identifier called uuid.
 
-**field**: each **event** has a set of fields, values are strings. Each event in 
+* **trail id** each trail in a TrailDB also has a numeric sequential id, unique within that traildb.
+
+* **event**: single item in a trail. Has a timestamp and a set of named fields.
+
+* **field**: each event has a set of fields, values are strings. Each event in 
 a traildb has the same set of fields.
 
 ### Performance considerations

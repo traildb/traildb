@@ -115,251 +115,237 @@ Close an open TrailDB.
 Working with fields and values
 --------------------------------------
 
-.. c:function:: int tdb_get_field(tdb *db, const char *field_name)
+### tdb_get_field
+```c
+tdb_error tdb_get_field(tdb *db, const char *field_name, tdb_field *field)
+```
 
-    Get field id by name.
+Get field id by name.
 
-    :param db: TrailDB object.
-    :param field_name: field name.
+* `db` TrailDB object.
+* `field_name` field name.
+* `field` pointer to variable to store field id to
 
-    :return: Integer field id or 255 if field cannot be found.
+Returns error code.
 
-.. c:function:: const char *tdb_get_field_name(tdb *db, tdb_field field)
+### tdb_get_field_name
 
-    Get field name by id.
+```c
+const char *tdb_get_field_name(tdb *db, tdb_field field)
+```
 
-    :param db: TrailDB object.
-    :param field: integer field id.
+Get field name by id.
 
-    :return: Pointer to a null terminated field name, memory owned by the TrailDB object (caller doesn't have to free this pointer).
+* `db` TrailDB object.
+* `field` integer field id.
 
-.. c:function:: int tdb_field_has_overflow_vals(tdb *db, tdb_field field)
+Returns a pointer to a null terminated field name, memory owned by the TrailDB object (caller doesn't have to free this pointer).
 
-    Check if field hit the 2^24 value limit and some values were not stored.
+### tdb_get_item
 
-    :param db: TrailDB object.
-    :param field: integer field id.
+```c
+tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value, uint64_t value_length)
+```
 
-    :return: boolean result.
+Construct tdb_item given field id and value.
 
-.. c:function:: tdb_item tdb_get_item(tdb *db, tdb_field field, const char *value)
+* `db` TrailDB object.
+* `field` integer field id.
+* `value` value as a byte string
+* `value_length` value size in bytes
 
-    Construct tdb_item given field id and value.
+Returns encoded field/value pair as `tdb_item`.
 
-    :param db: TrailDB object.
-    :param field: integer field id.
-    :param value: value as null terminated string
+### tdb_get_value
+```c
+const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val, uint64_t *value_length)
+```
 
-    :return: Encoded field/value pair
+Get item value given field id and value id.
 
-.. c:function:: const char *tdb_get_value(tdb *db, tdb_field field, tdb_val val)
+* `db` TrailDB object.
+* `field` integer field id.
+* `val` integer value id.
 
-    Get item value given field id and value id.
+Returns pointer to the value, memory owned by the TrailDB object (caller doesn't have to free this pointer). Value length is stored at the location pointed at by `value_length`.
 
-    :param db: TrailDB object.
-    :param field: integer field id.
-    :param val: integer value id.
+### tdb_get_item_value
+```c
+const char *tdb_get_item_value(tdb *db, tdb_item item, uint64_t *value_length)
+```
 
-    :return: Pointer to a null terminated value, memory owned by the TrailDB object (caller doesn't have to free this pointer).
+Get item value given encoded field/value pair.
 
-.. c:function:: const char *tdb_get_item_value(tdb *db, tdb_item item)
+* `db` TrailDB object.
+* `item` encoded field/value pair.
 
-    Get item value given encoded field/value pair.
+Returns pointer to the value, memory owned by the TrailDB object (caller doesn't have to free this pointer). Value length is stored at the location pointed at by `value_length`.
 
-    :param db: TrailDB object.
-    :param item: encoded field/value pair.
+### tdb_get_uuid
+```c
+const uint8_t *tdb_get_cookie(const tdb *db, uint64_t trail_id)
+```
 
-    :return: Pointer to a null terminated value, memory owned by the TrailDB object (caller doesn't have to free this pointer).
+Get trail uuid value by id.
 
-.. c:function:: const uint8_t *tdb_get_cookie(const tdb *db, uint64_t cookie_id)
+* `db` TrailDB object.
+* `trail_id` trail id.
 
-    Get cookie value by id.
+Returns a pointer to 16-byte trail uuid, memory owned by the TrailDB object (caller doesn't have to free this pointer).
 
-    :param db: TrailDB object.
-    :param cookie_id: cookie id.
+### tdb_get_trail_id
+```c
+tdb_error tdb_get_cookie_id(const tdb *db, const uint8_t uuid[16], uint64_t *trail_id)
+```
 
-    :return: Pointer to 16-byte cookie value, memory owned by the TrailDB object (caller doesn't have to free this pointer).
+Get trail id by uuid.
 
-.. c:function:: uint64_t tdb_get_cookie_id(const tdb *db, const uint8_t cookie[16])
+* `db` TrailDB object.
+* `cookie_id` trail uuid as a 16-byte array.
 
-    Get cookie id by value.
-
-    :param db: TrailDB object.
-    :param cookie_id: cookie value as a 16-byte array.
-
-    :return: Cookie id.
+Returns error code.
 
 ---------------
 Decoding Trails
 ---------------
-.. c:function:: uint32_t tdb_decode_trail(const tdb *db, uint64_t cookie_id, uint32_t *dst, uint32_t dst_size, int edge_encoded)
 
-    Decode trail. This will use global filter, if set by :c:func:`tdb_set_filter`. This function will decode as many events as
-    ``dst`` bufer fits; if trail is larger than that, return value would be equal to ``dst_size``. Common pattern when decoding trails
-    is to reuse buffer for multiple calls of :c:func:`tdb_decode_trail` and resize it lazily when necessary. See example.
+### tdb_cursor_new
+```c
+tdb_cursor *tdb_cursor_new(const tdb *db)
+```
 
-    :param db: TrailDB object.
-    :param cookie_id: cookie id for the trail to decode.
-    :param dst: buffer to decode to.
-    :param dst_size: buffer size in events.
-    :param edge_encoded: edge encoding mode boolean flag
+Create a new cursor object.
 
-    :return: Number of events decoded. If this number is equal to ``dst_size``, buffer wasn't big enough.
+* `db` TrailDB object
 
-.. c:function:: uint32_t tdb_decode_trail_filtered(const tdb *db, uint64_t cookie_id, uint32_t *dst, uint32_t dst_size, int edge_encoded, const uint32_t *filter, uint32_t filter_len)
+### tdb_cursor_free
+```c
+void tdb_cursor_free(tdb_cursor *cursor)
+```
 
-    A variant of :c:func:`tdb_decode_trail` with filter specified explicitly instead of using global filter set by :c:func:`tdb_set_filter`.
+Free a cursor object.
 
-    :param db: TrailDB object.
-    :param cookie_id: cookie id for the trail to decode.
-    :param dst: buffer to decode to.
-    :param dst_size: buffer size in events.
-    :param edge_encoded: edge encoding mode boolean flag
-    :param filter: filter specification (see Filter format)
-    :param filter_len: filter size in 32-bit words
 
-    :return: Number of events decoded. If this number is equal to ``dst_size``, buffer wasn't big enough.
+### tdb_get_trail
+```c
+tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id)
+```
+
+Find trail in traildb by id and initialize cursor to iterate through it. Note that trail ids are sequential; that is, trails within one traildb have integer ids starting from `0`. Therefore, to iterate through all the trails you can simply `tdb_get_trail` in a loop, for id values from `0` up to the value returned by `tdb_num_trails`.
+
+* `cursor` cursor object as returned by `tdb_cursor_new`
+* `trail_id` trail id
+
+### tdb_get_trail_length
+```c
+uint64_t tdb_get_trail_length(tdb_cursor *cursor);
+```
+
+Convenience function to get trail length. It simply goes through entire trail as if you'd call `tdb_cursor_next` 
+repeatedly, and therefore has O(n) complexity. Note that `cursor` object passed to it will be moved to the end of the trail in the process.
+
+* `cursor` cursor object pointing at a trail.
+
+### tdb_cursor_next
+```c
+const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
+```
+
+Move cursor to the next event in the trail pointed at by `cursor`. If there are no more events, returns `NULL`. Otherwise returns a pointer to `tdb_event` structure.
+
+```
+typedef struct __attribute__((packed)){
+    uint64_t timestamp;
+    uint64_t num_items;
+    const tdb_item items[0];
+} tdb_event;
+```
+
+`items` array contains field/value pairs for the event.
+
 --------------
 Error Handling
 --------------
 
-.. c:function:: const char *tdb_error(const tdb *db)
+### tdb_error_str
+```
+const char *tdb_error_str(tdb_error errcode)
+```
 
-    Get latest error message.
+Get error code string by error code.
 
-    :param db: TrailDB object.
+* `errcode` error code.
 
-    :return: Pointer to a null terminated error string, memory owned by the TrailDB object (caller doesn't have to free this pointer).
+Returns pointer to a null terminated error string, memory owned by the TrailDB object (caller doesn't have to free this pointer).
 
 --------------
 Stats
 --------------
 
-.. c:function:: uint64_t tdb_num_cookies(const tdb *db)
+### tdb_num_trails
 
-    Get number of cookies in a TrailDB.
+```
+uint64_t tdb_num_trails(const tdb *db)
+```
 
-    :param db: TrailDB object.
-    :return: Number of cookies.
+Get number of traild in a TrailDB.
 
-.. c:function:: uint64_t tdb_num_events(const tdb *db)
+* `db` TrailDB object.
 
-    Get number of events in a TrailDB.
 
-    :param db: TrailDB object.
-    :return: Number of events.
+### tdb_num_events
+```c
+uint64_t tdb_num_events(const tdb *db)
+```
 
-.. c:function:: uint32_t tdb_num_fields(const tdb *db)
+Get number of events in a TrailDB.
 
-    Get number of fields in a TrailDB, including timestamp.
+* `db` TrailDB object.
 
-    :param db: TrailDB object.
-    :return: Number of fields.
+### tdb_num_fields
+```
+uint64_t tdb_num_fields(const tdb *db)
+```
 
-.. c:function:: uint32_t tdb_min_timestamp(const tdb *db)
+Get number of fields in a TrailDB. This number includes timestamp.
 
-    Get minimum timestamp value for a TrailDB.
+* `db` TrailDB object.
 
-    :param db: TrailDB object.
-    :return: Minimum timestamp value.
+### tdb_min_timestamp
+```
+uint64_t tdb_min_timestamp(const tdb *db)
+```
 
-.. c:function:: uint32_t tdb_max_timestamp(const tdb *db)
+Get smallest timestamp value among all events stored in a TrailDB.
 
-    Get maximum timestamp value for a TrailDB.
+* `db` TrailDB object.
 
-    :param db: TrailDB object.
-    :return: Maximum timestamp value.
+### tdb_max_timestamp
+```c
+uint64_t tdb_max_timestamp(const tdb *db)
+```
 
-----------------
-Filter Functions
-----------------
+Get largest timestamp value among all events stored in a TrailDB.
 
-.. c:function:: int tdb_set_filter(tdb *db, const uint32_t *filter, uint32_t filter_len)
+* `db` TrailDB object.
 
-    Set global decoding filter that is later used by :c:func:`tdb_decode_trail`
-
-    :param filter: filter specification (see Filter format). Can be NULL to remove filter.
-    :param filter_len: filter size in 32-bit words
-
-.. c:function:: const uint32_t *tdb_get_filter(const tdb *db, uint32_t *filter_len)
-
-    Get global decoding filter that is later used by :c:func:`tdb_decode_trail`
-
-    :param filter_len: Variable to store filter size in 32-bit words
-    :return: Pointer to filter. Memory owned by the TrailDB object (caller doesn't have to free this pointer). 
-             May be NULL if filter is not set.
 
 -----------------
 Utility Functions
 -----------------
 
-.. c:function:: int tdb_cookie_raw(const uint8_t hexcookie[32], uint8_t cookie[16])
+### tdb_uuid_raw
+```
+int tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16])
+```
 
-    Converts cookie from a hexadecimal string to a binary representation.
+Converts uuid from a hexadecimal string to a binary representation.
 
-.. c:function:: int tdb_cookie_hex(const uint8_t cookie[16], uint8_t hexcookie[32])
+### tdb_uuid_hex
+```
+int tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32])
+```
 
-    Converts cookie from 16-byte binary representation to a hexadecimal string.
-
-
-----------------
-Filter Format
-----------------
-
-Functions :c:func:`tdb_decode_trail` and :c:func:`tdb_decode_trail_filtered` can be configured to filter out events
-from trail that do not match a specified filter expression while decoding.
-
-Filters are `conjuctive normal form boolean expressions <https://en.wikipedia.org/wiki/Conjunctive_normal_form>`_, that is::
-
-    ((Field1 = X) OR (Field2 != Y ))  AND ((Field3 = Z) | (Field1 = N) | ...) ...
-
-Filters are stored as arrays of ``uint32_t``, exact format described below.
-
-Each inner expression of the form ``Field OP Value`` is stored as three values
-
-.. code-block:: c
-
-    struct {
-        uint32_t op;        /* 0 for equal, 1 for not equal */
-        uint32_t item;      /* field/value pair as returned by tdb_get_item() */
-    } expr_t;
-
-Each ``OR`` clause is stored as
-
-.. code-block:: c
-
-    struct {
-        uint32_t num_exprs;
-        expr_t exprs[num_exprs];
-    } clause_t;
-
-And entire filter is stored as
-
-.. code-block:: c
-
-    struct {
-        uint32_t num_clauses;
-        clause_t clauses[num_clauses];
-    } clause_t;
+Converts uuid from 16-byte binary representation to a hexadecimal string.
 
 
-----------------------
-Decoded Trail Format
-----------------------
-
-Each trail is decoded to an array of ``uint32_t``.
-
-Each event in the trail is represented by a
-
-.. code-block:: c
-
-    uint32_t timestamp;                  /* event timestamp */
-    tdb_item field_vals[num_fields-1];   /* event field/value pairs */
-    uint32_t zero;                       /* zero item */
-
-Here ``num_fields`` is the value returned by :c:func:`tdb_num_fields`. That value includes timestamp, therefore there
-are ``num_fields-1`` string-valued fields for each event. There's a zero item after each event for convenience when
-scanning through the trail.
-
-Each field is a key/value pair of field and value ids (``tdb_field`` and ``tdb_val``), you can convert to/from string
-field names and corresponding numeric ids using functions from :ref:`fields-values-functions`.
