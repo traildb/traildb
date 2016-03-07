@@ -4,3 +4,6 @@ pages:
 - API: apidoc.md
 
 theme: readthedocs
+site_favicon: http://traildb.io/favicon.ico
+repo_url: http://github.com/traildb/traildb
+copyright: Copyright © 2016 <a href="http://www.adroll.com">AdRoll Inc.</a>
