@@ -1,0 +1,6 @@
+site_name: TrailDB
+pages:
+- Home: index.md
+- API: apidoc.md
+
+theme: readthedocs
