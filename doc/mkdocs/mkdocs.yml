@@ -12,3 +12,4 @@ google_analytics: ['UA-74696093-1', 'traildb.io']
 markdown_extensions:
     - toc:
         permalink: True
+    - extra:
