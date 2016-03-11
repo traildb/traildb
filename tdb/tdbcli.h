@@ -6,6 +6,11 @@
 
 #include <Judy.h>
 
+#define ERR_OR_DIE(die, msg, ...)\
+    do { fprintf(stderr, msg"\n", ##__VA_ARGS__); \
+         if (die) { exit(EXIT_FAILURE); } \
+       } while (0)
+
 #define DIE(msg, ...)\
     do { fprintf(stderr, msg"\n", ##__VA_ARGS__);   \
          exit(EXIT_FAILURE); } while (0)
@@ -32,6 +37,7 @@ struct tdbcli_options{
     const char *delimiter;
     uint64_t output_format;
     int output_format_is_set;
+    int skip_bad_input;
 };
 
 #define FORMAT_CSV 0
