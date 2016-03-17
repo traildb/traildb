@@ -74,6 +74,7 @@ static void initialize(int argc, char **argv, int op)
         {"tdb-format", required_argument, 0, 't'},
         {"csv-header", no_argument, 0, -2},
         {"json-no-empty", no_argument, 0, -3},
+        {"skip-bad-input", no_argument, 0, -4},
         {0, 0, 0, 0}
     };
 
@@ -138,6 +139,9 @@ static void initialize(int argc, char **argv, int op)
                 break;
             case -3:
                 options.json_no_empty = 1;
+                break;
+            case -4:
+                options.skip_bad_input = 1;
                 break;
             default:
                 print_usage_and_exit();

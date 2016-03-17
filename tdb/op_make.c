@@ -15,7 +15,8 @@
 
 static const uint8_t *parse_uuid(const char *token,
                                  uint64_t len,
-                                 uint64_t lineno)
+                                 uint64_t lineno,
+                                 int skip_bad_input)
 {
     static uint8_t hexuuid[32];
     static uint8_t uuid[16];
@@ -24,8 +25,9 @@ static const uint8_t *parse_uuid(const char *token,
         memset(hexuuid, '0', 32);
         memcpy(hexuuid, token, len);
     }
-    if (len > 32 || tdb_uuid_raw(hexuuid, uuid))
-        DIE("Line %"PRIu64": Invalid UUID '%.*s'", lineno, (int)len, token);
+    if (len > 32 || tdb_uuid_raw(hexuuid, uuid)){
+        ERR_OR_DIE(!skip_bad_input, "Line %"PRIu64": Invalid UUID '%.*s'", lineno, (int)len, token);
+    }
 
     return uuid;
 }
@@ -111,11 +113,12 @@ static void populate_values(Word_t field_idx,
                             uint64_t *tstamp,
                             const char **values,
                             uint64_t *lengths,
-                            uint64_t lineno)
+                            uint64_t lineno,
+                            int skip_bad_input)
 {
     switch (field_idx){
         case 0:
-            *uuid = parse_uuid(value, value_len, lineno);
+            *uuid = parse_uuid(value, value_len, lineno, skip_bad_input);
             break;
         case 1:
             value[value_len] = 0;
@@ -132,15 +135,20 @@ static void insert_to_tdb(tdb_cons *cons,
                           uint64_t tstamp,
                           const char **values,
                           uint64_t *lengths,
-                          uint64_t lineno)
+                          uint64_t lineno,
+                          int skip_bad_input)
 {
     int err;
-    if (!uuid)
-        DIE("Line %"PRIu64": UUID missing", lineno);
-    if (tstamp == UINT64_MAX)
-        DIE("Line %"PRIu64": Timestamp missing", lineno);
+    if (!uuid){
+        ERR_OR_DIE(!skip_bad_input, "Line %"PRIu64": UUID missing", lineno);
+        return;
+    }
+    if (tstamp == UINT64_MAX){
+        ERR_OR_DIE(!skip_bad_input, "Line %"PRIu64": Timestamp missing", lineno);
+        return;
+    }
     if ((err = tdb_cons_add(cons, uuid, tstamp, values, lengths)))
-        DIE("Line %"PRIu64": Adding event failed: %s",
+        ERR_OR_DIE(!skip_bad_input, "Line %"PRIu64": Adding event failed: %s",
             lineno,
             tdb_error_str(err));
 }
@@ -196,9 +204,10 @@ static void parse_csv(tdb_cons *cons,
                                 &tstamp,
                                 values,
                                 lengths,
-                                lineno);
+                                lineno,
+                                opt->skip_bad_input);
         }
-        insert_to_tdb(cons, uuid, tstamp, values, lengths, lineno);
+        insert_to_tdb(cons, uuid, tstamp, values, lengths, lineno, opt->skip_bad_input);
     }
 
     free(lengths);
@@ -318,7 +327,8 @@ static void parse_json(tdb_cons *cons,
                                         &tstamp,
                                         values,
                                         lengths,
-                                        lineno);
+                                        lineno,
+                                        opt->skip_bad_input);
                         break;
                     default:
                         DIE("Line %"PRIu64": Invalid value in the JSON object",
@@ -326,7 +336,7 @@ static void parse_json(tdb_cons *cons,
                 }
             }
         }
-        insert_to_tdb(cons, uuid, tstamp, values, lengths, lineno);
+        insert_to_tdb(cons, uuid, tstamp, values, lengths, lineno, opt->skip_bad_input);
     }
 
     JHSFA(len, json_fields);
