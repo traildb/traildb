@@ -54,16 +54,30 @@ static tdb_error toc_parse(FILE *f, struct pkg_toc *toc, uint64_t num_lines)
     /* ignore magic line */
     if (getline(&buf, &n, f) == -1)
         return TDB_ERR_IO_READ;
-    free(buf);
 
     for (i = 0; i < num_lines; i++){
-        if (fscanf(f,
-                   "%ms %"PRIu64" %"PRIu64,
-                   &toc[i].fname,
-                   &toc[i].offset,
-                   &toc[i].size) != 3)
+        if (getline(&buf, &n, f) == -1)
+            return TDB_ERR_IO_READ;
+
+        char *tok = strtok(buf, " ");
+        if (tok == NULL) {
             return TDB_ERR_INVALID_PACKAGE;
+        }
+        toc[i].fname = strdup(tok);
+
+        tok = strtok(NULL, " ");
+        if (tok == NULL) {
+            return TDB_ERR_INVALID_PACKAGE;
+        }
+        toc[i].offset = strtoull(tok, NULL, 10);
+
+        tok = strtok(NULL, " ");
+        if (tok == NULL) {
+            return TDB_ERR_INVALID_PACKAGE;
+        }
+        toc[i].size = strtoull(tok, NULL, 10);
     }
+    free(buf);
     return 0;
 }
 
