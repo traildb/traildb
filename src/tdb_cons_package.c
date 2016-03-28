@@ -391,8 +391,11 @@ tdb_error cons_package(const tdb_cons *cons)
     /* 6) finalize archive */
     if (archive_write_free(tar) != ARCHIVE_OK){
         ret = TDB_ERR_IO_PACKAGE;
+        /* don't call archive_write_free twice */
+        tar = NULL;
         goto done;
     }
+    tar = NULL;
 
     /* 7) write toc */
     if ((ret = write_tar_toc(fd, toc_file, toc_offset, toc_max_size)))
@@ -403,12 +406,21 @@ tdb_error cons_package(const tdb_cons *cons)
     unlink(path);
 
     /* fsync() is required to ensure integrity of the package */
-    if (fsync(fd) || close(fd)){
-        debug_print("fsync || close failed\n");
+    if (fsync(fd)){
+        debug_print("fsync failed\n");
         ret = TDB_ERR_IO_CLOSE;
         goto done;
     }
-    tar = NULL;
+
+    if (close(fd)){
+        debug_print("close failed\n");
+        ret = TDB_ERR_IO_CLOSE;
+        /* never call close() twice, even if it fails */
+        fd = 0;
+        goto done;
+    }
+
+    fd = 0;
 
     /* 9) rename archive */
     TDB_PATH(path, "%s.tdb", cons->root);
