@@ -12,7 +12,7 @@
 #undef JUDYERROR
 #define JUDYERROR(CallerFile, CallerLine, JudyFunc, JudyErrno, JudyErrID) \
 {                                                                         \
-   if ((JudyErrno) != JU_ERRNO_NOMEM)                                     \
+   if ((JudyErrno) == JU_ERRNO_NOMEM)                                     \
        goto out_of_memory;                                                \
 }
 #include <Judy.h>

@@ -6,6 +6,12 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#undef JUDYERROR
+#define JUDYERROR(CallerFile, CallerLine, JudyFunc, JudyErrno, JudyErrID) \
+{                                                                         \
+   if ((JudyErrno) == JU_ERRNO_NOMEM)                                     \
+       goto out_of_memory;                                                \
+}
 #include <Judy.h>
 #include "jsmn/jsmn.h"
 
@@ -54,6 +60,9 @@ static void populate_fields(const char *fieldstr,
         if (++opt->num_fields == TDB_MAX_NUM_FIELDS)
             DIE("Too many fields");
     }
+
+out_of_memory:
+    DIE("Out of memory.");
 }
 
 static void init_fields_from_header(FILE *input, struct tdbcli_options *opt)
@@ -218,6 +227,9 @@ static void parse_csv(tdb_cons *cons,
         return;
     else
         DIE("Premature end of input or out of memory.\n");
+
+out_of_memory:
+    DIE("Out of memory.");
 }
 
 static Pvoid_t init_json_fields(const struct tdbcli_options *opt)
@@ -239,6 +251,9 @@ static Pvoid_t init_json_fields(const struct tdbcli_options *opt)
         *ptr = i + 2;
     }
     return json_fields;
+
+out_of_memory:
+    DIE("Out of memory.");
 }
 
 static void parse_json(tdb_cons *cons,
@@ -348,6 +363,9 @@ static void parse_json(tdb_cons *cons,
         return;
     else
         DIE("Premature end of input or out of memory.");
+
+out_of_memory:
+    DIE("Out of memory.");
 }
 
 int op_make(struct tdbcli_options *opt)
