@@ -43,6 +43,7 @@ include_HEADERS = \
   src/tdb_types.h \
   src/tdb_limits.h \
   src/judy_str_map.h \
+  src/judy_128_map.h \
   src/xxhash/xxhash.c
 
 bin_PROGRAMS = util/traildb_bench
