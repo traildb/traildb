@@ -162,17 +162,3 @@ int main(int argc, char **argv)
     tdb_cursor_free(cursor);
     return 0;
 }
-
-    /*
-    const tdb_event *event;
-    while ((event = tdb_cursor_next(cursor))){
-        int j;
-        for (j = 0; j < event->num_items; j++){
-            uint64_t len;
-            const char *c = tdb_get_item_value(t, event->items[j], &len);
-            printf("%.*s(%d) ", len, c, event->items[j]);
-        }
-        printf("\n");
-    }
-    */
-
