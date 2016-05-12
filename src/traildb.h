@@ -91,12 +91,31 @@ uint64_t tdb_max_timestamp(const tdb *db);
 
 uint64_t tdb_version(const tdb *db);
 
+/* EVENT FILTER */
+
+struct tdb_event_filter *tdb_event_filter_new(void);
+
+tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
+                                    tdb_item term,
+                                    int is_negative);
+
+void tdb_event_filter_new_clause(struct tdb_event_filter *filter);
+
+void tdb_event_filter_free(struct tdb_event_filter *filter);
+
+/* CURSORS */
+
 tdb_cursor *tdb_cursor_new(const tdb *db);
 void tdb_cursor_free(tdb_cursor *cursor);
 
 tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id);
 
 uint64_t tdb_get_trail_length(tdb_cursor *cursor);
+
+void tdb_cursor_set_event_filter(tdb_cursor *cursor,
+                                 const struct tdb_event_filter *filter);
+
+void tdb_cursor_unset_event_filter(tdb_cursor *cursor);
 
 int _tdb_cursor_next_batch(tdb_cursor *cursor);
 

@@ -25,6 +25,13 @@ struct tdb_cons_event{
     uint64_t prev_event_idx;
 };
 
+struct tdb_event_filter{
+    uint64_t count;
+    uint64_t size;
+    uint64_t clause_len_idx;
+    tdb_item *items;
+};
+
 struct tdb_decode_state{
     const tdb *db;
 
@@ -43,6 +50,8 @@ struct tdb_decode_state{
     /* options */
     const tdb_item *filter;
     uint64_t filter_len;
+    uint64_t filter_size;
+
     int edge_encoded;
 
     tdb_item previous_items[0];
@@ -124,10 +133,6 @@ struct _tdb {
 
     /* TDB_OPT_ONLY_DIFF_ITEMS */
     int opt_edge_encoded;
-
-    /* TDB_OPT_EVENT_FILTER */
-    tdb_item *opt_event_filter;
-    uint64_t opt_event_filter_len;
 };
 
 void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex);

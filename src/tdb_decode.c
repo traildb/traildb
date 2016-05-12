@@ -166,6 +166,19 @@ void tdb_cursor_free(tdb_cursor *c)
     }
 }
 
+void tdb_cursor_unset_event_filter(tdb_cursor *cursor)
+{
+    cursor->state->filter = NULL;
+    cursor->state->filter_len = 0;
+}
+
+void tdb_cursor_set_event_filter(tdb_cursor *cursor,
+                                 const struct tdb_event_filter *filter)
+{
+    cursor->state->filter = filter->items;
+    cursor->state->filter_len = filter->count;
+}
+
 tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id)
 {
     struct tdb_decode_state *s = cursor->state;

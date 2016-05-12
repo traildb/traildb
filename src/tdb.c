@@ -441,7 +441,6 @@ void tdb_close(tdb *db)
         free(db->lexicons);
         free(db->field_names);
         free(db->field_stats);
-        free(db->opt_event_filter);
         free(db);
     }
 }
@@ -718,26 +717,50 @@ tdb_error tdb_get_opt(tdb *db, tdb_opt_key key, tdb_opt_value *value)
     }
 }
 
-#if 0
-tdb_error tdb_set_filter(tdb *db, const tdb_item *filter, uint64_t filter_len)
+
+struct tdb_event_filter *tdb_event_filter_new(void)
 {
-    /* TODO check that filter is valid: sum(clauses) < filter_len */
-    free(db->filter);
-    if (filter){
-        if (!(db->filter = malloc(filter_len * sizeof(tdb_item))))
-            return TDB_ERR_NOMEM;
-        memcpy(db->filter, filter, filter_len * sizeof(tdb_item));
-        db->filter_len = filter_len;
-    }else{
-        db->filter = NULL;
-        db->filter_len = 0;
-    }
-    return 0;
+    static const long unsigned INITIAL_SIZE = 33;
+    struct tdb_event_filter *f = malloc(sizeof(struct tdb_event_filter));
+    if (f){
+        if (!(f->items = calloc(1, INITIAL_SIZE * sizeof(tdb_item)))){
+            free(f);
+            return NULL;
+        }
+        f->count = 1;
+        f->size = INITIAL_SIZE;
+        f->clause_len_idx = 0;
+        return f;
+    }else
+        return NULL;
 }
 
-const tdb_item *tdb_get_filter(const tdb *db, uint64_t *filter_len)
+tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
+                                    tdb_item term,
+                                    int is_negative)
 {
-    *filter_len = db->filter_len;
-    return db->filter;
+    if (filter->count + 3 >= filter->size){
+        filter->size *= 2;
+        filter->items = realloc(filter->items, filter->size * sizeof(tdb_item));
+        if (!filter->items)
+            return TDB_ERR_NOMEM;
+    }
+
+    filter->items[filter->count++] = (is_negative ? 1: 0);
+    filter->items[filter->count++] = term;
+    filter->items[filter->clause_len_idx] += 2;
+
+    return TDB_ERR_OK;
 }
-#endif
+
+void tdb_event_filter_new_clause(struct tdb_event_filter *filter)
+{
+    filter->clause_len_idx = filter->count++;
+    filter->items[filter->clause_len_idx] = 0;
+}
+
+void tdb_event_filter_free(struct tdb_event_filter *filter)
+{
+    free(filter->items);
+    free(filter);
+}
