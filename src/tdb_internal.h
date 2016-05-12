@@ -45,7 +45,6 @@ struct tdb_decode_state{
     uint64_t size;
     uint64_t offset;
     uint64_t tstamp;
-    int first_satisfying;
 
     /* options */
     const tdb_item *filter;

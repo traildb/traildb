@@ -112,8 +112,8 @@ tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id);
 
 uint64_t tdb_get_trail_length(tdb_cursor *cursor);
 
-void tdb_cursor_set_event_filter(tdb_cursor *cursor,
-                                 const struct tdb_event_filter *filter);
+tdb_error tdb_cursor_set_event_filter(tdb_cursor *cursor,
+                                      const struct tdb_event_filter *filter);
 
 void tdb_cursor_unset_event_filter(tdb_cursor *cursor);
 

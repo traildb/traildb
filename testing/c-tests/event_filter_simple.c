@@ -158,6 +158,18 @@ int main(int argc, char **argv)
     assert(tdb_get_trail(cursor, 0) == 0);
     assert(tdb_get_trail_length(cursor) == 4);
 
+    /*
+       ONLY_DIFF
+       filters for ONLY_DIFF mode are not supported:
+       The sematics are too ill-defined
+    */
+    tdb_event_filter_free(f);
+    f = tdb_event_filter_new();
+    tdb_cursor_free(cursor);
+    assert(tdb_set_opt(t, TDB_OPT_ONLY_DIFF_ITEMS, TDB_TRUE) == 0);
+    cursor = tdb_cursor_new(t);
+    assert(tdb_cursor_set_event_filter(cursor, f) == TDB_ERR_ONLY_DIFF_FILTER);
+
     tdb_close(t);
     tdb_cursor_free(cursor);
     return 0;

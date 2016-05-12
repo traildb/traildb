@@ -652,6 +652,8 @@ const char *tdb_error_str(tdb_error errcode)
             return "TDB_ERR_TIMESTAMP_TOO_LARGE";
         case        TDB_ERR_TRAIL_TOO_LONG:
             return "TDB_ERR_TRAIL_TOO_LONG";
+        case        TDB_ERR_ONLY_DIFF_FILTER:
+            return "TDB_ERR_ONLY_DIFF_FILTER";
         default:
             return "Unknown error";
     }

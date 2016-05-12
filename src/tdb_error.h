@@ -50,7 +50,10 @@ typedef enum{
     TDB_ERR_APPEND_FIELDS_MISMATCH = -262,
     TDB_ERR_LEXICON_TOO_LARGE = -263,
     TDB_ERR_TIMESTAMP_TOO_LARGE = -264,
-    TDB_ERR_TRAIL_TOO_LONG = -265
+    TDB_ERR_TRAIL_TOO_LONG = -265,
+
+    /* querying */
+    TDB_ERR_ONLY_DIFF_FILTER = -513
 
 } tdb_error;
 

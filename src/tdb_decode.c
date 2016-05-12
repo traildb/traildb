@@ -87,11 +87,16 @@ void tdb_cursor_unset_event_filter(tdb_cursor *cursor)
     cursor->state->filter_len = 0;
 }
 
-void tdb_cursor_set_event_filter(tdb_cursor *cursor,
-                                 const struct tdb_event_filter *filter)
+tdb_error tdb_cursor_set_event_filter(tdb_cursor *cursor,
+                                      const struct tdb_event_filter *filter)
 {
-    cursor->state->filter = filter->items;
-    cursor->state->filter_len = filter->count;
+    if (cursor->state->edge_encoded)
+        return TDB_ERR_ONLY_DIFF_FILTER;
+    else{
+        cursor->state->filter = filter->items;
+        cursor->state->filter_len = filter->count;
+        return TDB_ERR_OK;
+    }
 }
 
 tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id)
@@ -217,40 +222,18 @@ int _tdb_cursor_next_batch(tdb_cursor *cursor)
                                                  s->filter_len)){
 
             /* no filter or filter matches, finalize the event */
-            if (!edge_encoded || s->first_satisfying){
+            if (!edge_encoded){
                 /* dump all the fields of this event in the result, if edge
-                   encoding is not requested or this is the first event
-                   that satisfies the filter */
-
-                /* FIXME should we add this i = orig_i + 2;
-                   otherwise we will get duplicate items in the dst.
-                   TODO create a test for this
+                   encoding is not requested
                 */
                 for (field = 1; field < s->db->num_fields; field++)
                     dst[i++] = s->previous_items[field];
-
-                /*
-                consider a sequence of events like
-
-                (A, X), (A, Y), (B, X), (B, Y), (B, Y)
-
-                and a CNF filter "B & Y". Without 'first_satisfying'
-                special case, the query would return
-
-                Y instead of (B, Y)
-
-                when edge_encoded=1
-                */
-                s->first_satisfying = 0;
             }
             ++num_events;
             *num_items = (i - (orig_i + 2));
         }else{
             /* filter doesn't match - ignore this event */
             i = orig_i;
-            /* FIXME should we add to cover all edges that may
-            get filtered out */
-            // s->first_satisfying = 1;
         }
     }
 
