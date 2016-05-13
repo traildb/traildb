@@ -8,12 +8,6 @@
 
 #include "tdbcli.h"
 
-/*
-fields:
-  - CSV: uuid:0,time:1
-  - JSON: uuid:user,time:tstamp
-*/
-
 static struct tdbcli_options options;
 
 static const char *OPS[] = {"make", "dump"};
@@ -32,28 +26,66 @@ long int safely_to_int(const char *str, const char *field)
 
 static void print_usage_and_exit()
 {
-    /* TODO add this */
-    printf("Usage\n");
-    exit(1);
-    /* four ways to define fields:
-
-    0) no options
-       * uuid and time are expected to be found at columns 1 and 2
-
-    1) --fields uuid,time,field1,field2
-       * Read / output first K fields
-       * Extract the defined fields from / to JSON.
-
-    2) --fields 2:uuid,3:time,20:field1,30:field2
-       * Explicit column IDs for CSV.
-       * Incompatible with JSON.
-       * Incompatible with dump.
-
-    3) --csv-header
-       * Read/output fields from/to a csv header.
-       * Incompatible with --fields.
-       * Incompatible with JSON.
-    */
+    printf(
+"\ntdb - a command line interface for manipulating TrailDBs\n"
+"\n"
+"USAGE:\n"
+"tdb <command> [options]\n"
+"\n"
+"Command can be either 'make' to create a TrailDB or\n"
+"'dump' to dump an existing TrailDB to an output file.\n"
+"\n"
+"OPTIONS:\n"
+"-c --csv          read input as CSV or output CSV (default)\n"
+"-d --delimiter    CSV delimiter (default: ' ')\n"
+"-j --json         read input as JSON or output JSON\n"
+"                   the format is one JSON-encoded event (object) per line\n"
+"-i --input        read input from the given file:\n"
+"                   for 'make' this is the source of input events\n"
+"                    (default: stdin)\n"
+"                   for 'dump' this is the TrailDB to be dumped\n"
+"                    (default: a.tdb)\n"
+"-o --output       write output to the given file:\n"
+"                   for 'make' this is the TrailDB to be created\n"
+"                    (default: a.tdb)\n"
+"                  for 'dump' this is the output file for events\n"
+"                    (default: stdout)\n"
+"-f --fields       field specification - see below for details\n"
+"--csv-header      read fields from the CSV header - see below for details\n"
+"--json-no-empty   don't output empty values to JSON output\n"
+"--skip-bad-input  don't quit on malformed input lines, skip them\n"
+"--tdb-format      TrailDB output format:\n"
+"                   'pkg' for the default one-file format,\n"
+"                   'dir' for a directory\n"
+"\n"
+"FIELD SPECIFICATION:\n"
+"The --fields option determines how fields from the input are mapped to\n"
+"the output. Multiple ways of defining the mapping are supported. The\n"
+"exact behavior varies between 'make' and 'dump':\n"
+"\n"
+"make:\n"
+"1) if no --fields is specified, two fields are expected, 'uuid' and 'time'\n"
+"     - CSV file should have the first column 'uuid', second 'time'\n"
+"     - JSON objects must have keys 'uuid' and 'time'\n"
+"2) --fields uuid,time,field2,field3,...\n"
+"     - CSV file should have at least the specified columns\n"
+"       (note that 'uuid' and 'time' can be set in any column)\n"
+"     - JSON objects must have keys 'uuid' and 'time'. If other specified\n"
+"       keys are found, they are extrated to TrailDB.\n"
+"3) --fields 2:uuid,5:time,30:field3,102:field4\n"
+"     - maps the specified CSV column IDs to TrailDB fields\n"
+"4) --csv-header\n"
+"     - like 2) but reads the field names from the first row of the input\n"
+"\n"
+"Note that in all the cases above 'uuid' and 'time' must be specified.\n"
+"\n"
+"dump:\n"
+"1) if no --fields in specified, all fields are output.\n"
+"2) --fields uuid,time,field2,field3,...\n"
+"    - outputs only the specified fields from TrailDB\n"
+"\n"
+);
+exit(1);
 }
 
 static void initialize(int argc, char **argv, int op)
@@ -71,10 +103,10 @@ static void initialize(int argc, char **argv, int op)
         {"output", required_argument, 0, 'o'},
         {"delimiter", required_argument, 0, 'd'},
         {"fields", required_argument, 0, 'f'},
-        {"tdb-format", required_argument, 0, 't'},
-        {"csv-header", no_argument, 0, -2},
-        {"json-no-empty", no_argument, 0, -3},
-        {"skip-bad-input", no_argument, 0, -4},
+        {"tdb-format", required_argument, 0, -2},
+        {"csv-header", no_argument, 0, -3},
+        {"json-no-empty", no_argument, 0, -4},
+        {"skip-bad-input", no_argument, 0, -5},
         {0, 0, 0, 0}
     };
 
@@ -123,7 +155,7 @@ static void initialize(int argc, char **argv, int op)
             case 'f':
                 options.fields_arg = optarg;
                 break;
-            case 't':
+            case -2:
                 options.output_format_is_set = 1;
                 if (!strcmp(optarg, "pkg"))
                     options.output_format = TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE;
@@ -134,13 +166,13 @@ static void initialize(int argc, char **argv, int op)
                         "Expected 'pkg' or 'dir'.\n", optarg);
                 }
                 break;
-            case -2:
+            case -3:
                 options.csv_has_header = 1;
                 break;
-            case -3:
+            case -4:
                 options.json_no_empty = 1;
                 break;
-            case -4:
+            case -5:
                 options.skip_bad_input = 1;
                 break;
             default:
