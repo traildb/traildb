@@ -1,7 +1,7 @@
 AC_INIT([traildb], [1.0], [we-will-need-an-actual-email-here-later@dev.null])
 : ${CFLAGS=""}
 AC_CONFIG_MACRO_DIR([m4])
-AM_INIT_AUTOMAKE([subdir-objects])
+AM_INIT_AUTOMAKE([subdir-objects foreign])
 AM_PROG_AR
 LT_INIT
 AC_PROG_CC
