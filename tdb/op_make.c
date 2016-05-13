@@ -60,6 +60,7 @@ static void populate_fields(const char *fieldstr,
         if (++opt->num_fields == TDB_MAX_NUM_FIELDS)
             DIE("Too many fields");
     }
+    return;
 
 out_of_memory:
     DIE("Out of memory.");
@@ -227,6 +228,8 @@ static void parse_csv(tdb_cons *cons,
         return;
     else
         DIE("Premature end of input or out of memory.\n");
+
+    return;
 
 out_of_memory:
     DIE("Out of memory.");
