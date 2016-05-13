@@ -48,6 +48,9 @@ util_traildb_bench_SOURCES = util/traildb_bench.c
 util_traildb_bench_CFLAGS  = ${libtraildb_la_CFLAGS} -Isrc/
 util_traildb_bench_LDADD   = libtraildb.la
 
+tdb_tdbcli_CFLAGS = -Isrc/ \
+                    -O3 \
+                    -g \
+                    -Wall
 tdb_tdbcli_SOURCES = tdb/main.c tdb/op_dump.c tdb/op_make.c tdb/jsmn/jsmn.c
-tdb_tdbcli_CFLAGS = ${libtraildb_la_CFLAGS} -Isrc/
 tdb_tdbcli_LDADD = libtraildb.la
