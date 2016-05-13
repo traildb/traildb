@@ -97,6 +97,15 @@ int main(int argc, char **argv)
         assert(count_events(t, cursor) == i + 1);
     }
 
+    /* a long conjunction of empty clauses is valid but matches nothing */
+    tdb_event_filter_free(f);
+    f = tdb_event_filter_new();
+    for (i = 0; i < 1000; i++)
+        tdb_event_filter_new_clause(f);
+
+    tdb_cursor_set_event_filter(cursor, f);
+    assert(count_events(t, cursor) == 0);
+
     tdb_close(t);
     tdb_cursor_free(cursor);
     return 0;

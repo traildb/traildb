@@ -99,7 +99,7 @@ tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
                                     tdb_item term,
                                     int is_negative);
 
-void tdb_event_filter_new_clause(struct tdb_event_filter *filter);
+tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter);
 
 void tdb_event_filter_free(struct tdb_event_filter *filter);
 

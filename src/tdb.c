@@ -737,28 +737,42 @@ struct tdb_event_filter *tdb_event_filter_new(void)
         return NULL;
 }
 
-tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
-                                    tdb_item term,
-                                    int is_negative)
+static tdb_error ensure_filter_size(struct tdb_event_filter *filter)
 {
-    if (filter->count + 3 >= filter->size){
+    if (filter->count + 2 >= filter->size){
         filter->size *= 2;
         filter->items = realloc(filter->items, filter->size * sizeof(tdb_item));
         if (!filter->items)
             return TDB_ERR_NOMEM;
     }
-
-    filter->items[filter->count++] = (is_negative ? 1: 0);
-    filter->items[filter->count++] = term;
-    filter->items[filter->clause_len_idx] += 2;
-
     return TDB_ERR_OK;
 }
 
-void tdb_event_filter_new_clause(struct tdb_event_filter *filter)
+tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
+                                    tdb_item term,
+                                    int is_negative)
 {
-    filter->clause_len_idx = filter->count++;
-    filter->items[filter->clause_len_idx] = 0;
+    tdb_error ret;
+    if ((ret = ensure_filter_size(filter)))
+        return ret;
+    else{
+        filter->items[filter->count++] = (is_negative ? 1: 0);
+        filter->items[filter->count++] = term;
+        filter->items[filter->clause_len_idx] += 2;
+        return TDB_ERR_OK;
+    }
+}
+
+tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter)
+{
+    tdb_error ret;
+    if ((ret = ensure_filter_size(filter)))
+        return ret;
+    else{
+        filter->clause_len_idx = filter->count++;
+        filter->items[filter->clause_len_idx] = 0;
+        return TDB_ERR_OK;
+    }
 }
 
 void tdb_event_filter_free(struct tdb_event_filter *filter)
