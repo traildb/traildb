@@ -24,19 +24,22 @@ including [Go], [Python], [D], [Haskell], and [R].
 
 # Why TrailDB?
 
-It is easy to store and query series of events using existing databases,
-or even flat files. The key motivation for TrailDB is immutability:
-Immutable data enables compression, scalability, and architectural
-decisions, which would not be feasible with existing databases. This is
-especially true for cloud environments with object stores like
-Amazon S3 that are a perfect match for compressed, immutable files. Once
-in S3, TrailDBs can be easily processed using an arbitrary number of
-instances in parallel, without any centralized bottlenecks.
+It is easy to store and query series of events using existing databases.
+What makes TrailDB different is immutability: Immutable data enables
+deeper compression, scalability, and architectural decisions, which
+would not be feasible with existing databases. This is especially true
+for cloud environments with object stores like Amazon S3 that are a
+perfect match for compressed, immutable files. Once in S3, TrailDBs can
+be easily processed using an arbitrary number of servers in parallel,
+without any centralized bottlenecks.
 
 Developer productivity is another main motivation of TrailDB. Individual
-files are easy to observe and manipulate using standard filesystem
-tools. The library has only a handful of easily available dependencies,
+files are easy to manipulate using standard filesystem tools. The easily
+portable C library has only a handful of easily available dependencies,
 making it easily deployable. [The API] is clean and minimal by design.
+In Devops point of view, it is invaluable to be able to observe various
+slices of a large data-intensive production system on a laptop, which in
+the case of TrailDB is a matter of downloading a file.
 
 TrailDB is used as a highly performant building block in large
 production systems, so maintainability, reliability and robustness are

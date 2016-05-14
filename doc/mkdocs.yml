@@ -4,7 +4,7 @@ pages:
 - Getting Started: getting_started.md
 - Tutorial: tutorial.md
 - Technical Overview: technical_overview.md
-- API: api.md
+- C API: api.md
 
 theme: readthedocs
 site_favicon: http://traildb.io/favicon.ico
