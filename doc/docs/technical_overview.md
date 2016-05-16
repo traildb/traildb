@@ -1,36 +1,51 @@
 # Data Model
 
-
-TrailDB data is a collection of trails. Each trail consists of multiple events.
-Each event has a number of string fields, some of them may be empty, and an
-integer timestamp.
-
+<img src="../images/datamodel.png" style="width: 60%">
 
 traildb
-:	A single traildb, stored on disk as a directory.
+:   - TrailDB is a collection of **trails**.
 
 trail
-:	A sequence of events, identified by an uuid.
-
-uuid
-:	Each trail in a TrailDB has a unique 16-byte identifier called uuid.
-
-trail id
-:	Each trail in a TrailDB is also automatically assigned a numeric sequential id, unique within that traildb.
+:   - A **trail** is identified by a user-defined
+      [128-bit UUID](http://en.wikipedia.org/wiki/UUID) as well as an
+      automatically assigned trail ID.
+    - A **trail** consists of a sequence of **events**, ordered by time.
 
 event
-: 	A single item in a trail. Has a timestamp and a set of named fields.
+:   - An **event** corresponds to an event in time, related to an UUID.
+    - An **event** has a 64-bit integer timestamp.
+    - An **event** consists of a pre-defined set of **fields**.
 
 field
-:   Each event has a set of fields, values are strings. Each event in a traildb has the same set of fields.
+:   - Each TrailDB follows a schema that is a list of fields.
+    - A **field** consists of a set of values.
 
-# Performance Best Practices
+In a relational database, **UUID** would be the primary key, **event** would be a row,
+and **fields** would be the columns.
 
-Integers
-Expensive Functions
+The combination of a field ID and a value of the field is represented
+as an **item** in the [C API]. Items are encoded as 64-bit integers, so
+they can be manipulated efficiently.
 
 # Limits
 
+ - Maximum number of trails: 2<sup>59</sup> - 1
+ - Maximum number of events in a trail: 2<sup>50</sup> - 1
+ - Maximum number of distrinct values in a field: 2<sup>40</sup> - 2
+ - Maximum number of fields: 16,382
+
+# Performance Best Practices
+
+ - Integers (32/64 bit items)
+ - Expensive Functions
+ - Cons is Expensive
+
 # Internals
 
-Compression
+ - Decompress only what you need (lazy, cursor)
+ - Variable-width items
+ - Dictionary Encoding
+ - Edge Encoding
+ - Entropy Coding
+ - Bigram coding
+

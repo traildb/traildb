@@ -1,0 +1,6 @@
+#!/bin/bash
+set -e
+
+rm -Rf site
+mkdocs build
+aws s3 cp --recursive --region us-west-2 site s3://traildb.io/docs/
