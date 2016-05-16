@@ -59,7 +59,7 @@ the newest version of the library.
 
 # Learn More
 
- - Watch a presentation [Introduction to TrailDB].
- - Browse [the slides of the presentation].
- - Take a look at the [technical overview].
+ - Watch a presentation [Introduction to TrailDB](https://www.youtube.com/watch?v=ondmDAMWEtg).
+ - Browse [the slides of the presentation](http://slides.com/villetuulos/intro-to-traildb#/).
+ - Take a look at the [technical overview](technical_overview).
 
