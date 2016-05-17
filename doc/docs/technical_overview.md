@@ -34,14 +34,15 @@ they can be manipulated efficiently.
 [Constructing a new TrailDB](api/#traildb-construction) consumes CPU, memory,
 and temporary disk space roughly O(N) amount where N is the amount of raw data.
 It is typical to separate the relatively expensive construction phase from
-processing, so enough resources can be dedicated to it.
+processing so enough resources can be dedicated to it.
 
 ###### Use tdb_cons_append for merging TrailDBs
 
-In some cases it makes sense to construct smaller TrailDB shards, and later
-merge them to larger TrailDBs using [`tdb_cons_append()`](api/#tdb_cons_append)
-function. Using this function is more efficient than looping over an existing
-TrailDB and creating a new one using [`tdb_cons_add()`](api/#tdb_cons_add).
+In some cases it makes sense to construct smaller TrailDB
+shards and later merge them to larger TrailDBs using the
+[`tdb_cons_append()`](api/#tdb_cons_append) function. Using this
+function is more efficient than looping over an existing TrailDB and
+creating a new one using [`tdb_cons_add()`](api/#tdb_cons_add).
 
 ###### Mapping strings to items is a relatively slow O(L) operation
 
@@ -77,7 +78,7 @@ to maintain a very large number of parallel cursors.
 A typical situation is that you have a large amount of SSD (disk) space compared
 to the amount of available RAM. If the size of the TrailDBs you need to process
 exceeds the amount of RAM, performance may suffer or you may need to complicate
-the application logic to open only a subset of TrailDBs at once.
+the application logic by opening only a subset of TrailDBs at once.
 
 An alternative solution is to open all TrailDBs using
 [`tdb_open()`](api/#tdb_open) as usual, which doesn't consume much memory
