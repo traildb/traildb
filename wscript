@@ -3,15 +3,23 @@
 # chmod +x waf
 # git commit waf   # this is supposed to be committed in SCM
 # ./waf configure
-# ./waf            # or ./waf-1.8.20 build
+# ./waf            # or ./waf build
 # ./waf install
 # ./waf uninstall
+import sys, os
 
 APPNAME = "traildb"
 VERSION = "0.1"
 
 def options(opt):
     opt.load("compiler_c")
+
+errmsg_libarchive = "not found"
+errmsg_judy = "not found"
+
+if sys.platform == "darwin":
+    errmsg_libarchive = "not found; install with 'brew install libarchive'"
+    errmsg_judy = "not found; install with 'brew install judy && brew link judy'"
 
 def configure(cnf):
     cnf.load("compiler_c")
@@ -22,16 +30,20 @@ def configure(cnf):
     cnf.env.append_value("CFLAGS", "-O3")
     cnf.env.append_value("CFLAGS", "-g")
 
-    # Find libarchive through pkg-config. On OSX, there is a
-    # very old pre-installed version which is not compatible,
-    # so error out if major version is < 3
+    # Find libarchive through pkg-config. We need at least version 3.
+    # On OSX, there is a very old pre-installed version which is not
+    # compatible, so and brew never overwrites standard libraries, so
+    # we need to explicitly tweak the PKG_CONFIG_PATH.
+    if sys.platform == "darwin":
+        os.environ["PKG_CONFIG_PATH"] = "/usr/local/opt/libarchive/lib/pkgconfig"
     cnf.check_cfg(package="libarchive",
         args=["libarchive >= 3.0.0", "--cflags", "--libs"],
-        uselib_store="ARCHIVE")
+        uselib_store="ARCHIVE", errmsg=errmsg_libarchive)
 
     # Judy does not support pkg-config. Do a normal dependeny
     # check.
-    cnf.check_cc(lib="Judy", uselib_store="JUDY")
+    cnf.check_cc(lib="Judy", uselib_store="JUDY",
+        errmsg=errmsg_judy)
 
 def build(bld):
     tdbcflags = [
