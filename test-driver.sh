@@ -2,8 +2,11 @@
 set -euf
 OLDCWD=$(pwd)
 
-# append to CFLAGS if defined
-CFLAGS="${CFLAGS-} -I${OLDCWD}/src"; export CFLAGS
+# force small allocations
+CFLAGS="${CFLAGS-} -DEVENTS_ARENA_INCREMENT=100"
+# add source directory
+CFLAGS="${CFLAGS-} -I${OLDCWD}/src"
+export CFLAGS
 
 # move to test directory
 cd ./tests
