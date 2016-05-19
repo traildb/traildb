@@ -3,3 +3,5 @@
 # Install on OS X
 
 # Test that it works
+
+# Install Python bindings
