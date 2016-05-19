@@ -550,37 +550,41 @@ tdb_error tdb_cons_finalize(tdb_cons *cons)
 
     if (cons->items.fd && fclose(cons->items.fd)) {
         cons->items.fd = NULL;
-        return TDB_ERR_IO_CLOSE;
+        ret = TDB_ERR_IO_CLOSE;
+        goto done;
     }
     cons->items.fd = NULL;
 
-    if (num_events && cons->num_ofields) {
-        if (file_mmap(cons->tempfile, NULL, &items_mmapped, NULL))
-            return TDB_ERR_IO_READ;
+    if (cons->tempfile){
+        if (num_events && cons->num_ofields) {
+            if (file_mmap(cons->tempfile, NULL, &items_mmapped, NULL)){
+                ret = TDB_ERR_IO_READ;
+                goto done;
+            }
+        }
+
+        TDB_TIMER_DEF
+
+        TDB_TIMER_START
+        if ((ret = store_lexicons(cons)))
+            goto done;
+        TDB_TIMER_END("encoder/store_lexicons")
+
+        TDB_TIMER_START
+        if ((ret = store_uuids(cons)))
+            goto done;
+        TDB_TIMER_END("encoder/store_uuids")
+
+        TDB_TIMER_START
+        if ((ret = store_version(cons)))
+            goto done;
+        TDB_TIMER_END("encoder/store_version")
+
+        TDB_TIMER_START
+        if ((ret = tdb_encode(cons, (const tdb_item*)items_mmapped.data)))
+            goto done;
+        TDB_TIMER_END("encoder/encode")
     }
-
-    TDB_TIMER_DEF
-
-    TDB_TIMER_START
-    if ((ret = store_lexicons(cons)))
-        goto done;
-    TDB_TIMER_END("encoder/store_lexicons")
-
-    TDB_TIMER_START
-    if ((ret = store_uuids(cons)))
-        goto done;
-    TDB_TIMER_END("encoder/store_uuids")
-
-    TDB_TIMER_START
-    if ((ret = store_version(cons)))
-        goto done;
-    TDB_TIMER_END("encoder/store_version")
-
-    TDB_TIMER_START
-    if ((ret = tdb_encode(cons, (const tdb_item*)items_mmapped.data)))
-        goto done;
-    TDB_TIMER_END("encoder/encode")
-
 done:
     if (items_mmapped.ptr)
         munmap(items_mmapped.ptr, items_mmapped.mmap_size);
