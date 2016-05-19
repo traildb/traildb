@@ -31,3 +31,6 @@ configure
 coverage-html/
 m4/
 
+# Waf build artficats
+/.waf-*/
+/build/

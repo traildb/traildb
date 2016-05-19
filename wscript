@@ -65,11 +65,18 @@ def build(bld):
         "-Wstrict-prototypes",
     ]
 
+    bld.objects(
+        target         = "vendorlibs",
+        source         = bld.path.ant_glob("src/dsfmt/*.c") +
+                         bld.path.ant_glob("src/xxhash/*.c"),
+    )
+
     # Build traildb shared library
     bld.shlib(
         target         = "traildb",
-        source         = bld.path.ant_glob("src/**/*.c"),
+        source         = bld.path.ant_glob("src/*.c"),
         cflags         = tdbcflags,
+        use            = "vendorlibs",
         uselib         = ["ARCHIVE", "JUDY"],
         vnum            = "0",  # .so versioning
     )
@@ -108,6 +115,11 @@ def build(bld):
         "src/tdb_types.h",
         "src/tdb_limits.h"
     ])
+
+    # Build pkgconfig metadata file
+    pc = bld(source='traildb.pc.in', target='%s-%s.pc' % (APPNAME, VERSION), install_path='${PREFIX}/lib/pkgconfig')
+    pc.env.prefix  = bld.env.PREFIX
+    pc.env.version = VERSION
 
 
 JUDY_TEST="""
