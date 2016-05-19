@@ -555,7 +555,7 @@ tdb_error tdb_cons_finalize(tdb_cons *cons)
     }
     cons->items.fd = NULL;
 
-    if (cons->tempfile){
+    if (cons->tempfile[0]){
         if (num_events && cons->num_ofields) {
             if (file_mmap(cons->tempfile, NULL, &items_mmapped, NULL)){
                 ret = TDB_ERR_IO_READ;
@@ -589,7 +589,7 @@ done:
     if (items_mmapped.ptr)
         munmap(items_mmapped.ptr, items_mmapped.mmap_size);
 
-    if (cons->tempfile)
+    if (cons->tempfile[0])
         unlink(cons->tempfile);
 
     if (!ret){
