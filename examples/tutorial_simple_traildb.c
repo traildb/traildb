@@ -47,6 +47,7 @@ int main(int argc, char **argv)
         printf("Closing TrailDB constructor failed: %s\n", tdb_error_str(err));
         exit(1);
     }
+    tdb_cons_close(cons);
 
     /* open the newly created TrailDB and print out its contents */
 
