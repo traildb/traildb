@@ -65,27 +65,35 @@ def build(bld):
         "-Wstrict-prototypes",
     ]
 
-    bld.objects(
-        target         = "vendorlibs",
-        source         = bld.path.ant_glob("src/dsfmt/*.c") +
-                         bld.path.ant_glob("src/xxhash/*.c"),
-    )
 
     # Build traildb shared library
+    bld.objects(
+        target         = "vendorlibs_shared",
+        source         = bld.path.ant_glob("src/dsfmt/*.c") +
+                         bld.path.ant_glob("src/xxhash/*.c"),
+        features       = "c cshlib",
+    )
     bld.shlib(
         target         = "traildb",
         source         = bld.path.ant_glob("src/*.c"),
         cflags         = tdbcflags,
-        use            = "vendorlibs",
+        use            = "vendorlibs_shared",
         uselib         = ["ARCHIVE", "JUDY"],
         vnum            = "0",  # .so versioning
     )
 
     # Build traildb static library
+    bld.objects(
+        target         = "vendorlibs_static",
+        source         = bld.path.ant_glob("src/dsfmt/*.c") +
+                         bld.path.ant_glob("src/xxhash/*.c"),
+        features       = "c cstlib",
+    )
     bld.stlib(
         target         = "traildb",
-        source         = bld.path.ant_glob("src/**/*.c"),
+        source         = bld.path.ant_glob("src/*.c"),
         cflags         = tdbcflags,
+        use            = "vendorlibs_static",
         uselib         = ["ARCHIVE", "JUDY"],
         install_path   = "${PREFIX}/lib",  # opt-in to have .a installed
     )
