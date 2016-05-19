@@ -585,7 +585,7 @@ done:
     if (items_mmapped.ptr)
         munmap(items_mmapped.ptr, items_mmapped.mmap_size);
 
-    if (cons->tempfile)
+    if (cons->tempfile[0])
         unlink(cons->tempfile);
 
     if (!ret){
