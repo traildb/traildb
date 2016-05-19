@@ -69,6 +69,7 @@ def build(bld):
         target         = "vendorlibs",
         source         = bld.path.ant_glob("src/dsfmt/*.c") +
                          bld.path.ant_glob("src/xxhash/*.c"),
+        features       = "c cshlib",
     )
 
     # Build traildb shared library
