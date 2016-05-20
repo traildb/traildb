@@ -25,7 +25,7 @@ def configure(cnf):
     cnf.load("compiler_c")
 
     cnf.define("DSFMT_MEXP", 521)
-    cnf.define("HAVE_SSE2", 1)
+    cnf.define("HAVE_ARCHIVE_H", 1)
     cnf.env.append_value("CFLAGS", "-std=c99")
     cnf.env.append_value("CFLAGS", "-O3")
     cnf.env.append_value("CFLAGS", "-g")
@@ -57,6 +57,7 @@ def build(bld):
         "-Wconversion",
         "-Wcast-qual",
         "-Wformat-security",
+        "-Wformat",
         "-Wmissing-declarations",
         "-Wmissing-prototypes",
         "-Wnested-externs",
@@ -66,34 +67,18 @@ def build(bld):
     ]
 
 
-    # Build traildb shared library
-    bld.objects(
-        target         = "vendorlibs_shared",
-        source         = bld.path.ant_glob("src/dsfmt/*.c") +
-                         bld.path.ant_glob("src/xxhash/*.c"),
-        features       = "c cshlib",
-    )
     bld.shlib(
         target         = "traildb",
-        source         = bld.path.ant_glob("src/*.c"),
+        source         = bld.path.ant_glob("src/**/*.c"),
         cflags         = tdbcflags,
-        use            = "vendorlibs_shared",
         uselib         = ["ARCHIVE", "JUDY"],
         vnum            = "0",  # .so versioning
     )
 
-    # Build traildb static library
-    bld.objects(
-        target         = "vendorlibs_static",
-        source         = bld.path.ant_glob("src/dsfmt/*.c") +
-                         bld.path.ant_glob("src/xxhash/*.c"),
-        features       = "c cstlib",
-    )
     bld.stlib(
         target         = "traildb",
-        source         = bld.path.ant_glob("src/*.c"),
+        source         = bld.path.ant_glob("src/**/*.c"),
         cflags         = tdbcflags,
-        use            = "vendorlibs_static",
         uselib         = ["ARCHIVE", "JUDY"],
         install_path   = "${PREFIX}/lib",  # opt-in to have .a installed
     )
@@ -109,8 +94,8 @@ def build(bld):
 
     # Build tdbcli
     bld.program(
-        target       = "tdbcli",
-        source       = bld.path.ant_glob("tdb/**/*.c"),
+        target       = "tdb",
+        source       = bld.path.ant_glob("tdbcli/**/*.c"),
         includes     = "src",
         use          = "traildb",
         uselib       = ["ARCHIVE", "JUDY"],
