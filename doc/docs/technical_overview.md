@@ -122,6 +122,32 @@ not fully accurate. You still want to construct a proper set structure
 in your application but this option can make populating the set much
 faster.
 
+###### Return a subset of events with event filters
+
+[Event filters](api/#event_filters) are a powerful feature
+for querying a subset of events in trails. Event filters
+support boolean queries over fields, expressed in [conjunctive normal
+form](http://en.wikipedia.org/wiki/Conjunctive_normal_form).
+For instance, you could query certain web browsing events with
+```
+action=page_view AND (page=pricing OR page=about)
+```
+First, you need to construct a query using
+[`tdb_event_filter_add_term`](api/#tdb_filter_add_term),
+which adds terms to OR clauses, and
+[`tdb_event_filter_new_clause`](api/#tdb_filter_new_clause) which adds
+a new clause that is connected by AND to the previous clauses.
+
+Once the filter has been constructed, you can apply it to a cursor with
+[`tdb_cursor_set_event_filter()`](api/#tdb_cursor_event_filter). After
+this, the cursor returns only events that match the query. Internally,
+the cursor still needs to evaluate every event but filters may speed up
+processing by discarding unwanted events on the fly.
+
+Note that the `tdb_event_filter` handle needs to be available as long
+as you keep using the cursor. You can use the same filter in multiple
+cursors.
+
 # Limits
 
  - Maximum number of trails: 2<sup>59</sup> - 1
