@@ -35,6 +35,11 @@ library and the `tdb` command line tool to a system-wide directory with
 
 That's all. See below for instructions for testing the installation.
 
+Note that some old versions of Ubuntu and Debian include a version of
+Judy that is broken (1.0.5-1 or older). The build will fail if a broken
+version is found. You can install a newer version of Judy manually if
+your system is affected.
+
 Alternatively, TrailDB provides an autotools-based build system which
 can be run as follows:
 ```sh

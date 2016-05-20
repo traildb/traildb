@@ -1,6 +1,6 @@
 site_name: TrailDB
 pages:
-- Home: index.md
+- Introduction: index.md
 - Getting Started: getting_started.md
 - Tutorial: tutorial.md
 - Technical Overview: technical_overview.md
