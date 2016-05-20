@@ -2,14 +2,38 @@
 
 ### Install
 
-If you want to install locally:
+install locally with autotools:
 
     $ ./autogen.sh
     $ ./configure
     $ make
     $ sudo make install
 
+install locally with waf (depends on python):
+
+    $ ./waf configure
+    $ ./waf install
+
+### Dependencies
+
+For Debian and derivatives:
+
+	$ apt-get install libarchive-dev libjudy-dev
+
+For RPM-based distros:
+
+	$ yum install judy-devel libarchive-devel
+
+For OSX:
+
+	$ brew install judy libarchive
+
+
 ### Tests
 
-Read the `README.md` inside `testing/` subdirectory.
+The quickest way to run the test suite is
+    $ ./waf configure
+    $ ./waf install
+    $ sh test-driver.sh
 
+Read the `README.md` inside `tests/` subdirectory.

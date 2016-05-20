@@ -43,15 +43,15 @@ include_HEADERS = \
   src/tdb_types.h \
   src/tdb_limits.h
 
-bin_PROGRAMS = util/traildb_bench tdb/tdb
+bin_PROGRAMS = util/traildb_bench tdbcli/tdb
 util_traildb_bench_SOURCES = util/traildb_bench.c
 util_traildb_bench_CFLAGS  = ${libtraildb_la_CFLAGS} -Isrc/
 util_traildb_bench_LDADD   = libtraildb.la
 
-tdb_tdb_CFLAGS = -Isrc/ \
-                 -DJUDYERROR=judyerror_macro_missing_fix_this \
-                 -O3 \
-                 -g \
-                 -Wall
-tdb_tdb_SOURCES = tdb/main.c tdb/op_dump.c tdb/op_make.c tdb/jsmn/jsmn.c
-tdb_tdb_LDADD = libtraildb.la
+tdbcli_tdb_CFLAGS = -Isrc/ \
+                    -DJUDYERROR=judyerror_macro_missing_fix_this \
+                    -O3 \
+                    -g \
+                    -Wall
+tdbcli_tdb_SOURCES = tdbcli/main.c tdbcli/op_dump.c tdbcli/op_make.c tdbcli/jsmn/jsmn.c
+tdbcli_tdb_LDADD = libtraildb.la

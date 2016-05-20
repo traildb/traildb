@@ -1,0 +1,11 @@
+prefix=@PREFIX@
+exec_prefix=${prefix}
+includedir=${prefix}/include
+libdir=${exec_prefix}/lib
+
+Name: TrailDB
+Description: TrailDB database
+URL: https://traildb.io
+Version: @VERSION@
+Cflags: -I${includedir}/traildb
+Libs: -L${libdir} -ltraildb

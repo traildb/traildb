@@ -24,7 +24,8 @@ class Testing:
             os.system("chmod +x %s" % path)
             result = os.system("%s \"%s\"" % (path, temp_dir_path))
             if result != 0:
-                print("FAILED: %s %s" % (cfile, msg))
+                # mask off signal bit in exit status
+                print("FAILED: %s %s with status %d (%d)" % (cfile, msg, result, result & 127))
                 self.failed_tests.add(cfile)
             else:
                 print("SUCCEEDED: %s %s" % (cfile, msg))
