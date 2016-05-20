@@ -20,7 +20,7 @@ int main(int argc, char **argv)
 
     dsfmt_init_gen_rand(&dsfmt, seed);
 
-    dsfmt_genrand_close_open(&dsfmt)
+    dsfmt_genrand_close_open(&dsfmt);
     
     return 0;
 }
