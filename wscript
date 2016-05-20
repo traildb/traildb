@@ -25,7 +25,7 @@ def configure(cnf):
     cnf.load("compiler_c")
 
     cnf.define("DSFMT_MEXP", 521)
-    cnf.define("HAVE_SSE2", 1)
+    cnf.define("HAVE_ARCHIVE_H", 1)
     cnf.env.append_value("CFLAGS", "-std=c99")
     cnf.env.append_value("CFLAGS", "-O3")
     cnf.env.append_value("CFLAGS", "-g")
@@ -109,7 +109,7 @@ def build(bld):
 
     # Build tdbcli
     bld.program(
-        target       = "tdbcli",
+        target       = "tdb",
         source       = bld.path.ant_glob("tdb/**/*.c"),
         includes     = "src",
         use          = "traildb",
