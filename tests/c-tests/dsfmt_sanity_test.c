@@ -16,17 +16,11 @@ int main(int argc, char **argv)
     // with a few close values and then generating values
     int size = 5;
     uint32_t seed = 4321;
-    dsfmt_t dsfmt[size];
+    dsfmt_t dsfmt;
 
-    dsfmt_init_gen_rand(&dsfmt[0], seed);
-    for (int i = 1; i < size; i++) {
-        dsfmt[i] = dsfmt[i-1];
-    }
+    dsfmt_init_gen_rand(&dsfmt, seed);
 
-    for (int i = 0; i < size; i++) {
-        printf("%f ", dsfmt_genrand_close_open(&dsfmt[i]));
-    }
-    printf("\n");
-
+    dsfmt_genrand_close_open(&dsfmt)
+    
     return 0;
 }
