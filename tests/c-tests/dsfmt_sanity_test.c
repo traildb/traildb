@@ -14,7 +14,6 @@ int main(int argc, char **argv)
 {
     // we are initializing an array of dsfmt_t 's
     // with a few close values and then generating values
-    int size = 5;
     uint32_t seed = 4321;
     dsfmt_t dsfmt;
 
