@@ -160,10 +160,10 @@ sources of your own.
 # Part II: Analyze a large TrailDB of Wikipedia edits
 
 Wikipedia provides a [database
-dump](https://dumps.wikimedia.org/enwiki/) of full edit history of all
-Wikipedia pages. This is a treasure trove of data that can be used to
-analyze, for instance, behavior of individual contributors and edit history
-of individual pages.
+dump](https://dumps.wikimedia.org/enwiki/) of the full edit history
+of Wikipedia pages. This is a treasure trove of data that can be used
+to analyze, for instance, behavior of individual contributors or edit
+history of individual pages.
 
 We [converted the 50GB compressed dump to a
 TrailDB](https://github.com/traildb-python/tree/master/examples/parse_wi
@@ -180,7 +180,7 @@ TrailDB. Two versions are provided:
    [this script](https://github.com/traildb-python/tree/master/examples/extract_sample.py)
    was used to produce a random extract of the full TrailDB.
 
-You should download first the smaller snapshot above,
+First, you should download the smaller snapshot above,
 `wikipedia-history-small.tdb`, which allows you to verify quickly
 that the code works. Python is convenient for small and medium-scale
 analysis but it tends to be slow with larger amounts of data. For
@@ -196,11 +196,11 @@ registered contributors who have a username (field `user`). Each
 event includes also a `title` of the page that was edited and the
 timestamp of the edit action.
 
-To measure true contributor activity, it is useful to count the number
-of *edit sessions*, in addition to the raw number of edits. We define a
+To measure contributor activity, it is useful to count the number of
+*edit sessions*, in addition to the raw number of edits. We define a
 *session* as a sequence of actions where actions are at most 30 minutes
-apart. Counting the number of sessions by contributor is easy with
-TrailDB.
+apart, similar to how sessions are defined in web analytics. Counting
+the number of sessions by contributor is easy with TrailDB.
 
 You can find the full Python source code in the
 [traildb-python](https://github.com/SemanticSugar/traildb-python/tree/ma
@@ -265,7 +265,7 @@ each contributor. We can plot a histogram of the results:
 <img src="../images/wikipedia-sessions.png">
 
 Unsurprisingly, the vast majority of contributors have only one session.
-However, there is a very long tail of contributors that have over 200
+However, there is a very long tail of contributors who have over 200
 sessions.
 
 Not all contributors are human beings. There are a number of benevolent
@@ -273,5 +273,5 @@ bots making routine edits in Wikipedia, such as maintaining basic
 statistics. In fact, in `wikipedia-history.tdb` you can find over 4500
 users whose name ends with `bot`. As a fun follow up exercise, you
 can write a script that tries to detect bots based on their behavior
-which is often very characteristic and easy to distinguish from human
+that is often very characteristic and easy to distinguish from human
 contributors.
