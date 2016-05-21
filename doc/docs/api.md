@@ -1,3 +1,8 @@
+
+# Functions
+
+[TOC]
+
 # Construct a new TrailDB
 
 

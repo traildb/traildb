@@ -23,9 +23,11 @@ field
 In a relational database, **UUID** would be the primary key, **event** would be a row,
 and **fields** would be the columns.
 
-The combination of a field ID and a value of the field is represented
-as an **item** in the [C API]. Items are encoded as 64-bit integers, so
-they can be manipulated efficiently.
+The combination of a field ID and a value of the field is represented as
+an **item** in the [C API](api). Items are encoded as 64-bit integers,
+so they can be manipulated efficiently. See
+[Working with items, fields, and values](api/#working-with-items-fields-and-values)
+for detailed API documentation.
 
 # Performance Best Practices
 
@@ -133,13 +135,13 @@ For instance, you could query certain web browsing events with
 action=page_view AND (page=pricing OR page=about)
 ```
 First, you need to construct a query using
-[`tdb_event_filter_add_term`](api/#tdb_filter_add_term),
+[`tdb_event_filter_add_term`](api/#tdb_event_filter_add_term),
 which adds terms to OR clauses, and
-[`tdb_event_filter_new_clause`](api/#tdb_filter_new_clause) which adds
+[`tdb_event_filter_new_clause`](api/#tdb_event_filter_new_clause) which adds
 a new clause that is connected by AND to the previous clauses.
 
 Once the filter has been constructed, you can apply it to a cursor with
-[`tdb_cursor_set_event_filter()`](api/#tdb_cursor_event_filter). After
+[`tdb_cursor_set_event_filter()`](api/#tdb_cursor_set_event_filter). After
 this, the cursor returns only events that match the query. Internally,
 the cursor still needs to evaluate every event but filters may speed up
 processing by discarding unwanted events on the fly.

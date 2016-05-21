@@ -19,7 +19,11 @@ analysis on a laptop.
 TrailDBs are immutable files which your application can create and
 access using the TrailDB library. The TrailDB library is implemented in
 C that makes it extremely performant. Multiple language bindings are
-provided, including [Go], [Python], [D], [Haskell], and [R].
+provided, including [Go](https://github.com/traildb/traildb-go),
+[Python](https://github.com/traildb/traildb-python),
+[D](https://github.com/traildb/traildb-d),
+[Haskell](https://github.com/traildb/traildb-haskell),
+and [R](https://github.com/traildb/traildb-r).
 
 
 # Why TrailDB?
@@ -46,7 +50,7 @@ setup with minimal operational overhead.
 Developer productivity is another main motivation of TrailDB. Individual
 files are easy to manipulate using standard filesystem tools. The easily
 portable C library has only a few easily available dependencies,
-making it easily deployable. [The API] is clean and minimal by design.
+making it easily deployable. [The API](api) is clean and minimal by design.
 In Devops point of view, it is invaluable to be able to observe various
 slices of a large data-intensive production system on a laptop, which in
 the case of TrailDB is a matter of downloading a file.
