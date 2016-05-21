@@ -156,6 +156,7 @@ cursors.
  - Maximum number of events in a trail: 2<sup>50</sup> - 1
  - Maximum number of distinct values in a field: 2<sup>40</sup> - 2
  - Maximum number of fields: 16,382
+ - Maximum size of a value: 2<sup>58</sup> bytes
 
 # Internals
 

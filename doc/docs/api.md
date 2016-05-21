@@ -520,10 +520,10 @@ and a number of field-value pairs, encoded as items.
 
 # Filter events
 
-An event filter is boolean query over fields, expressed in [conjunctive normal
+An event filter is a boolean query over fields, expressed in [conjunctive normal
 form](http://en.wikipedia.org/wiki/Conjunctive_normal_form).
 
-Once [assigned to a cursor](#tdb_cursor_set_event_filter), only a
+Once [assigned to a cursor](#tdb_cursor_set_event_filter), only the
 subset of events that match the query are returned. See [technical
 overview](technical_overview/#return-a-subset-of-events-with-event-filte
 rs) for more information.
