@@ -92,7 +92,7 @@ to the current value of the key. Return 0 on success, an error code otherwise.
 
 
 ### tdb_cons_finalize
-Finalize TrailDB construction. Finalization takes of compacting the
+Finalize TrailDB construction. Finalization takes care of compacting the
 events and creating a valid TrailDB file.
 ```c
 tdb_error tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
@@ -374,8 +374,8 @@ not need to free it.
 
 # Working with UUIDs
 
-Each trail has an UUID and a trail ID associated to it.
-
+Each trail has a user-defined [16-byte UUID](http://en.wikipedia.org/wiki/UUID)
+and a sequential 64-bit trail ID associated to it.
 
 ### tdb_get_uuid
 Get the UUID given a trail ID. This is a fast O(1) operation.
@@ -410,7 +410,7 @@ tdb_error tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16])
 * `hexuuid` source 32-byte hex-encoded UUID.
 * `uuid` destination 16-byte UUID.
 
-Return 0 if successful, an error code if `hexuuid` is not a valid
+Return 0 on success, an error code if `hexuuid` is not a valid
 hex-encoded string.
 
 
@@ -476,7 +476,7 @@ tdb_error tdb_cursor_set_event_filter(tdb_cursor *cursor,
 * `cursor` cursor handle.
 * `filter` filter handle.
 
-Return 0 if successful or an error if this cursor does not support event
+Return 0 on success or an error if this cursor does not support event
 filtering (`TDB_OPT_ONLY_DIFF_ITEMS` is enabled).
 
 Note that this function borrows `filter` so it needs to stay alive as long
@@ -501,7 +501,7 @@ const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
 Return an event struct or NULL if the cursor has no more events. The
 event structure is defined as follows:
 
-```
+```c
 typedef struct{
     uint64_t timestamp;
     uint64_t num_items;
@@ -551,7 +551,7 @@ tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
 * `term` an item to be included in the clause.
 * `is_negative` is this item negative?
 
-Return 0 if successful, an error code otherwise (out of memory).
+Return 0 on success, an error code otherwise (out of memory).
 
 
 ### tdb_event_filter_new_clause
@@ -562,4 +562,4 @@ tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter)
 ```
 * `filter` filter handle.
 
-Return 0 if successful, an error code otherwise (out of memory).
+Return 0 success, an error code otherwise (out of memory).

@@ -191,7 +191,7 @@ variable-length integers.
 The end result is often comparable to compressing the data using Zip.
 The big benefit of TrailDB compared to Zip is that each trail can be
 decoded individually efficiently and the output of decoding is kept in
-an efficent integer-based format. By design, the TrailDB API encourages
+an efficient integer-based format. By design, the TrailDB API encourages
 the use of integer-based items instead of original strings for further
 processing, making it easy to build high-performance applications on top
 of TrailDB.

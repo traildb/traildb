@@ -94,7 +94,8 @@ for i in range(3):
 </div>
 
 Once you are done adding events in the TrailDB, you have to finalize it.
-Finalization takes of compacting the events and creating a valid TrailDB file.
+Finalization takes care of compacting the events and creating a valid
+TrailDB file.
 
 <div markdown data-multilang title="Finalize the TrailDB">
 ```python
