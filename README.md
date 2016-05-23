@@ -1,21 +1,30 @@
-TrailDB is a database aggregating the past history cookies and letting
-you query them.
+# TrailDB
 
-### Internals
-Each dimension value is encoded into a 32 bits unsigned int.
-The first byte encodes the dimension id. The 3 remaining bytes encode the
-value.
+<img src="http://traildb.io/images/tdb_logo@2x.png" style="width: 40%">
 
-### Install
+TrailDB is an efficient tool for storing and querying series of events.
+This repository contains the core C library and the `tdb` command line tool.
 
-Build the C lib:
+Learn more at [traildb.io](http://traildb.io).
 
-  make
+## Quick start
 
-Build the Python bindings:
+For detailed installation instructions, see [Getting Started guide](http://traildb.io/docs/getting_started/).
 
-  make python
+#### Install Dependencies
 
-Install the Python bindings:
+	$ apt-get install libarchive-dev libjudy-dev pkg-config
 
-  make python CMD=install
+For RPM-based distros:
+
+	$ yum install judy-devel libarchive-devel pkg-config
+
+For OSX:
+
+	$ brew install judy libarchive pkg-config
+
+#### Build TrailDB
+
+    $ ./waf configure
+    $ ./waf install
+

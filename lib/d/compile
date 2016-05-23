@@ -1,3 +1,0 @@
-cp libtraildb.so dsrc/
-dmd -L-L./ -L-ltraildb TrailDB.d
-cd ../

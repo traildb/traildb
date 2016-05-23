@@ -4,121 +4,168 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#undef JUDYERROR
+#define JUDYERROR(CallerFile, CallerLine, JudyFunc, JudyErrno, JudyErrID) \
+{                                                                         \
+   if ((JudyErrno) == JU_ERRNO_NOMEM)                                     \
+       goto out_of_memory;                                                \
+}
+#include <Judy.h>
+
 #include "tdb_internal.h"
 #include "tdb_encode_model.h"
-#include "util.h"
+#include "tdb_huffman.h"
+#include "tdb_error.h"
+#include "tdb_io.h"
+
+#define DSFMT_MEXP 521
+#include "dsfmt/dSFMT.h"
 
 #define SAMPLE_SIZE (0.1 * RAND_MAX)
 #define RANDOM_SEED 238713
 #define UNIGRAM_SUPPORT 0.00001
+#define NUM_EVENTS_SAMPLING_THRESHOLD 1000000
+#define INITIAL_GRAM_BUF_LEN (256 * 256)
 
-#define FIELD_IDX_1(x) (x & 255)
-#define FIELD_IDX_2(x) ((x >> 32) & 255)
+#define MIN(a,b) ((a)>(b)?(b):(a))
 
-typedef void (*event_op)(const uint32_t *encoded,
-                         int n,
-                         const tdb_event *ev,
-                         void *state);
+/* event op handles one *event* (not one trail) */
+typedef int (*event_op)(const tdb_item *encoded,
+                        uint64_t n,
+                        const struct tdb_grouped_event *ev,
+                        void *state);
 
-static uint32_t get_sample_size()
+struct ngram_state{
+    Pvoid_t candidates;
+    struct judy_128_map ngram_freqs;
+    Pvoid_t final_freqs;
+    __uint128_t *grams;
+    struct gram_bufs gbufs;
+};
+
+static double get_sample_size(void)
 {
+    /* TODO remove this env var */
+    double d = 0.1;
     if (getenv("TDB_SAMPLE_SIZE")){
         char *endptr;
-        double d = strtod(getenv("TDB_SAMPLE_SIZE"), &endptr);
-        if (*endptr || d < 0.01 || d > 1.0)
-            DIE("Invalid TDB_SAMPLE_SIZE");
-        else
-            return d * RAND_MAX;
+        d = strtod(getenv("TDB_SAMPLE_SIZE"), &endptr);
+        if (*endptr || d < 0.01 || d > 1.0){
+            /* TODO fix this */
+            fprintf(stderr, "Invalid TDB_SAMPLE_SIZE");
+            d = 0.1;
+        }
     }
-    return SAMPLE_SIZE;
+    return d;
 }
 
-static void event_fold(event_op op,
-                       FILE *grouped,
-                       uint64_t num_events,
-                       const tdb_item *items,
-                       uint32_t num_fields,
-                       void *state)
+static tdb_error event_fold(event_op op,
+                            FILE *grouped,
+                            uint64_t num_events,
+                            const tdb_item *items,
+                            uint64_t num_fields,
+                            void *state)
 {
+    dsfmt_t rand_state;
     tdb_item *prev_items = NULL;
-    uint32_t *encoded = NULL;
-    uint32_t encoded_size = 0;
+    tdb_item *encoded = NULL;
+    uint64_t encoded_size = 0;
     uint64_t i = 1;
-    unsigned int rand_state = RANDOM_SEED;
-    const uint32_t sample_size = get_sample_size();
-    tdb_event ev;
+    double sample_size = 1.0;
+    struct tdb_grouped_event ev;
+    int ret = 0;
 
     if (num_events == 0)
-        return;
+        return 0;
 
-    if (!(prev_items = malloc(num_fields * sizeof(tdb_item))))
-        DIE("Couldn't allocate %u items", num_fields);
+    dsfmt_init_gen_rand(&rand_state, RANDOM_SEED);
+
+    /* enable sampling only if there is a large number of events */
+    if (num_events > NUM_EVENTS_SAMPLING_THRESHOLD)
+        sample_size = get_sample_size();
+
+    if (!(prev_items = malloc(num_fields * sizeof(tdb_item)))){
+        ret = TDB_ERR_NOMEM;
+        goto done;
+    }
 
     rewind(grouped);
-    SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
-
+    TDB_READ(grouped, &ev, sizeof(struct tdb_grouped_event));
 
     /* this function scans through *all* unencoded data, takes a sample
-       of cookies, edge-encodes events for a cookie, and calls the
+       of trails, edge-encodes events for a trail, and calls the
        given function (op) for each event */
 
     while (i <= num_events){
-        /* NB: We sample cookies, not events, below.
+        /* NB: We sample trails, not events, below.
            We can't encode *and* sample events efficiently at the same time.
 
-           If data is very unevenly distributed over cookies,
-           sampling cookies will produce suboptimal results.
+           If data is very unevenly distributed over trails, sampling trails
+           will produce suboptimal results. We could compensate for this by
+           always include all very long trails in the sample.
         */
-        uint64_t cookie_id = ev.cookie_id;
+        uint64_t n, trail_id = ev.trail_id;
 
-        /* Always include the first cookie so we don't end up empty */
-        if (i == 1 || rand_r(&rand_state) < sample_size){
+        /* Always include the first trail so we don't end up empty */
+        if (i == 1 || dsfmt_genrand_close_open(&rand_state) < sample_size){
             memset(prev_items, 0, num_fields * sizeof(tdb_item));
 
-            while (ev.cookie_id == cookie_id){
-                /* consider only valid timestamps (first byte == 0)
-                   XXX: use invalid timestamps again when we add
-                        the flag in finalize to skip OOD data */
-                if (tdb_item_field(ev.timestamp) == 0){
-                    uint32_t n = edge_encode_items(items,
-                                                   &encoded,
-                                                   &encoded_size,
-                                                   prev_items,
-                                                   &ev);
+            while (ev.trail_id == trail_id){
+                if ((ret = edge_encode_items(items,
+                                             &encoded,
+                                             &n,
+                                             &encoded_size,
+                                             prev_items,
+                                             &ev)))
+                    goto done;
 
-                    op(encoded, n, &ev, state);
-                }
+                if ((ret = op(encoded, n, &ev, state)))
+                    goto done;
 
-                if (i++ < num_events) {
-                    SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
-                } else {
+                if (i++ < num_events){
+                    TDB_READ(grouped, &ev, sizeof(struct tdb_grouped_event));
+                }else
                     break;
-                }
             }
         }else{
-            /* given that we are sampling cookies, we need to skip all events
-               related to a cookie not included in the sample */
-            for (;i < num_events && ev.cookie_id == cookie_id; i++)
-                SAFE_FREAD(grouped, "grouped", &ev, sizeof(tdb_event));
+            /* given that we are sampling trails, we need to skip all events
+               related to a trail not included in the sample */
+            for (;i < num_events && ev.trail_id == trail_id; i++)
+                TDB_READ(grouped, &ev, sizeof(struct tdb_grouped_event));
         }
     }
 
+done:
     free(encoded);
     free(prev_items);
+
+    return ret;
 }
 
-void init_gram_bufs(struct gram_bufs *b, uint32_t num_fields)
+static tdb_error alloc_gram_bufs(struct gram_bufs *b)
 {
-    if (!(b->chosen = malloc(num_fields * num_fields * 8)))
-        DIE("Could not allocate bigram gram_buf (%u fields)", num_fields);
+    if (!(b->chosen = malloc(b->buf_len * 16)))
+        return TDB_ERR_NOMEM;
 
-    if (!(b->scores = malloc(num_fields * num_fields * 8)))
-        DIE("Could not allocate scores gram_buf (%u fields)", num_fields);
+    if (!(b->scores = malloc(b->buf_len * 8)))
+        return TDB_ERR_NOMEM;
 
-    if (!(b->covered = malloc(num_fields)))
-        DIE("Could not allocate covered gram_buf (%u fields)", num_fields);
+    return 0;
+}
 
-    b->num_fields = num_fields;
+tdb_error init_gram_bufs(struct gram_bufs *b, uint64_t num_fields)
+{
+    memset(b, 0, sizeof(struct gram_bufs));
+
+    if (num_fields){
+        if (!(b->covered = malloc(num_fields)))
+            return TDB_ERR_NOMEM;
+
+        b->buf_len = MIN(num_fields * num_fields, INITIAL_GRAM_BUF_LEN);
+        b->num_fields = num_fields;
+        return alloc_gram_bufs(b);
+    }
+    return 0;
 }
 
 void free_gram_bufs(struct gram_bufs *b)
@@ -131,30 +178,47 @@ void free_gram_bufs(struct gram_bufs *b)
 /* given a set of edge-encoded values (encoded), choose a set of unigrams
    and bigrams that cover the original set. In essence, this tries to
    solve Weigted Exact Cover Problem for the universe of 'encoded'. */
-uint32_t choose_grams(const uint32_t *encoded,
-                      int num_encoded,
-                      const Pvoid_t gram_freqs,
-                      struct gram_bufs *g,
-                      uint64_t *grams,
-                      const tdb_event *ev)
+tdb_error choose_grams_one_event(const tdb_item *encoded,
+                                 uint64_t num_encoded,
+                                 const struct judy_128_map *gram_freqs,
+                                 struct gram_bufs *g,
+                                 __uint128_t *grams,
+                                 uint64_t *num_grams,
+                                 const struct tdb_grouped_event *ev)
 {
-    uint32_t j, k, n = 0;
-    int i;
+    uint64_t i, j, k, n = 0;
     Word_t *ptr;
+    uint64_t unigram1 = ev->timestamp;
+    int ret = 0;
+
+    /*
+    in the worst case we need O(num_fields^2) of memory but typically
+    either num_fields is small or events are sparse, i.e.
+    num_encoded << num_fields, so in practice these shouldn't take a
+    huge amount of space
+    */
+    if (g->buf_len < num_encoded * num_encoded){
+        free(g->scores);
+        free(g->chosen);
+        g->buf_len = num_encoded * num_encoded;
+        if ((ret = alloc_gram_bufs(g)))
+            return ret;
+    }
 
     memset(g->covered, 0, g->num_fields);
 
     /* First, produce all candidate bigrams for this set. */
-    for (k = 0, i = -1; i < num_encoded; i++){
-        uint64_t unigram1;
-        if (i == -1)
-            unigram1 = ev->timestamp;
-        else
+    for (k = 0, i = 0; i < num_encoded; i++){
+        if (i > 0){
             unigram1 = encoded[i];
+            j = i + 1;
+        }else
+            j = 0;
 
-        for (j = i + 1; j < num_encoded; j++){
-            uint64_t bigram = unigram1 | (((uint64_t)encoded[j]) << 32);
-            JLG(ptr, gram_freqs, bigram);
+        for (;j < num_encoded; j++){
+            __uint128_t bigram = unigram1;
+            bigram |= ((__uint128_t)encoded[j]) << 64;
+            ptr = j128m_get(gram_freqs, bigram);
             if (ptr){
                 g->chosen[k] = bigram;
                 g->scores[k++] = *ptr;
@@ -169,13 +233,13 @@ uint32_t choose_grams(const uint32_t *encoded,
     /* Pick non-overlapping histograms, in the order of descending score.
        As we go, mark fields covered (consumed) in the set. */
     while (1){
-        uint32_t max_idx = 0;
-        uint32_t max_score = 0;
+        uint64_t max_idx = 0;
+        uint64_t max_score = 0;
 
         for (i = 0; i < k; i++)
             /* consider only bigrams whose both unigrams are non-covered */
-            if (!(g->covered[FIELD_IDX_1(g->chosen[i])] ||
-                  g->covered[FIELD_IDX_2(g->chosen[i])]) &&
+            if (!(g->covered[tdb_item_field(HUFF_BIGRAM_TO_ITEM(g->chosen[i]))] ||
+                  g->covered[tdb_item_field(HUFF_BIGRAM_OTHER_ITEM(g->chosen[i]))]) &&
                   g->scores[i] > max_score){
 
                 max_score = g->scores[i];
@@ -184,14 +248,17 @@ uint32_t choose_grams(const uint32_t *encoded,
 
         if (max_score){
             /* mark both unigrams of this bigram covered */
-            uint64_t chosen = g->chosen[max_idx];
-            g->covered[FIELD_IDX_1(chosen)] = 1;
-            g->covered[FIELD_IDX_2(chosen)] = 1;
-            if (!(chosen & 255))
-                /* make sure timestamp stays as the first item */
-                grams[0] = chosen;
-            else
+            __uint128_t chosen = g->chosen[max_idx];
+            g->covered[tdb_item_field(HUFF_BIGRAM_TO_ITEM(chosen))] = 1;
+            g->covered[tdb_item_field(HUFF_BIGRAM_OTHER_ITEM(chosen))] = 1;
+            if (tdb_item_field(HUFF_BIGRAM_TO_ITEM(chosen)))
                 grams[n++] = chosen;
+            else
+                /*
+                make sure timestamp stays as the first item.
+                This is safe since grams[0] was reserved above for
+                the timestamp. */
+                grams[0] = chosen;
         }else
             /* all bigrams used */
             break;
@@ -200,13 +267,46 @@ uint32_t choose_grams(const uint32_t *encoded,
     /* Finally, add all remaining unigrams to the result set which have not
        been covered by any bigrams */
     for (i = 0; i < num_encoded; i++)
-        if (!g->covered[encoded[i] & 255])
+        if (!g->covered[tdb_item_field(encoded[i])])
             grams[n++] = encoded[i];
 
-    return n;
+    *num_grams = n;
+    return ret;
 }
 
-static Pvoid_t find_candidates(const Pvoid_t unigram_freqs)
+static tdb_error choose_grams(const tdb_item *encoded,
+                              uint64_t num_encoded,
+                              const struct tdb_grouped_event *ev,
+                              void *state){
+
+    struct ngram_state *g = (struct ngram_state*)state;
+    uint64_t n;
+    int ret = 0;
+
+    if ((ret = choose_grams_one_event(encoded,
+                                      num_encoded,
+                                      &g->ngram_freqs,
+                                      &g->gbufs,
+                                      g->grams,
+                                      &n,
+                                      ev)))
+        return ret;
+
+    while (n--){
+        /* TODO fix this once j128m returns proper error codes */
+        Word_t *ptr = j128m_insert(g->final_freqs, g->grams[n]);
+        if (ptr)
+            ++*ptr;
+        else
+            return TDB_ERR_NOMEM;
+    }
+
+    return 0;
+}
+
+
+static tdb_error find_candidates(const Pvoid_t unigram_freqs,
+                                 Pvoid_t *candidates0)
 {
     Pvoid_t candidates = NULL;
     Word_t idx = 0;
@@ -223,7 +323,7 @@ static Pvoid_t find_candidates(const Pvoid_t unigram_freqs)
         JLN(ptr, unigram_freqs, idx);
     }
 
-    support = num_values * UNIGRAM_SUPPORT;
+    support = num_values / (uint64_t)(1.0 / UNIGRAM_SUPPORT);
     idx = 0;
 
     JLF(ptr, unigram_freqs, idx);
@@ -234,134 +334,148 @@ static Pvoid_t find_candidates(const Pvoid_t unigram_freqs)
         JLN(ptr, unigram_freqs, idx);
     }
 
-    return candidates;
+    *candidates0 = candidates;
+    return 0;
+
+out_of_memory:
+    return TDB_ERR_NOMEM;
 }
 
+static tdb_error all_bigrams(const tdb_item *encoded,
+                             uint64_t n,
+                             const struct tdb_grouped_event *ev,
+                             void *state){
 
-struct ngram_state{
-  Pvoid_t candidates;
-  Pvoid_t ngram_freqs;
-  Pvoid_t final_freqs;
-  uint64_t *grams;
-  struct gram_bufs gbufs;
-};
+    struct ngram_state *g = (struct ngram_state *)state;
+    Word_t *ptr;
+    int set;
+    uint64_t i, j;
+    uint64_t unigram1 = ev->timestamp;
 
-void all_bigrams(const uint32_t *encoded,
-                 int n,
-                 const tdb_event *ev,
-                 void *state){
+    for (i = 0; i < n; i++){
+        if (i > 0){
+            unigram1 = encoded[i];
+            j = i + 1;
+        }else
+            j = 0;
 
-  struct ngram_state *g = (struct ngram_state *)state;
-  Word_t *ptr;
-  int set, i, j;
-
-  for (i = -1; i < n; i++){
-    uint64_t unigram1;
-    if (i == -1)
-      unigram1 = ev->timestamp;
-    else
-      unigram1 = encoded[i];
-
-    J1T(set, g->candidates, unigram1);
-    if (set){
-      for (j = i + 1; j < n; j++){
-        uint64_t unigram2 = encoded[j];
-        J1T(set, g->candidates, unigram2);
+        J1T(set, g->candidates, unigram1);
         if (set){
-          Word_t bigram = unigram1 | (unigram2 << 32);
-          JLI(ptr, g->ngram_freqs, bigram);
-          ++*ptr;
+            for (; j < n; j++){
+                uint64_t unigram2 = encoded[j];
+                J1T(set, g->candidates, unigram2);
+                if (set){
+                    __uint128_t bigram = unigram1;
+                    bigram |= ((__uint128_t)unigram2) << 64;
+                    ptr = j128m_insert(&g->ngram_freqs, bigram);
+                    if (ptr)
+                        ++*ptr;
+                    else
+                        return TDB_ERR_NOMEM;
+                }
+            }
         }
-      }
     }
-  }
+
+    return 0;
 }
 
-void choose_bigrams(const uint32_t *encoded,
-                    int num_encoded,
-                    const tdb_event *ev,
-                    void *state){
-
-  struct ngram_state *g = (struct ngram_state *)state;
-  Word_t *ptr;
-
-  uint32_t n = choose_grams(encoded,
-                            num_encoded,
-                            g->ngram_freqs,
-                            &g->gbufs,
-                            g->grams,
-                            ev);
-
-  while (n--){
-    JLI(ptr, g->final_freqs, g->grams[n]);
-    ++*ptr;
-  }
-}
-
-Pvoid_t make_grams(FILE *grouped,
-                   uint64_t num_events,
-                   const tdb_item *items,
-                   uint32_t num_fields,
-                   const Pvoid_t unigram_freqs)
+tdb_error make_grams(FILE *grouped,
+                     uint64_t num_events,
+                     const tdb_item *items,
+                     uint64_t num_fields,
+                     const Pvoid_t unigram_freqs,
+                     struct judy_128_map *final_freqs)
 {
-    struct ngram_state g = {};
+    struct ngram_state g = {.final_freqs = final_freqs};
     Word_t tmp;
+    int ret = 0;
+    TDB_TIMER_DEF
 
-    init_gram_bufs(&g.gbufs, num_fields);
+    j128m_init(&g.ngram_freqs);
+    if ((ret = init_gram_bufs(&g.gbufs, num_fields)))
+        goto done;
+
+    if (!(g.grams = malloc(num_fields * 16))){
+        ret = TDB_ERR_NOMEM;
+        goto done;
+    }
 
     /* below is a very simple version of the Apriori algorithm
        for finding frequent sets (bigrams) */
 
     /* find unigrams that are sufficiently frequent */
-    g.candidates = find_candidates(unigram_freqs);
-
-    if (!(g.grams = malloc(num_fields * 8)))
-        DIE("Could not allocate grams buf (%u fields)", num_fields);
+    TDB_TIMER_START
+    if ((ret = find_candidates(unigram_freqs, &g.candidates)))
+        goto done;
+    TDB_TIMER_END("encode_model/find_candidates")
 
     /* collect frequencies of *all* occurring bigrams of candidate unigrams */
-    event_fold(all_bigrams, grouped, num_events, items, num_fields, (void *)&g);
-    /* collect frequencies of non-overlapping bigrams and unigrams
-       (exact covering set for each event) */
-    event_fold(choose_bigrams, grouped, num_events, items, num_fields, (void *)&g);
+    TDB_TIMER_START
+    ret = event_fold(all_bigrams, grouped, num_events, items, num_fields, &g);
+    if (ret)
+        goto done;
+    TDB_TIMER_END("encode_model/all_bigrams")
 
+    /* collect frequencies of non-overlapping bigrams and unigrams
+       (exact covering set for each event), store in final_freqs */
+    TDB_TIMER_START
+    ret = event_fold(choose_grams, grouped, num_events, items, num_fields, &g);
+    if (ret)
+        goto done;
+    TDB_TIMER_END("encode_model/choose_grams")
+
+done:
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
     J1FA(tmp, g.candidates);
-    JLFA(tmp, g.ngram_freqs);
+#pragma GCC diagnostic pop
+    j128m_free(&g.ngram_freqs);
     free_gram_bufs(&g.gbufs);
     free(g.grams);
 
-    /* final_freqs is a combination of bigrams and unigrams with their actual,
-       non-overlapping frequencies */
-    return g.final_freqs;
+    return ret;
+
+out_of_memory:
+    return TDB_ERR_NOMEM;
 }
 
-void all_freqs(const uint32_t *encoded,
-               int n,
-               const tdb_event *ev,
-               void *state){
+struct unigram_state{
+    Pvoid_t freqs;
+};
 
-    struct ngram_state *g = (struct ngram_state *)state;
+static tdb_error all_freqs(const tdb_item *encoded,
+                           uint64_t n,
+                           const struct tdb_grouped_event *ev,
+                           void *state){
+
+    struct unigram_state *s = (struct unigram_state*)state;
     Word_t *ptr;
 
     while (n--){
-      JLI(ptr, g->ngram_freqs, encoded[n]);
-      ++*ptr;
+        JLI(ptr, s->freqs, encoded[n]);
+        ++*ptr;
     }
 
     /* include frequencies for timestamp deltas */
-    JLI(ptr, g->ngram_freqs, ev->timestamp);
+    JLI(ptr, s->freqs, ev->timestamp);
     ++*ptr;
+    return 0;
+
+out_of_memory:
+    return TDB_ERR_NOMEM;
 }
 
 Pvoid_t collect_unigrams(FILE *grouped,
                          uint64_t num_events,
                          const tdb_item *items,
-                         uint32_t num_fields)
+                         uint64_t num_fields)
 {
-    struct ngram_state g = {};
-
     /* calculate frequencies of all items */
-    event_fold(all_freqs, grouped, num_events, items, num_fields, (void *)&g);
-
-    return g.ngram_freqs;
+    struct unigram_state state = {.freqs = NULL};
+    if (event_fold(all_freqs, grouped, num_events, items, num_fields, &state))
+        return NULL;
+    else
+        return state.freqs;
 }
 

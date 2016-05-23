@@ -1,455 +1,636 @@
+#define _DEFAULT_SOURCE /* ftruncate() */
+#define _GNU_SOURCE
 
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
+#undef JUDYERROR
+#define JUDYERROR(CallerFile, CallerLine, JudyFunc, JudyErrno, JudyErrID) \
+{                                                                         \
+   if ((JudyErrno) == JU_ERRNO_NOMEM)                                     \
+       goto out_of_memory;                                                \
+}
+#include <Judy.h>
+
+#include "judy_str_map.h"
 #include "tdb_internal.h"
+#include "tdb_error.h"
+#include "tdb_io.h"
+#include "tdb_package.h"
 #include "arena.h"
-#include "util.h"
 
-static uint64_t lexicon_size(const Pvoid_t lexicon, uint64_t *size)
+#ifndef EVENTS_ARENA_INCREMENT
+#define EVENTS_ARENA_INCREMENT 1000000
+#endif
+
+struct jm_fold_state{
+    FILE *out;
+    uint64_t offset;
+    tdb_error ret;
+    uint64_t width;
+};
+
+static void *lexicon_store_fun(uint64_t id,
+                               const char *value,
+                               uint64_t len,
+                               void *state)
 {
-    uint8_t value[TDB_MAX_VALUE_SIZE];
-    uint64_t count = 0;
-    Word_t *ptr;
+    struct jm_fold_state *s = (struct jm_fold_state*)state;
+    int ret = 0;
 
-    value[0] = 0;
-    JSLF(ptr, lexicon, value);
-    while (ptr){
-        *size += strlen((char*)value);
-        ++count;
-        JSLN(ptr, lexicon, value);
-    }
-    return count;
+    if (s->ret)
+        return state;
+
+    /* NOTE: vals start at 1, otherwise we would need to +1 */
+    TDB_SEEK(s->out, id * s->width);
+    TDB_WRITE(s->out, &s->offset, s->width);
+
+    TDB_SEEK(s->out, s->offset);
+    TDB_WRITE(s->out, value, len);
+
+done:
+    s->ret = ret;
+    s->offset += len;
+    return state;
 }
 
-static void lexicon_store(const Pvoid_t lexicon, const char *path)
+static tdb_error lexicon_store(const struct judy_str_map *lexicon,
+                               const char *path)
 {
-    uint8_t value[TDB_MAX_VALUE_SIZE];
-    tdb_val *val;
-    uint64_t size = 0, offset;
-    uint64_t count = lexicon_size(lexicon, &size);
-    FILE *out;
+    /*
+    Lexicon format:
+    [ number of values N ] 4 or 8 bytes
+    [ value offsets ...  ] N * (4 or 8 bytes)
+    [ last value offset  ] 4 or 8 bytes
+    [ values ...         ] X bytes
+    */
 
-    size += (count + 1) * 4;
+    struct jm_fold_state state;
+    uint64_t count = jsm_num_keys(lexicon);
+    uint64_t size = (count + 2) * 4 + jsm_values_size(lexicon);
+    int ret = 0;
+
+    state.offset = (count + 2) * 4;
+    state.width = 4;
+
+    if (size > UINT32_MAX){
+        size = (count + 2) * 8 + jsm_values_size(lexicon);
+        state.offset = (count + 2) * 8;
+        state.width = 8;
+    }
 
     if (size > TDB_MAX_LEXICON_SIZE)
-        DIE("Lexicon %s would be huge! %"PRIu64" items, %"PRIu64" bytes",
-            path,
-            count,
-            size);
+        return TDB_ERR_LEXICON_TOO_LARGE;
 
-    SAFE_OPEN(out, path, "w");
+    state.out = NULL;
+    state.ret = 0;
 
-    if (ftruncate(fileno(out), size))
-        DIE("Could not initialize lexicon file (%"PRIu64" bytes): %s",
-            size,
-            path);
+    TDB_OPEN(state.out, path, "w");
+    TDB_TRUNCATE(state.out, (off_t)size);
+    TDB_WRITE(state.out, &count, state.width);
 
-    SAFE_WRITE(&count, 4, path, out);
+    jsm_fold(lexicon, lexicon_store_fun, &state);
+    if ((ret = state.ret))
+        goto done;
 
-    value[0] = 0;
-    offset = (count + 1) * 4;
-    JSLF(val, lexicon, value);
-    while (val){
-        size_t len = strlen((char*)value);
+    TDB_SEEK(state.out, (count + 1) * state.width);
+    TDB_WRITE(state.out, &state.offset, state.width);
 
-        /* NOTE: vals start at 1, otherwise we would need to +1 */
-        SAFE_SEEK(out, *val * 4, path);
-        SAFE_WRITE(&offset, 4, path, out);
-
-        SAFE_SEEK(out, offset, path);
-        SAFE_WRITE(value, len + 1, path, out);
-
-        offset += len + 1;
-        JSLN(val, lexicon, value);
-    }
-    SAFE_CLOSE(out, path);
+done:
+    TDB_CLOSE_FINAL(state.out);
+    return ret;
 }
 
-static int store_lexicons(tdb_cons *cons)
+static tdb_error store_lexicons(tdb_cons *cons)
 {
-    int i;
-    FILE *out;
-    const char *field_name = cons->ofield_names;
+    tdb_field i;
+    FILE *out = NULL;
     char path[TDB_MAX_PATH_SIZE];
+    int ret = 0;
 
-    tdb_path(path, "%s/fields", cons->root);
-    SAFE_OPEN(out, path, "w");
+    TDB_PATH(path, "%s/fields", cons->root);
+    TDB_OPEN(out, path, "w");
 
     for (i = 0; i < cons->num_ofields; i++){
-        size_t j = strlen(field_name);
-        tdb_path(path, "%s/lexicon.%s", cons->root, field_name);
-        lexicon_store(cons->lexicons[i], path);
-        fprintf(out, "%s\n", field_name);
-        field_name += j + 1;
+        TDB_PATH(path, "%s/lexicon.%s", cons->root, cons->ofield_names[i]);
+        if ((ret = lexicon_store(&cons->lexicons[i], path)))
+            goto done;
+        TDB_FPRINTF(out, "%s\n", cons->ofield_names[i]);
     }
-    SAFE_CLOSE(out, path);
-
-    return 0;
+    TDB_FPRINTF(out, "\n");
+done:
+    TDB_CLOSE_FINAL(out);
+    return ret;
 }
 
-static int store_cookies(tdb_cons *cons)
+static tdb_error store_version(tdb_cons *cons)
 {
-    Word_t cookie_words[2]; // NB: word must be 64-bit
-    Word_t *ptr;
-    FILE *out;
+    FILE *out = NULL;
     char path[TDB_MAX_PATH_SIZE];
+    int ret = 0;
 
-    tdb_path(path, "%s/cookies", cons->root);
-    SAFE_OPEN(out, path, "w");
+    TDB_PATH(path, "%s/version", cons->root);
+    TDB_OPEN(out, path, "w");
+    TDB_FPRINTF(out, "%llu", TDB_VERSION_LATEST);
+done:
+    TDB_CLOSE_FINAL(out);
+    return ret;
+}
 
-    if (cons->num_cookies > TDB_MAX_NUM_COOKIES) {
-        WARN("Too many cookies (%"PRIu64")", cons->num_cookies);
+static void *store_uuids_fun(__uint128_t key,
+                             Word_t *value __attribute__((unused)),
+                             void *state)
+{
+    struct jm_fold_state *s = (struct jm_fold_state*)state;
+    int ret = 0;
+    TDB_WRITE(s->out, &key, 16);
+done:
+    s->ret = ret;
+    return s;
+}
+
+static tdb_error store_uuids(tdb_cons *cons)
+{
+    char path[TDB_MAX_PATH_SIZE];
+    struct jm_fold_state state = {.ret = 0};
+    uint64_t num_trails = j128m_num_keys(&cons->trails);
+    int ret = 0;
+
+    /* this is why num_trails < TDB_MAX)NUM_TRAILS < 2^59:
+       (2^59 - 1) * 16 < LONG_MAX (off_t) */
+    if (num_trails > TDB_MAX_NUM_TRAILS)
+        return TDB_ERR_TOO_MANY_TRAILS;
+
+    TDB_PATH(path, "%s/uuids", cons->root);
+    TDB_OPEN(state.out, path, "w");
+    TDB_TRUNCATE(state.out, ((off_t)(num_trails * 16)));
+
+    j128m_fold(&cons->trails, store_uuids_fun, &state);
+    ret = state.ret;
+
+done:
+    TDB_CLOSE_FINAL(state.out);
+    return ret;
+}
+
+int is_fieldname_invalid(const char* field)
+{
+    uint64_t i;
+
+    if (!strcmp(field, "time"))
         return 1;
-    }
 
-    if (ftruncate(fileno(out), cons->num_cookies * 16LLU)) {
-        WARN("Could not init (%"PRIu64" cookies): %s", cons->num_cookies, path);
-        return -1;
-    }
+    for (i = 0; i < TDB_MAX_FIELDNAME_LENGTH && field[i]; i++)
+        if (!index(TDB_FIELDNAME_CHARS, field[i]))
+            return 1;
 
-    cookie_words[0] = 0;
-    JLF(ptr, cons->cookie_index, cookie_words[0]);
-    while (ptr){
-        const Pvoid_t cookie_index_lo = (Pvoid_t)*ptr;
-        cookie_words[1] = 0;
-        JLF(ptr, cookie_index_lo, cookie_words[1]);
-        while (ptr){
-            SAFE_WRITE(cookie_words, 16, path, out);
-            JLN(ptr, cookie_index_lo, cookie_words[1]);
-        }
-        JLN(ptr, cons->cookie_index, cookie_words[0]);
-    }
+    if (i == 0 || i == TDB_MAX_FIELDNAME_LENGTH)
+        return 1;
 
-    SAFE_CLOSE(out, path);
     return 0;
 }
 
-static int dump_cookie_pointers(tdb_cons *cons)
+static tdb_error find_duplicate_fieldnames(const char **ofield_names,
+                                           uint64_t num_ofields)
 {
-    Word_t cookie_words[2]; // NB: word must be 64-bit
-    Word_t *ptr;
+    Pvoid_t check = NULL;
+    tdb_field i;
     Word_t tmp;
-    uint64_t idx = 0;
 
-    /* serialize cookie pointers, freeing cookie_index */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+    for (i = 0; i < num_ofields; i++){
+        Word_t *ptr;
+        JSLI(ptr, check, (const uint8_t*)ofield_names[i]);
+        if (*ptr){
+            JSLFA(tmp, check);
+            return TDB_ERR_DUPLICATE_FIELDS;
 
-    if ((cons->cookie_pointers = malloc(cons->num_cookies * 8)) == NULL) {
-        WARN("Could not allocate cookie array");
-        return -1;
-    }
-
-    /* NOTE: The code below must populate cookie_pointers
-       in the same order as what gets stored by store_cookies() */
-    cookie_words[0] = 0;
-    JLF(ptr, cons->cookie_index, cookie_words[0]);
-    while (ptr){
-        Pvoid_t cookie_index_lo = (Pvoid_t)*ptr;
-
-        cookie_words[1] = 0;
-        JLF(ptr, cookie_index_lo, cookie_words[1]);
-        while (ptr){
-            cons->cookie_pointers[idx++] = *ptr - 1;
-            JLN(ptr, cookie_index_lo, cookie_words[1]);
         }
-
-        JLFA(tmp, cookie_index_lo);
-        JLN(ptr, cons->cookie_index, cookie_words[0]);
+        *ptr = 1;
     }
-    JLFA(tmp, cons->cookie_index);
+    JSLFA(tmp, check);
+#pragma GCC diagnostic pop
     return 0;
+
+out_of_memory:
+    return TDB_ERR_NOMEM;
 }
 
-tdb_cons *tdb_cons_new(const char *root,
-                       const char *ofield_names,
-                       uint32_t num_ofields)
+TDB_EXPORT tdb_cons *tdb_cons_init(void)
 {
-    tdb_cons *cons;
-    if ((cons = calloc(1, sizeof(tdb_cons))) == NULL)
-        return NULL;
+    tdb_cons *c = calloc(1, sizeof(tdb_cons));
+    if (c){
+        /*
+        this will fail if libarchive is not found but it is ok, we just
+        fall back to the directory mode
+        */
+        tdb_cons_set_opt(c,
+                         TDB_OPT_CONS_OUTPUT_FORMAT,
+                         opt_val(TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE));
+    }
+    return c;
+}
 
-    cons->root = strdup(root);
-    cons->ofield_names = dupstrs(ofield_names, num_ofields);
-    cons->min_timestamp = UINT32_MAX;
-    cons->max_timestamp = 0;
-    cons->max_timedelta = 0;
+TDB_EXPORT tdb_error tdb_cons_open(tdb_cons *cons,
+                                   const char *root,
+                                   const char **ofield_names,
+                                   uint64_t num_ofields)
+{
+    tdb_field i;
+    int fd;
+    int ret = 0;
+
+    /*
+    by handling the "cons == NULL" case here gracefully, we allow the return
+    value of tdb_init() to be used unchecked like here:
+
+    int err;
+    tdb_cons *cons = tdb_cons_init();
+    if ((err = tdb_cons_open(cons, path, fields, num_fields)))
+        printf("Opening cons failed: %s", tdb_error(err));
+    */
+    if (!cons)
+        return TDB_ERR_HANDLE_IS_NULL;
+
+    if (cons->events.item_size)
+        return TDB_ERR_HANDLE_ALREADY_OPENED;
+
+    if (num_ofields > TDB_MAX_NUM_FIELDS)
+        return TDB_ERR_TOO_MANY_FIELDS;
+
+    if ((ret = find_duplicate_fieldnames(ofield_names, num_ofields)))
+        goto done;
+
+    if (!(cons->ofield_names = calloc(num_ofields, sizeof(char*))))
+        return TDB_ERR_NOMEM;
+
+    for (i = 0; i < num_ofields; i++){
+        if (is_fieldname_invalid(ofield_names[i])){
+            ret = TDB_ERR_INVALID_FIELDNAME;
+            goto done;
+        }
+        if (!(cons->ofield_names[i] = strdup(ofield_names[i]))){
+            ret = TDB_ERR_NOMEM;
+            goto done;
+        }
+    }
+
+    j128m_init(&cons->trails);
+
+    if (!(cons->root = strdup(root))){
+        ret = TDB_ERR_NOMEM;
+        goto done;
+    }
+
+    cons->min_timestamp = UINT64_MAX;
     cons->num_ofields = num_ofields;
-    cons->events.item_size = sizeof(tdb_cons_event);
+    cons->events.arena_increment = EVENTS_ARENA_INCREMENT;
+    cons->events.item_size = sizeof(struct tdb_cons_event);
     cons->items.item_size = sizeof(tdb_item);
 
     /* Opportunistically try to create the output directory.
        We don't care if it fails, e.g. because it already exists */
     mkdir(root, 0755);
-    tdb_path(cons->tempfile, "%s/tmp.items.%d", root, getpid());
-    if (!(cons->items.fd = fopen(cons->tempfile, "wx")))
-        goto error;
-    if (cons->num_ofields > 0) {
-        if (!(cons->lexicons = calloc(cons->num_ofields, sizeof(Pvoid_t))))
-            goto error;
-        if (!(cons->lexicon_counters = calloc(cons->num_ofields, sizeof(Word_t))))
-            goto error;
-        if (!(cons->lexicon_maps = calloc(cons->num_ofields, sizeof(uint32_t *))))
-            goto error;
+    TDB_PATH(cons->tempfile, "%s/tmp.items.XXXXXX", root);
+    if ((fd = mkstemp(cons->tempfile)) == -1){
+        ret = TDB_ERR_IO_OPEN;
+        goto done;
     }
-    return cons;
 
- error:
-    tdb_cons_free(cons);
-    return NULL;
+    if (!(cons->items.fd = fdopen(fd, "w"))){
+        ret = TDB_ERR_IO_OPEN;
+        goto done;
+    }
+
+    if (cons->num_ofields > 0)
+        if (!(cons->lexicons = calloc(cons->num_ofields,
+                                      sizeof(struct judy_str_map)))){
+            ret = TDB_ERR_NOMEM;
+            goto done;
+        }
+
+    for (i = 0; i < cons->num_ofields; i++)
+        if (jsm_init(&cons->lexicons[i])){
+            ret = TDB_ERR_NOMEM;
+            goto done;
+        }
+
+done:
+    return ret;
 }
 
-void tdb_cons_free(tdb_cons *cons)
+TDB_EXPORT void tdb_cons_close(tdb_cons *cons)
 {
-    int i;
-    Word_t tmp;
-    for (i = 0; i < cons->num_ofields; i++)
-        JSLFA(tmp, cons->lexicons[i]);
+    uint64_t i;
+    for (i = 0; i < cons->num_ofields; i++){
+        if (cons->ofield_names)
+            free(cons->ofield_names[i]);
+        if (cons->lexicons)
+            jsm_free(&cons->lexicons[i]);
+    }
     free(cons->lexicons);
-    free(cons->lexicon_counters);
-    free(cons->lexicon_maps);
-    if (strcmp(cons->tempfile, ""))
-        unlink(cons->tempfile);
+    if (cons->items.fd)
+        fclose(cons->items.fd);
     if (cons->events.data)
         free(cons->events.data);
     if (cons->items.data)
         free(cons->items.data);
-    free(cons->cookie_pointers);
+
+    j128m_free(&cons->trails);
     free(cons->ofield_names);
     free(cons->root);
     free(cons);
 }
 
 /*
-this function guarantees that the string representation of
-TDB_OVERFLOW_VAL is unique in this lexicon.
+Append an event in this cons.
 */
-static const uint8_t *find_overflow_value(tdb_cons *cons, tdb_field field)
+TDB_EXPORT tdb_error tdb_cons_add(tdb_cons *cons,
+                                  const uint8_t uuid[16],
+                                  const uint64_t timestamp,
+                                  const char **values,
+                                  const uint64_t *value_lengths)
 {
-    static const int LEN = sizeof(TDB_OVERFLOW_STR) - 1;
-    int i, j;
-    Word_t *ptr;
+    tdb_field i;
+    struct tdb_cons_event *event;
+    Word_t *uuid_ptr;
+    __uint128_t uuid_key;
 
-    for (i = 1; i * 2 + LEN < TDB_MAX_VALUE_SIZE; i++){
-        for (j = 0; j < i; j++){
-            cons->overflow_str[j] = TDB_OVERFLOW_LSEP;
-            cons->overflow_str[i + LEN + j] = TDB_OVERFLOW_RSEP;
-        }
-        memcpy(&cons->overflow_str[i], TDB_OVERFLOW_STR, LEN);
-        cons->overflow_str[i * 2 + LEN] = 0;
-        JSLG(ptr, cons->lexicons[field], cons->overflow_str);
-        if (!ptr)
-            return cons->overflow_str;
-    }
-    DIE("Field %u overflows and could not generate a unique overflow value",
-        field);
-}
+    for (i = 0; i < cons->num_ofields; i++)
+        if (value_lengths[i] > TDB_MAX_VALUE_SIZE)
+            return TDB_ERR_VALUE_TOO_LONG;
 
-int tdb_cons_add(tdb_cons *cons,
-                 const uint8_t cookie[16],
-                 const uint32_t timestamp,
-                 const char *values)
-{
-    Word_t *cookie_words = (Word_t*)cookie; // NB: word must be 64-bit
-    Word_t *cookie_ptr_hi, *cookie_ptr_lo;
-    Pvoid_t cookie_index_lo;
+    memcpy(&uuid_key, uuid, 16);
+    uuid_ptr = j128m_insert(&cons->trails, uuid_key);
+
+    if (!(event = (struct tdb_cons_event*)arena_add_item(&cons->events)))
+        return TDB_ERR_NOMEM;
+
+    event->item_zero = cons->items.next;
+    event->num_items = 0;
+    event->timestamp = timestamp;
+    event->prev_event_idx = *uuid_ptr;
+    *uuid_ptr = cons->events.next;
 
     if (timestamp < cons->min_timestamp)
         cons->min_timestamp = timestamp;
 
-    /* Cookie index, which maps 16-byte cookies to event indices,
-       has the following structure:
-          JudyL -> JudyL -> Word_t */
-    JLI(cookie_ptr_hi, cons->cookie_index, cookie_words[0]);
-    cookie_index_lo = (Pvoid_t)*cookie_ptr_hi;
-    JLI(cookie_ptr_lo, cookie_index_lo, cookie_words[1]);
-    *cookie_ptr_hi = (Word_t)cookie_index_lo;
-
-    if (!*cookie_ptr_lo)
-        ++cons->num_cookies;
-
-    tdb_cons_event *event = (tdb_cons_event*)arena_add_item(&cons->events);
-    event->item_zero = cons->items.next;
-    event->num_items = 0;
-    event->timestamp = timestamp;
-    event->prev_event_idx = *cookie_ptr_lo;
-    *cookie_ptr_lo = cons->events.next;
-
-    int i;
-    Word_t *val_p;
-    const uint8_t *value = (const uint8_t*)values;
     for (i = 0; i < cons->num_ofields; i++){
-        size_t j = strlen((const char*)value);
-        tdb_field field = i + 1;
-        tdb_item item = field;
-        if (j){
-            if (cons->lexicon_counters[i] < TDB_MAX_NUM_VALUES){
-                JSLI(val_p, cons->lexicons[i], (uint8_t*)value);
-                if (*val_p == 0)
-                    *val_p = ++cons->lexicon_counters[i];
-                item |= (*val_p) << 8;
-            }else{
-                JSLG(val_p, cons->lexicons[i], (uint8_t*)value);
-                if (val_p)
-                    item |= (*val_p) << 8;
-                else{
-                    if (cons->lexicon_counters[i] == TDB_MAX_NUM_VALUES){
-                        value = find_overflow_value(cons, i);
-                        JSLI(val_p, cons->lexicons[i], value);
-                        *val_p = TDB_OVERFLOW_VALUE;
-                        ++cons->lexicon_counters[i];
-                    }
-                    item |= TDB_OVERFLOW_VALUE << 8;
-                }
-            }
-        }
-        *((tdb_item*)arena_add_item(&cons->items)) = item;
-        ++event->num_items;
-        value += j + 1;
-    }
+        tdb_field field = (tdb_field)(i + 1);
+        tdb_val val = 0;
+        tdb_item item;
+        void *dst;
 
+        /* TODO add a test for sparse trails */
+        if (value_lengths[i]){
+            if (!(val = (tdb_val)jsm_insert(&cons->lexicons[i],
+                                            values[i],
+                                            value_lengths[i])))
+                return TDB_ERR_NOMEM;
+
+        }
+        item = tdb_make_item(field, val);
+        if (!(dst = arena_add_item(&cons->items)))
+            return TDB_ERR_NOMEM;
+        memcpy(dst, &item, sizeof(tdb_item));
+        ++event->num_items;
+    }
     return 0;
 }
 
-static void *append_fn(const tdb *db,
-                       uint64_t cookie_id,
-                       const tdb_item *items,
-                       void *acc)
+/*
+Append the lexicons of an existing TrailDB, db, to this cons. Used by
+tdb_cons_append().
+*/
+static uint64_t **append_lexicons(tdb_cons *cons, const tdb *db)
 {
-    Word_t *cookie_words = (Word_t*)&db->cookies.data[cookie_id * 16];
-    Word_t *cookie_ptr_hi, *cookie_ptr_lo;
-    Pvoid_t cookie_index_lo;
+    tdb_val **lexicon_maps;
+    tdb_val i;
+    tdb_field field;
 
-    tdb_cons *cons = (tdb_cons*)acc;
+    if (!(lexicon_maps = calloc(cons->num_ofields, sizeof(tdb_val*))))
+        return NULL;
 
-    JLI(cookie_ptr_hi, cons->cookie_index, cookie_words[0]);
-    cookie_index_lo = (Pvoid_t)*cookie_ptr_hi;
-    JLI(cookie_ptr_lo, cookie_index_lo, cookie_words[1]);
-    *cookie_ptr_hi = (Word_t)cookie_index_lo;
+    for (field = 0; field < cons->num_ofields; field++){
+        struct tdb_lexicon lex;
+        uint64_t *map;
 
-    if (!*cookie_ptr_lo)
-        ++cons->num_cookies;
+        tdb_lexicon_read(db, field + 1, &lex);
 
-    tdb_cons_event *event = (tdb_cons_event*)arena_add_item(&cons->events);
-    event->item_zero = cons->items.next;
-    event->num_items = 0;
-    event->timestamp = items[0];
-    event->prev_event_idx = *cookie_ptr_lo;
-    *cookie_ptr_lo = cons->events.next;
+        if (!(map = lexicon_maps[field] = malloc(lex.size * sizeof(tdb_val))))
+            goto error;
 
-    tdb_field i;
-    for (i = 0; i < cons->num_ofields; i++){
-        tdb_field field = i + 1;
-        tdb_item item = field;
-        tdb_val val = tdb_item_val(items[field]);
-        if (val)
-            item |= cons->lexicon_maps[i][val - 1] << 8;
-        *((tdb_item*)arena_add_item(&cons->items)) = item;
-        ++event->num_items;
-    }
-
-    return acc;
-}
-
-int tdb_cons_append(tdb_cons *cons, const tdb *db)
-{
-    uint32_t num_ofields = db->num_fields - 1;
-    if (cons->num_ofields != num_ofields)
-        return -1;
-    if (db->min_timestamp < cons->min_timestamp)
-        cons->min_timestamp = db->min_timestamp;
-    int ret = 0;
-    tdb_field i;
-    for (i = 0; i < num_ofields; i++){
-        tdb_lexicon *lex = (tdb_lexicon*)db->lexicons[i].data;
-        uint32_t v, N = lex->size;
-        uint32_t *map = cons->lexicon_maps[i] = malloc(N * sizeof(uint32_t));
-        for (v = 0; v < N; v++){
-            Word_t *val_p;
-            const uint8_t *value =
-                (const uint8_t*)((char*)lex + (&lex->toc)[v]);
-            /* We use TDB_OVERFLOW_VALUE - 1 here since we are looping over
-               the lexicon, not actual values. The lexicon skips the NULL
-               value at 0, decreasing the index of all values by one. */
-            if (v == TDB_OVERFLOW_VALUE - 1)
-                map[v] = TDB_OVERFLOW_VALUE;
-            else if (cons->lexicon_counters[i] < TDB_MAX_NUM_VALUES){
-                JSLI(val_p, cons->lexicons[i], value);
-                if (*val_p == 0)
-                    *val_p = ++cons->lexicon_counters[i];
-                map[v] = *val_p;
-            }else{
-                JSLG(val_p, cons->lexicons[i], (uint8_t*)value);
-                if (val_p)
-                    map[v] = *val_p;
-                else{
-                    if (cons->lexicon_counters[i] == TDB_MAX_NUM_VALUES){
-                        value = find_overflow_value(cons, i);
-                        JSLI(val_p, cons->lexicons[i], value);
-                        *val_p = TDB_OVERFLOW_VALUE;
-                        ++cons->lexicon_counters[i];
-                    }
-                    map[v] = TDB_OVERFLOW_VALUE;
-                }
-            }
+        for (i = 0; i < lex.size; i++){
+            uint64_t value_length;
+            const char *value = tdb_lexicon_get(&lex, i, &value_length);
+            tdb_val val;
+            if ((val = (tdb_val)jsm_insert(&cons->lexicons[field],
+                                            value,
+                                            value_length)))
+                map[i] = val;
+            else
+                goto error;
         }
     }
+    return lexicon_maps;
+error:
+    for (i = 0; i < cons->num_ofields; i++)
+        free(lexicon_maps[i]);
+    free(lexicon_maps);
+    return NULL;
+}
 
-    if ((tdb_fold(db, append_fn, cons) == NULL))
-        ret = -1;
+/*
+Take an event from the old db, translate its items to new vals
+and append to the new cons
+*/
+static void append_event(tdb_cons *cons,
+                         const tdb_event *event,
+                         Word_t *uuid_ptr,
+                         tdb_val **lexicon_maps)
+{
+    uint64_t i;
+    struct tdb_cons_event *new_event =
+        (struct tdb_cons_event*)arena_add_item(&cons->events);
 
-    for (i = 0; i < num_ofields; i++)
-        free(cons->lexicon_maps[i]);
+    new_event->item_zero = cons->items.next;
+    new_event->num_items = 0;
+    new_event->timestamp = event->timestamp;
+    new_event->prev_event_idx = *uuid_ptr;
+    *uuid_ptr = cons->events.next;
+
+    for (i = 0; i < event->num_items; i++){
+        tdb_val val = tdb_item_val(event->items[i]);
+        tdb_field field = tdb_item_field(event->items[i]);
+        /* translate val */
+        tdb_val new_val = lexicon_maps[field - 1][val - 1];
+        tdb_item item = tdb_make_item(field, new_val);
+        memcpy(arena_add_item(&cons->items), &item, sizeof(tdb_item));
+        ++new_event->num_items;
+    }
+}
+
+
+/*
+This is a variation of tdb_cons_add(): Instead of accepting fields as
+strings, it reads them as integer items from an existing TrailDB and
+remaps them to match with this cons.
+*/
+TDB_EXPORT tdb_error tdb_cons_append(tdb_cons *cons, const tdb *db)
+{
+    tdb_val **lexicon_maps = NULL;
+    uint64_t i, trail_id;
+    tdb_field field;
+    int ret = 0;
+
+    tdb_cursor *cursor = tdb_cursor_new(db);
+    if (!cursor)
+        return TDB_ERR_NOMEM;
+
+    /* NOTE we could be much more permissive with what can be joined:
+    we could support "full outer join" and replace all missing fields
+    with NULLs automatically.
+    */
+    if (cons->num_ofields != db->num_fields - 1)
+        return TDB_ERR_APPEND_FIELDS_MISMATCH;
+
+    for (field = 0; field < cons->num_ofields; field++)
+        if (strcmp(cons->ofield_names[field], tdb_get_field_name(db, field + 1)))
+            return TDB_ERR_APPEND_FIELDS_MISMATCH;
+
+    if (db->min_timestamp < cons->min_timestamp)
+        cons->min_timestamp = db->min_timestamp;
+
+    if (!(lexicon_maps = append_lexicons(cons, db))){
+        ret = TDB_ERR_NOMEM;
+        goto done;
+    }
+
+    for (trail_id = 0; trail_id < tdb_num_trails(db); trail_id++){
+        __uint128_t uuid_key;
+        Word_t *uuid_ptr;
+        const tdb_event *event;
+
+        memcpy(&uuid_key, tdb_get_uuid(db, trail_id), 16);
+        uuid_ptr = j128m_insert(&cons->trails, uuid_key);
+
+        if ((ret = tdb_get_trail(cursor, trail_id)))
+            goto done;
+
+        while ((event = tdb_cursor_next(cursor)))
+            append_event(cons, event, uuid_ptr, lexicon_maps);
+    }
+done:
+    if (lexicon_maps){
+        for (i = 0; i < cons->num_ofields; i++)
+            free(lexicon_maps[i]);
+        free(lexicon_maps);
+    }
+    tdb_cursor_free(cursor);
     return ret;
 }
 
-int tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
+TDB_EXPORT tdb_error tdb_cons_finalize(tdb_cons *cons)
 {
-    tdb_file items_mmapped = {0};
+    struct tdb_file items_mmapped;
+    uint64_t num_events = cons->events.next;
+    int ret = 0;
 
-    cons->num_events = cons->events.next;
+    memset(&items_mmapped, 0, sizeof(struct tdb_file));
 
     /* finalize event items */
-    arena_flush(&cons->items);
-    if (fclose(cons->items.fd)) {
-        WARN("Closing %s failed", cons->tempfile);
-        return -1;
-    }
+    if ((ret = arena_flush(&cons->items)))
+        goto done;
 
-    if (cons->num_events && cons->num_ofields) {
-        if (tdb_mmap(cons->tempfile, &items_mmapped, NULL)) {
-            WARN("Mmapping %s failed", cons->tempfile);
-            return -1;
+    if (cons->items.fd && fclose(cons->items.fd)) {
+        cons->items.fd = NULL;
+        ret = TDB_ERR_IO_CLOSE;
+        goto done;
+    }
+    cons->items.fd = NULL;
+
+    if (cons->tempfile[0]){
+        if (num_events && cons->num_ofields) {
+            if (file_mmap(cons->tempfile, NULL, &items_mmapped, NULL)){
+                ret = TDB_ERR_IO_READ;
+                goto done;
+            }
         }
+
+        TDB_TIMER_DEF
+
+        TDB_TIMER_START
+        if ((ret = store_lexicons(cons)))
+            goto done;
+        TDB_TIMER_END("encoder/store_lexicons")
+
+        TDB_TIMER_START
+        if ((ret = store_uuids(cons)))
+            goto done;
+        TDB_TIMER_END("encoder/store_uuids")
+
+        TDB_TIMER_START
+        if ((ret = store_version(cons)))
+            goto done;
+        TDB_TIMER_END("encoder/store_version")
+
+        TDB_TIMER_START
+        if ((ret = tdb_encode(cons, (const tdb_item*)items_mmapped.data)))
+            goto done;
+        TDB_TIMER_END("encoder/encode")
     }
+done:
+    if (items_mmapped.ptr)
+        munmap(items_mmapped.ptr, items_mmapped.mmap_size);
 
-    TDB_TIMER_DEF
+    if (cons->tempfile[0])
+        unlink(cons->tempfile);
 
-    /* finalize lexicons */
-    TDB_TIMER_START
-    if (store_lexicons(cons))
-        goto error;
-    TDB_TIMER_END("encoder/store_lexicons")
+    if (!ret){
+        #ifdef HAVE_ARCHIVE_H
+        if (cons->output_format == TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE)
+            ret = cons_package(cons);
+        #endif
+    }
+    return ret;
+}
 
-    TDB_TIMER_START
-    if (store_cookies(cons))
-        goto error;
-    TDB_TIMER_END("encoder/store_cookies")
+TDB_EXPORT tdb_error tdb_cons_set_opt(tdb_cons *cons,
+                                      tdb_opt_key key,
+                                      tdb_opt_value value)
+{
+    switch (key){
+        case TDB_OPT_CONS_OUTPUT_FORMAT:
+            switch (value.value){
+                #ifdef HAVE_ARCHIVE_H
+                case TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE:
+                #endif
+                case TDB_OPT_CONS_OUTPUT_FORMAT_DIR:
+                    cons->output_format = value.value;
+                    return 0;
+                default:
+                    return TDB_ERR_INVALID_OPTION_VALUE;
+            }
+        default:
+            return TDB_ERR_UNKNOWN_OPTION;
+    }
+}
 
-    if (dump_cookie_pointers(cons))
-        goto error;
-
-    TDB_TIMER_START
-    tdb_encode(cons, (tdb_item*)items_mmapped.data);
-    TDB_TIMER_END("encoder/encode")
-
-    if (items_mmapped.data)
-        munmap((void*)items_mmapped.data, items_mmapped.size);
-    return 0;
-
- error:
-    if (items_mmapped.data)
-        munmap((void*)items_mmapped.data, items_mmapped.size);
-    tdb_cons_free(cons);
-    return -1;
+TDB_EXPORT tdb_error tdb_cons_get_opt(tdb_cons *cons,
+                                      tdb_opt_key key,
+                                      tdb_opt_value *value)
+{
+    switch (key){
+        case TDB_OPT_CONS_OUTPUT_FORMAT:
+            value->value = cons->output_format;
+            return 0;
+        default:
+            return TDB_ERR_UNKNOWN_OPTION;
+    }
 }
