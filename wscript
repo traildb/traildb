@@ -11,9 +11,6 @@ import sys, os
 APPNAME = "traildb"
 VERSION = "0.5"
 
-def options(opt):
-    opt.load("compiler_c")
-
 errmsg_libarchive = "not found"
 errmsg_judy = "not found"
 
@@ -52,6 +49,7 @@ def configure(cnf):
         errmsg="Found a broken version of Judy. Install a newer version.")
 
 def options(ctx):
+    ctx.load("compiler_c")
     ctx.add_option('--test_build',
                    action='store_true',
                    default=False,
