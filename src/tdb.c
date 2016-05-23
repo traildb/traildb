@@ -282,12 +282,12 @@ static tdb_error read_info(tdb *db, const char *root, struct io_ops *io)
     return ret;
 }
 
-tdb *tdb_init(void)
+TDB_EXPORT tdb *tdb_init(void)
 {
     return calloc(1, sizeof(tdb));
 }
 
-tdb_error tdb_open(tdb *db, const char *orig_root)
+TDB_EXPORT tdb_error tdb_open(tdb *db, const char *orig_root)
 {
     char root[TDB_MAX_PATH_SIZE];
     struct stat stats;
@@ -384,7 +384,7 @@ done:
     return ret;
 }
 
-void tdb_willneed(const tdb *db)
+TDB_EXPORT void tdb_willneed(const tdb *db)
 {
     if (db && db->num_fields > 0){
         tdb_field i;
@@ -400,7 +400,7 @@ void tdb_willneed(const tdb *db)
     }
 }
 
-void tdb_dontneed(const tdb *db)
+TDB_EXPORT void tdb_dontneed(const tdb *db)
 {
     if (db && db->num_fields > 0){
         tdb_field i;
@@ -416,7 +416,7 @@ void tdb_dontneed(const tdb *db)
     }
 }
 
-void tdb_close(tdb *db)
+TDB_EXPORT void tdb_close(tdb *db)
 {
     if (db){
         tdb_field i;
@@ -445,7 +445,7 @@ void tdb_close(tdb *db)
     }
 }
 
-uint64_t tdb_lexicon_size(const tdb *db, tdb_field field)
+TDB_EXPORT uint64_t tdb_lexicon_size(const tdb *db, tdb_field field)
 {
     if (field == 0 || field >= db->num_fields)
         return 0;
@@ -457,9 +457,9 @@ uint64_t tdb_lexicon_size(const tdb *db, tdb_field field)
     }
 }
 
-tdb_error tdb_get_field(const tdb *db,
-                        const char *field_name,
-                        tdb_field *field)
+TDB_EXPORT tdb_error tdb_get_field(const tdb *db,
+                                   const char *field_name,
+                                   tdb_field *field)
 {
     tdb_field i;
     for (i = 0; i < db->num_fields; i++)
@@ -470,17 +470,18 @@ tdb_error tdb_get_field(const tdb *db,
     return TDB_ERR_UNKNOWN_FIELD;
 }
 
-const char *tdb_get_field_name(const tdb *db, tdb_field field)
+TDB_EXPORT const char *tdb_get_field_name(const tdb *db,
+                                          tdb_field field)
 {
     if (field < db->num_fields)
         return db->field_names[field];
     return NULL;
 }
 
-tdb_item tdb_get_item(const tdb *db,
-                      tdb_field field,
-                      const char *value,
-                      uint64_t value_length)
+TDB_EXPORT tdb_item tdb_get_item(const tdb *db,
+                                 tdb_field field,
+                                 const char *value,
+                                 uint64_t value_length)
 {
     if (!value_length)
         /* NULL value for this field */
@@ -502,10 +503,10 @@ tdb_item tdb_get_item(const tdb *db,
     }
 }
 
-const char *tdb_get_value(const tdb *db,
-                          tdb_field field,
-                          tdb_val val,
-                          uint64_t *value_length)
+TDB_EXPORT const char *tdb_get_value(const tdb *db,
+                                     tdb_field field,
+                                     tdb_val val,
+                                     uint64_t *value_length)
 {
     if (field == 0 || field >= db->num_fields)
         return NULL;
@@ -523,9 +524,9 @@ const char *tdb_get_value(const tdb *db,
     }
 }
 
-const char *tdb_get_item_value(const tdb *db,
-                               tdb_item item,
-                               uint64_t *value_length)
+TDB_EXPORT const char *tdb_get_item_value(const tdb *db,
+                                          tdb_item item,
+                                          uint64_t *value_length)
 {
     return tdb_get_value(db,
                          tdb_item_field(item),
@@ -533,16 +534,17 @@ const char *tdb_get_item_value(const tdb *db,
                          value_length);
 }
 
-const uint8_t *tdb_get_uuid(const tdb *db, uint64_t trail_id)
+TDB_EXPORT const uint8_t *tdb_get_uuid(const tdb *db,
+                                       uint64_t trail_id)
 {
     if (trail_id < db->num_trails)
         return (const uint8_t *)&db->uuids.data[trail_id * 16];
     return NULL;
 }
 
-tdb_error tdb_get_trail_id(const tdb *db,
-                           const uint8_t *uuid,
-                           uint64_t *trail_id)
+TDB_EXPORT tdb_error tdb_get_trail_id(const tdb *db,
+                                      const uint8_t *uuid,
+                                      uint64_t *trail_id)
 {
     __uint128_t cmp, key;
     memcpy(&key, uuid, 16);
@@ -579,7 +581,7 @@ tdb_error tdb_get_trail_id(const tdb *db,
     return TDB_ERR_UNKNOWN_UUID;
 }
 
-const char *tdb_error_str(tdb_error errcode)
+TDB_EXPORT const char *tdb_error_str(tdb_error errcode)
 {
     switch (errcode){
         case        TDB_ERR_OK:
@@ -659,37 +661,39 @@ const char *tdb_error_str(tdb_error errcode)
     }
 }
 
-uint64_t tdb_num_trails(const tdb *db)
+TDB_EXPORT uint64_t tdb_num_trails(const tdb *db)
 {
     return db->num_trails;
 }
 
-uint64_t tdb_num_events(const tdb *db)
+TDB_EXPORT uint64_t tdb_num_events(const tdb *db)
 {
     return db->num_events;
 }
 
-uint64_t tdb_num_fields(const tdb *db)
+TDB_EXPORT uint64_t tdb_num_fields(const tdb *db)
 {
     return db->num_fields;
 }
 
-uint64_t tdb_min_timestamp(const tdb *db)
+TDB_EXPORT uint64_t tdb_min_timestamp(const tdb *db)
 {
     return db->min_timestamp;
 }
 
-uint64_t tdb_max_timestamp(const tdb *db)
+TDB_EXPORT uint64_t tdb_max_timestamp(const tdb *db)
 {
     return db->max_timestamp;
 }
 
-uint64_t tdb_version(const tdb *db)
+TDB_EXPORT uint64_t tdb_version(const tdb *db)
 {
     return db->version;
 }
 
-tdb_error tdb_set_opt(tdb *db, tdb_opt_key key, tdb_opt_value value)
+TDB_EXPORT tdb_error tdb_set_opt(tdb *db,
+                                 tdb_opt_key key,
+                                 tdb_opt_value value)
 {
     switch (key){
         case TDB_OPT_ONLY_DIFF_ITEMS:
@@ -705,7 +709,9 @@ tdb_error tdb_set_opt(tdb *db, tdb_opt_key key, tdb_opt_value value)
     }
 }
 
-tdb_error tdb_get_opt(tdb *db, tdb_opt_key key, tdb_opt_value *value)
+TDB_EXPORT tdb_error tdb_get_opt(tdb *db,
+                                 tdb_opt_key key,
+                                 tdb_opt_value *value)
 {
     switch (key){
         case TDB_OPT_ONLY_DIFF_ITEMS:
@@ -720,7 +726,7 @@ tdb_error tdb_get_opt(tdb *db, tdb_opt_key key, tdb_opt_value *value)
 }
 
 
-struct tdb_event_filter *tdb_event_filter_new(void)
+TDB_EXPORT struct tdb_event_filter *tdb_event_filter_new(void)
 {
     static const long unsigned INITIAL_SIZE = 33;
     struct tdb_event_filter *f = malloc(sizeof(struct tdb_event_filter));
@@ -748,9 +754,9 @@ static tdb_error ensure_filter_size(struct tdb_event_filter *filter)
     return TDB_ERR_OK;
 }
 
-tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
-                                    tdb_item term,
-                                    int is_negative)
+TDB_EXPORT tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
+                                               tdb_item term,
+                                               int is_negative)
 {
     tdb_error ret;
     if ((ret = ensure_filter_size(filter)))
@@ -763,7 +769,7 @@ tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
     }
 }
 
-tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter)
+TDB_EXPORT tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter)
 {
     tdb_error ret;
     if ((ret = ensure_filter_size(filter)))
@@ -775,7 +781,7 @@ tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter)
     }
 }
 
-void tdb_event_filter_free(struct tdb_event_filter *filter)
+TDB_EXPORT void tdb_event_filter_free(struct tdb_event_filter *filter)
 {
     free(filter->items);
     free(filter);

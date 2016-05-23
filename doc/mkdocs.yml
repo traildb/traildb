@@ -1,7 +1,10 @@
 site_name: TrailDB
 pages:
-- Home: index.md
-- API: apidoc.md
+- Introduction: index.md
+- Getting Started: getting_started.md
+- Tutorial: tutorial.md
+- Technical Overview: technical_overview.md
+- C API: api.md
 
 theme: readthedocs
 site_favicon: http://traildb.io/favicon.ico

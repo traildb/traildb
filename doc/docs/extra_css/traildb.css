@@ -17,3 +17,15 @@ html {
     height: 5em;
     width: 10em;
 }
+
+.wy-menu .toctree-l4{
+    display: none;
+}
+
+h6{
+    margin-bottom: 0.5em;
+}
+
+code{
+    font-size: 80%;
+}

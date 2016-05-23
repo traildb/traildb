@@ -46,7 +46,7 @@ static int event_satisfies_filter(const tdb_item *event,
 }
 
 
-tdb_cursor *tdb_cursor_new(const tdb *db)
+TDB_EXPORT tdb_cursor *tdb_cursor_new(const tdb *db)
 {
     tdb_cursor *c = NULL;
 
@@ -72,7 +72,7 @@ err:
     return NULL;
 }
 
-void tdb_cursor_free(tdb_cursor *c)
+TDB_EXPORT void tdb_cursor_free(tdb_cursor *c)
 {
     if (c){
         free(c->state->events_buffer);
@@ -81,14 +81,14 @@ void tdb_cursor_free(tdb_cursor *c)
     }
 }
 
-void tdb_cursor_unset_event_filter(tdb_cursor *cursor)
+TDB_EXPORT void tdb_cursor_unset_event_filter(tdb_cursor *cursor)
 {
     cursor->state->filter = NULL;
     cursor->state->filter_len = 0;
 }
 
-tdb_error tdb_cursor_set_event_filter(tdb_cursor *cursor,
-                                      const struct tdb_event_filter *filter)
+TDB_EXPORT tdb_error tdb_cursor_set_event_filter(tdb_cursor *cursor,
+                                                 const struct tdb_event_filter *filter)
 {
     if (cursor->state->edge_encoded)
         return TDB_ERR_ONLY_DIFF_FILTER;
@@ -99,7 +99,8 @@ tdb_error tdb_cursor_set_event_filter(tdb_cursor *cursor,
     }
 }
 
-tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id)
+TDB_EXPORT tdb_error tdb_get_trail(tdb_cursor *cursor,
+                                   uint64_t trail_id)
 {
     struct tdb_decode_state *s = cursor->state;
     const tdb *db = s->db;
@@ -133,7 +134,7 @@ tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id)
         return TDB_ERR_INVALID_TRAIL_ID;
 }
 
-uint64_t tdb_get_trail_length(tdb_cursor *cursor)
+TDB_EXPORT uint64_t tdb_get_trail_length(tdb_cursor *cursor)
 {
     uint64_t count = 0;
     while (_tdb_cursor_next_batch(cursor))
@@ -141,7 +142,7 @@ uint64_t tdb_get_trail_length(tdb_cursor *cursor)
     return count;
 }
 
-int _tdb_cursor_next_batch(tdb_cursor *cursor)
+TDB_EXPORT int _tdb_cursor_next_batch(tdb_cursor *cursor)
 {
     struct tdb_decode_state *s = cursor->state;
     const struct huff_codebook *codebook =
@@ -249,5 +250,5 @@ libtraildb.so
 this is "strategy 3" from
 http://www.greenend.org.uk/rjk/tech/inline.html
 */
-extern const tdb_event *tdb_cursor_next(tdb_cursor *cursor);
+TDB_EXPORT extern const tdb_event *tdb_cursor_next(tdb_cursor *cursor);
 

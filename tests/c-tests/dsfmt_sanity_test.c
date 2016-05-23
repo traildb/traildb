@@ -16,10 +16,7 @@ int main(int argc, char **argv)
     // with a few close values and then generating values
     uint32_t seed = 4321;
     dsfmt_t dsfmt;
-
     dsfmt_init_gen_rand(&dsfmt, seed);
-
     dsfmt_genrand_close_open(&dsfmt);
-    
     return 0;
 }

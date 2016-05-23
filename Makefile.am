@@ -3,6 +3,7 @@ ACLOCAL_AMFLAGS = -I m4
 libtraildb_la_CFLAGS = -std=c99 \
                        -DJUDYERROR=judyerror_macro_missing_fix_this \
                        -O3 \
+                       -fvisibility=hidden \
                        -g \
                        -Wall \
                        -Wextra \
@@ -17,7 +18,7 @@ libtraildb_la_CFLAGS = -std=c99 \
                        -Wstrict-prototypes
 
 AM_CPPFLAGS = -Isrc/xxhash -Isrc/dsfmt
-AM_CFLAGS=-O3 -g
+AM_CFLAGS=-O3 -g -fvisibility=hidden
 
 libtraildb_la_LIBADD = src/xxhash/xxhash.lo src/dsfmt/dSFMT.lo
 libtraildb_la_SOURCES = \

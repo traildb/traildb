@@ -1,6 +1,8 @@
 
 #include "traildb.h"
 
+#define TDB_EXPORT __attribute__((visibility("default")))
+
 static const uint8_t HEXBYTES[] =
    {
      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // ........
@@ -47,7 +49,8 @@ static const uint8_t HEXCHARS[] =
     "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
     "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff";
 
-int tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16])
+TDB_EXPORT int tdb_uuid_raw(const uint8_t hexuuid[32],
+                            uint8_t uuid[16])
 {
     int i;
     for (i = 0; i < 32; i += 2){
@@ -61,7 +64,8 @@ int tdb_uuid_raw(const uint8_t hexuuid[32], uint8_t uuid[16])
     return 0;
 }
 
-void tdb_uuid_hex(const uint8_t uuid[16], uint8_t hexuuid[32])
+TDB_EXPORT void tdb_uuid_hex(const uint8_t uuid[16],
+                             uint8_t hexuuid[32])
 {
     int i;
     for (i = 0; i < 16; i++){

@@ -222,7 +222,7 @@ out_of_memory:
     return TDB_ERR_NOMEM;
 }
 
-tdb_cons *tdb_cons_init(void)
+TDB_EXPORT tdb_cons *tdb_cons_init(void)
 {
     tdb_cons *c = calloc(1, sizeof(tdb_cons));
     if (c){
@@ -237,10 +237,10 @@ tdb_cons *tdb_cons_init(void)
     return c;
 }
 
-tdb_error tdb_cons_open(tdb_cons *cons,
-                        const char *root,
-                        const char **ofield_names,
-                        uint64_t num_ofields)
+TDB_EXPORT tdb_error tdb_cons_open(tdb_cons *cons,
+                                   const char *root,
+                                   const char **ofield_names,
+                                   uint64_t num_ofields)
 {
     tdb_field i;
     int fd;
@@ -325,7 +325,7 @@ done:
     return ret;
 }
 
-void tdb_cons_close(tdb_cons *cons)
+TDB_EXPORT void tdb_cons_close(tdb_cons *cons)
 {
     uint64_t i;
     for (i = 0; i < cons->num_ofields; i++){
@@ -351,11 +351,11 @@ void tdb_cons_close(tdb_cons *cons)
 /*
 Append an event in this cons.
 */
-tdb_error tdb_cons_add(tdb_cons *cons,
-                       const uint8_t uuid[16],
-                       const uint64_t timestamp,
-                       const char **values,
-                       const uint64_t *value_lengths)
+TDB_EXPORT tdb_error tdb_cons_add(tdb_cons *cons,
+                                  const uint8_t uuid[16],
+                                  const uint64_t timestamp,
+                                  const char **values,
+                                  const uint64_t *value_lengths)
 {
     tdb_field i;
     struct tdb_cons_event *event;
@@ -482,7 +482,7 @@ This is a variation of tdb_cons_add(): Instead of accepting fields as
 strings, it reads them as integer items from an existing TrailDB and
 remaps them to match with this cons.
 */
-tdb_error tdb_cons_append(tdb_cons *cons, const tdb *db)
+TDB_EXPORT tdb_error tdb_cons_append(tdb_cons *cons, const tdb *db)
 {
     tdb_val **lexicon_maps = NULL;
     uint64_t i, trail_id;
@@ -536,7 +536,7 @@ done:
     return ret;
 }
 
-tdb_error tdb_cons_finalize(tdb_cons *cons)
+TDB_EXPORT tdb_error tdb_cons_finalize(tdb_cons *cons)
 {
     struct tdb_file items_mmapped;
     uint64_t num_events = cons->events.next;
@@ -601,9 +601,9 @@ done:
     return ret;
 }
 
-tdb_error tdb_cons_set_opt(tdb_cons *cons,
-                           tdb_opt_key key,
-                           tdb_opt_value value)
+TDB_EXPORT tdb_error tdb_cons_set_opt(tdb_cons *cons,
+                                      tdb_opt_key key,
+                                      tdb_opt_value value)
 {
     switch (key){
         case TDB_OPT_CONS_OUTPUT_FORMAT:
@@ -622,9 +622,9 @@ tdb_error tdb_cons_set_opt(tdb_cons *cons,
     }
 }
 
-tdb_error tdb_cons_get_opt(tdb_cons *cons,
-                           tdb_opt_key key,
-                           tdb_opt_value *value)
+TDB_EXPORT tdb_error tdb_cons_get_opt(tdb_cons *cons,
+                                      tdb_opt_key key,
+                                      tdb_opt_value *value)
 {
     switch (key){
         case TDB_OPT_CONS_OUTPUT_FORMAT:

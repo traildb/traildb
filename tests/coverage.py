@@ -72,7 +72,7 @@ def run_coverage_test(test_args):
         # out_of_memory tests which produce more interesting results, Judy memory
         # errors in particular, when it is not only the large arena that hits
         # malloc failures.
-        cflags = "%s -DEVENTS_ARENA_INCREMENT=100 -I%s/src/ -L%s/.libs" %\
+        cflags = "%s -DEVENTS_ARENA_INCREMENT=100 -fvisibility=default -I%s/src/ -L%s/.libs" %\
                  (os.getenv('CFLAGS', ''), upper_path, temp_dir_path)
 
         if test_args.get('package_tests'):

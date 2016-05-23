@@ -11,6 +11,8 @@
 #include "tdb_profile.h"
 #include "tdb_io.h"
 
+#define TDB_EXPORT __attribute__((visibility("default")))
+
 /*
 These are defined by autoconf
 
