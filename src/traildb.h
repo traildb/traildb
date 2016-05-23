@@ -215,7 +215,7 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54113
 */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-prototypes"
-inline const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
+__attribute__((visibility("default"))) inline const tdb_event *tdb_cursor_next(tdb_cursor *cursor)
 {
     if (cursor->num_events_left > 0 || _tdb_cursor_next_batch(cursor)){
         const tdb_event *e = (const tdb_event*)cursor->next_event;

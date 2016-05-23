@@ -2,11 +2,13 @@
 set -euf
 OLDCWD=$(pwd)
 
-# force small allocations
-CFLAGS="${CFLAGS-} -DEVENTS_ARENA_INCREMENT=100"
+echo "Build TrailDB with ./waf --test_build before running this!"
+
 # add source directory
-CFLAGS="${CFLAGS-} -I${OLDCWD}/src"
+CFLAGS="${CFLAGS-} -L ${OLDCWD}/build -I${OLDCWD}/src"
 export CFLAGS
+
+export LD_LIBRARY_PATH=${OLDCWD}/build
 
 # move to test directory
 cd ./tests

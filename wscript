@@ -51,7 +51,13 @@ def configure(cnf):
         uselib="JUDY", features="c cprogram test_exec",
         errmsg="Found a broken version of Judy. Install a newer version.")
 
-def build(bld):
+def options(ctx):
+    ctx.add_option('--test_build',
+                   action='store_true',
+                   default=False,
+                   help='Build a version of TrailDB suitable for testing')
+
+def build(bld, test_build=False):
     tdbcflags = [
         "-Wextra",
         "-Wconversion",
@@ -63,9 +69,12 @@ def build(bld):
         "-Wnested-externs",
         "-Wpointer-arith",
         "-Wshadow",
-        "-Wstrict-prototypes",
+        "-Wstrict-prototypes"
     ]
-
+    if bld.options.test_build:
+        tdbcflags.append("-DEVENTS_ARENA_INCREMENT=100")
+    else:
+        tdbcflags.append("-fvisibility=hidden")
 
     bld.shlib(
         target         = "traildb",
