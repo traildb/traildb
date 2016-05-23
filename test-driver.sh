@@ -2,7 +2,7 @@
 set -euf
 OLDCWD=$(pwd)
 
-echo "Build TrailDB with ./waf --test_build before running this!"
+echo "Run ./waf install --test_build before running this!"
 
 # add source directory
 CFLAGS="${CFLAGS-} -L ${OLDCWD}/build -I${OLDCWD}/src"
