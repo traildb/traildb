@@ -21,7 +21,7 @@ For RPM-based distros:
 
 For OSX:
 
-	$ brew install judy libarchive
+	$ brew install judy libarchive pkg-config
 
 #### Build TrailDB
 
