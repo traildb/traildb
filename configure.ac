@@ -1,4 +1,4 @@
-AC_INIT([traildb], [1.0], [we-will-need-an-actual-email-here-later@dev.null])
+AC_INIT([traildb], [0.5], [ville@adroll.com])
 : ${CFLAGS=""}
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([subdir-objects foreign])
