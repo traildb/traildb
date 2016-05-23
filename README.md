@@ -1,39 +1,30 @@
 # TrailDB
 
-### Install
+<img src="http://traildb.io/images/tdb_logo@2x.png" style="width: 40%">
 
-install locally with autotools:
+TrailDB is an efficient tool for storing and querying series of events.
+This repository contains the core C library and the `tdb` command line tool.
 
-    $ ./autogen.sh
-    $ ./configure
-    $ make
-    $ sudo make install
+Learn more at [traildb.io](http://traildb.io).
 
-install locally with waf (depends on python):
+## Quick start
 
-    $ ./waf configure
-    $ ./waf install
+For detailed installation instructions, see [Getting Started guide](http://traildb.io/docs/getting_started/).
 
-### Dependencies
+#### Install Dependencies
 
-For Debian and derivatives:
-
-	$ apt-get install libarchive-dev libjudy-dev
+	$ apt-get install libarchive-dev libjudy-dev pkg-config
 
 For RPM-based distros:
 
-	$ yum install judy-devel libarchive-devel
+	$ yum install judy-devel libarchive-devel pkg-config
 
 For OSX:
 
 	$ brew install judy libarchive
 
+#### Build TrailDB
 
-### Tests
-
-The quickest way to run the test suite is
     $ ./waf configure
     $ ./waf install
-    $ sh test-driver.sh
 
-Read the `README.md` inside `tests/` subdirectory.
