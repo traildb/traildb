@@ -1,0 +1,10 @@
+language: c
+script: ./waf configure build
+
+addons:
+  apt:
+    packages:
+    - libarchive-dev
+    - libjudy-dev
+    - pkg-config
+
