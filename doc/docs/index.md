@@ -51,9 +51,8 @@ Developer productivity is another main motivation of TrailDB. Individual
 files are easy to manipulate using standard filesystem tools. The easily
 portable C library has only a few easily available dependencies,
 making it easily deployable. [The API](api) is clean and minimal by design.
-In Devops point of view, it is invaluable to be able to observe various
-slices of a large data-intensive production system on a laptop, which in
-the case of TrailDB is a matter of downloading a file.
+In the Devops point of view, it is convenient to be able to observe
+slices of a large production system just by downloading a file.
 
 As TrailDB is used as a core building block in large production systems,
 maintainability, reliability and robustness are of central importance.
