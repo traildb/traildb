@@ -1,6 +1,6 @@
 # TrailDB
 
-<img src="http://traildb.io/images/tdb_logo@2x.png" style="width: 40%">
+<img src="http://traildb.io/images/traildb_logo_512.png">
 
 TrailDB is an efficient tool for storing and querying series of events.
 This repository contains the core C library and the `tdb` command line tool.
