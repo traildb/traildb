@@ -28,3 +28,13 @@ For OSX:
     $ ./waf configure
     $ ./waf install
 
+#### Run Tests
+
+    $ ./waf install --test_build
+    $ ./test-driver.py
+
+or on Linux
+
+    $ make distclean
+    $ cd tests
+    $ ./coverage.py
