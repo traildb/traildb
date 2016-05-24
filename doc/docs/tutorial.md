@@ -6,11 +6,9 @@ installed TrailDB yet, see [Getting Started](getting_started) for instructions.
 
 In this example, we will create a tiny TrailDB that includes events
 from three users. You can find the full Python source code in the
-[traildb-python](https://github.com/SemanticSugar/traildb-python/tree/ma
-ster/examples/tutorial_simple_traildb.py)
+[traildb-python](https://github.com/traildb/traildb-python/tree/master/examples/tutorial_simple_traildb.py)
 repo and the C source in the [main traildb
-repo](https://github.com/SemanticSugar/traildb/tree/master/examples/tuto
-rial_simple_traildb.c).
+repo](https://github.com/traildb/traildb/tree/master/examples/tutorial_simple_traildb.c).
 
 Note that opening a new TrailDB constructor fails if there is an
 existing TrailDB with the same name. If you run this example multiple
@@ -204,11 +202,9 @@ apart, similar to how sessions are defined in web analytics. Counting
 the number of sessions by contributor is easy with TrailDB.
 
 You can find the full Python source code in the
-[traildb-python](https://github.com/SemanticSugar/traildb-python/tree/ma
-ster/examples/tutorial_wikipedia_sessions.py)
+[traildb-python](https://github.com/traildb/traildb-python/tree/master/examples/tutorial_wikipedia_sessions.py)
 repo and the C source in the [main traildb
-repo](https://github.com/SemanticSugar/traildb/tree/master/examples/tuto
-rial_wikipedia_sessions.c).
+repo](https://github.com/traildb/traildb/tree/master/examples/tutorial_wikipedia_sessions.c).
 
 <div markdown data-multilang title="Number of sessions by contributor">
 ```python
