@@ -38,3 +38,5 @@ or on Linux
     $ make distclean
     $ cd tests
     $ ./coverage.py
+
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/traildb/traildb?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
