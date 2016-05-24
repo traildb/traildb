@@ -165,8 +165,7 @@ to analyze, for instance, behavior of individual contributors or edit
 history of individual pages.
 
 We [converted the 50GB compressed dump to a
-TrailDB](https://github.com/traildb-python/tree/master/examples/parse_wi
-kipedia_history.py). For this tutorial, you should download the pre-made
+TrailDB](https://github.com/traildb/traildb-python/tree/master/examples/parse_wikipedia_history.py). For this tutorial, you should download the pre-made
 TrailDB. Two versions are provided:
 
  - [wikipedia-history.tdb](http://traildb.io/data/wikipedia-history.tdb)
@@ -176,7 +175,7 @@ TrailDB. Two versions are provided:
 
  - [wikipedia-history-small.tdb](http://traildb.io/data/wikipedia-history-small.tdb)
    contains a random sample of 1% contributors (103MB). If you are curious,
-   [this script](https://github.com/traildb-python/tree/master/examples/extract_sample.py)
+   [this script](https://github.com/traildb/traildb-python/tree/master/examples/extract_sample.py)
    was used to produce a random extract of the full TrailDB.
 
 First, you should download the smaller snapshot above,
