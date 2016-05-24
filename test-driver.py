@@ -22,9 +22,10 @@ def main():
     os.putenv("LD_LIBRARY_PATH", build_dir)
 
     os.chdir("./tests")
-    
+
     tester = subprocess.Popen(["./support/test.py"])
-    tester.wait()
+    if tester.wait() != 0:
+        sys.exit(1)
 
 def stop_tester(signal, frame):
     if tester is not None:
