@@ -1,4 +1,8 @@
 site_name: TrailDB Docs
+site_description: TrailDB is an efficient tool for storing and querying series of events
+site_author: AdRoll Inc.
+site_favicon: http://traildb.io/favicon.ico
+
 pages:
 - Introduction: index.md
 - Getting Started: getting_started.md
@@ -7,7 +11,6 @@ pages:
 - C API: api.md
 
 theme: readthedocs
-site_favicon: http://traildb.io/favicon.ico
 repo_url: http://github.com/traildb/traildb
 copyright: Copyright © 2016 <a href="http://tech.adroll.com">AdRoll Inc.</a>
 google_analytics: ['UA-74696093-1', 'traildb.io']
