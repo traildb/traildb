@@ -384,36 +384,30 @@ done:
     return ret;
 }
 
-TDB_EXPORT void tdb_willneed(const tdb *db)
+static void tdb_madvise(const tdb *db, int advice)
 {
     if (db && db->num_fields > 0){
         tdb_field i;
         for (i = 0; i < db->num_fields - 1; i++)
             madvise(db->lexicons[i].ptr,
                     db->lexicons[i].mmap_size,
-                    MADV_WILLNEED);
+                    advice);
 
-        madvise(db->uuids.ptr, db->uuids.mmap_size, MADV_WILLNEED);
-        madvise(db->codebook.ptr, db->codebook.mmap_size, MADV_WILLNEED);
-        madvise(db->toc.ptr, db->toc.mmap_size, MADV_WILLNEED);
-        madvise(db->trails.ptr, db->trails.mmap_size, MADV_WILLNEED);
+        madvise(db->uuids.ptr, db->uuids.mmap_size, advice);
+        madvise(db->codebook.ptr, db->codebook.mmap_size, advice);
+        madvise(db->toc.ptr, db->toc.mmap_size, advice);
+        madvise(db->trails.ptr, db->trails.mmap_size, advice);
     }
+}
+
+TDB_EXPORT void tdb_willneed(const tdb *db)
+{
+    tdb_madvise(db, MADV_WILLNEED);
 }
 
 TDB_EXPORT void tdb_dontneed(const tdb *db)
 {
-    if (db && db->num_fields > 0){
-        tdb_field i;
-        for (i = 0; i < db->num_fields - 1; i++)
-            madvise(db->lexicons[i].ptr,
-                    db->lexicons[i].mmap_size,
-                    MADV_DONTNEED);
-
-        madvise(db->uuids.ptr, db->uuids.mmap_size, MADV_DONTNEED);
-        madvise(db->codebook.ptr, db->codebook.mmap_size, MADV_DONTNEED);
-        madvise(db->toc.ptr, db->toc.mmap_size, MADV_DONTNEED);
-        madvise(db->trails.ptr, db->trails.mmap_size, MADV_DONTNEED);
-    }
+    tdb_madvise(db, MADV_DONTNEED);
 }
 
 TDB_EXPORT void tdb_close(tdb *db)
