@@ -23,10 +23,21 @@ For OSX:
 
 	$ brew install judy libarchive pkg-config
 
+
+Note that your systems package manager may have too old of [libjudy](https://sourceforge.net/projects/judy/).
+You may also require a [patch](https://sourceforge.net/p/judy/patches/5/) if you are using gcc 4.9.
+
 #### Build TrailDB
 
     $ ./waf configure
     $ ./waf install
+
+Alternatively you may use autotools
+
+    $ ./autogen.sh
+    $ ./configure
+    $ make
+    $ make install
 
 #### Run Tests
 
