@@ -12,6 +12,10 @@ import tempfile, shutil
 APPNAME = "traildb"
 VERSION = "0.5"
 
+SKIP_TESTS = []
+if sys.platform == "darwin":
+    SKIP_TESTS += ["judy_128_map_test.c", "out_of_memory.c"]
+
 errmsg_libarchive = "not found"
 errmsg_judy = "not found"
 
@@ -85,11 +89,12 @@ def build(bld, test_build=False):
         os.environ["TDB_TMP_DIR"] = "."
 
         for test in bld.path.ant_glob("tests/c-tests/*.c"):
-            if test.abspath().endswith("judy_128_map_test.c") or test.abspath().endswith("out_of_memory.c"):
+            testname = os.path.basename(test.abspath())
+            if testname in SKIP_TESTS:
                 continue
             tsk = bld.program(
                 features    = "test",
-                target      = os.path.splitext(os.path.basename(test.abspath()))[0],
+                target      = os.path.splitext(testname)[0],
                 source      = [test],
                 includes    = "src",
                 cflags      = ["-fprofile-arcs", "-ftest-coverage", "-fPIC"],
@@ -97,7 +102,7 @@ def build(bld, test_build=False):
                 use         = ["traildb"],
                 uselib      = ["ARCHIVE", "JUDY"],
             )
-            tsk.ut_cwd = basetmp+"/"+os.path.basename(test.abspath())
+            tsk.ut_cwd = basetmp+"/"+testname
             os.mkdir(tsk.ut_cwd)
 
         from waflib.Tools import waf_unit_test
