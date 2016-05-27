@@ -1,3 +1,4 @@
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/traildb/traildb?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Travis CI](https://travis-ci.org/traildb/traildb.svg?branch=master)](https://travis-ci.org/traildb/traildb)
 
 # TrailDB
@@ -58,4 +59,3 @@ or on Linux
     $ cd tests
     $ ./coverage.py
 
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/traildb/traildb?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
