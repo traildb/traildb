@@ -29,7 +29,7 @@ int main(int argc, char **argv)
     dsfmt_init_gen_rand(&state, 23489);
     tdb_cons* c = tdb_cons_init();
     test_cons_settings(c);
-    assert(tdb_cons_open(c, argv[1], NULL, 0) == 0);
+    assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), NULL, 0) == 0);
 
     for (i = 0; i < NUM_ITER; i++){
         double tmp = dsfmt_genrand_close_open(&state) * DBL_MAX;
@@ -45,7 +45,7 @@ int main(int argc, char **argv)
     assert(tdb_cons_finalize(c) == 0);
     tdb_cons_close(c);
     tdb* t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, getenv("TDB_TMP_DIR")) == 0);
 
     J1C(n, comp, 0, -1)
     /* check that we have collisions */

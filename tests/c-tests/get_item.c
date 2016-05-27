@@ -23,13 +23,13 @@ int main(int argc, char** argv)
 
     tdb_cons *c = tdb_cons_init();
     test_cons_settings(c);
-    assert(tdb_cons_open(c, argv[1], fields_ptr, NUM_FIELDS) == 0);
+    assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), fields_ptr, NUM_FIELDS) == 0);
     assert(tdb_cons_add(c, uuid, 0, fields_ptr, lengths) == 0);
     assert(tdb_cons_finalize(c) == 0);
     tdb_cons_close(c);
 
     tdb* t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, getenv("TDB_TMP_DIR")) == 0);
     for (i = 0; i < NUM_FIELDS; i++){
         assert(tdb_get_item(t, i + 1, "", 0) == tdb_make_item(i + 1, 0));
         assert(tdb_get_item(t, i + 1, fields_ptr[i], lengths[i]) ==

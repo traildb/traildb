@@ -26,7 +26,8 @@ int main(int argc, char **argv)
     int i;
 
     tdb_cons* c = tdb_cons_init();
-    assert(tdb_cons_open(c, argv[1], fields, 3) == 0);
+    test_cons_settings(c);
+    assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), fields, 3) == 0);
 
     assert(tdb_cons_add(c, uuid, 1, event1, lengths1) == 0);
     assert(tdb_cons_add(c, uuid, 2, event2, lengths1) == 0);
@@ -37,7 +38,7 @@ int main(int argc, char **argv)
     tdb_cons_close(c);
 
     tdb* t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, getenv("TDB_TMP_DIR")) == 0);
 
     tdb_field field_a, field_b, field_c;
     assert(tdb_get_field(t, "a", &field_a) == 0);
