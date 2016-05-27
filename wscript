@@ -71,7 +71,12 @@ def build(bld, test_build=False):
         "-Wstrict-prototypes"
     ]
     if bld.variant == "test":
-        tdbcflags.append("-DEVENTS_ARENA_INCREMENT=100")
+        tdbcflags.extend([
+            "-DEVENTS_ARENA_INCREMENT=100",
+            "-fprofile-arcs",
+            "-ftest-coverage",
+            "-fPIC",
+        ])
     else:
         tdbcflags.append("-fvisibility=hidden")
 
