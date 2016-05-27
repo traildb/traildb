@@ -1,3 +1,5 @@
+[![Travis CI](https://travis-ci.org/traildb/traildb.svg?branch=master)](https://travis-ci.org/traildb/traildb)
+
 # TrailDB
 
 <img src="http://traildb.io/images/traildb_logo_512.png">
