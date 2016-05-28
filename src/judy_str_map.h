@@ -9,6 +9,10 @@
 
 #define BUFFER_INITIAL_SIZE 65536
 
+#define JSM_EXPORT __attribute__((visibility("default")))
+
+
+
 typedef void *(*judy_str_fold_fn)(uint64_t id,
                                   const char *value,
                                   uint64_t length,
@@ -23,20 +27,27 @@ struct judy_str_map{
     XXH64_state_t hash_state;
 };
 
+JSM_EXPORT
 int jsm_init(struct judy_str_map *jsm);
 
+JSM_EXPORT
 uint64_t jsm_insert(struct judy_str_map *jsm, const char *buf, uint64_t length);
 
+JSM_EXPORT
 uint64_t jsm_get(struct judy_str_map *jsm, const char *buf, uint64_t length);
 
+JSM_EXPORT
 void jsm_free(struct judy_str_map *jsm);
 
+JSM_EXPORT
 void *jsm_fold(const struct judy_str_map *jsm,
                judy_str_fold_fn fun,
                void *state);
 
+JSM_EXPORT
 uint64_t jsm_num_keys(const struct judy_str_map *jsm);
 
+JSM_EXPORT
 uint64_t jsm_values_size(const struct judy_str_map *jsm);
 
 #endif /* __JUDY_STR_MAP_H__ */
