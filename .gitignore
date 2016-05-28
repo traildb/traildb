@@ -3,15 +3,7 @@
 *.o
 *.so
 *.swp
-testing/coverage-html
-lib/haskell/.stack-work
-lib/haskell/dist
-lib/python/build
-bin/encode
-bin/extractd
-bin/index
-bin/mix
-bin/trail
+tests/coverage-html
 
 # Autotools and build artifacts
 *.la
@@ -39,3 +31,6 @@ configure
 coverage-html/
 m4/
 
+# Waf build artficats
+/.waf-*/
+/build/

@@ -11,6 +11,8 @@
 #include "tdb_profile.h"
 #include "tdb_io.h"
 
+#define TDB_EXPORT __attribute__((visibility("default")))
+
 /*
 These are defined by autoconf
 
@@ -23,6 +25,13 @@ struct tdb_cons_event{
     uint64_t num_items;
     uint64_t timestamp;
     uint64_t prev_event_idx;
+};
+
+struct tdb_event_filter{
+    uint64_t count;
+    uint64_t size;
+    uint64_t clause_len_idx;
+    tdb_item *items;
 };
 
 struct tdb_decode_state{
@@ -38,11 +47,12 @@ struct tdb_decode_state{
     uint64_t size;
     uint64_t offset;
     uint64_t tstamp;
-    int first_satisfying;
 
     /* options */
     const tdb_item *filter;
     uint64_t filter_len;
+    uint64_t filter_size;
+
     int edge_encoded;
 
     tdb_item previous_items[0];
@@ -124,10 +134,6 @@ struct _tdb {
 
     /* TDB_OPT_ONLY_DIFF_ITEMS */
     int opt_edge_encoded;
-
-    /* TDB_OPT_EVENT_FILTER */
-    tdb_item *opt_event_filter;
-    uint64_t opt_event_filter_len;
 };
 
 void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex);

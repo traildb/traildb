@@ -3,6 +3,7 @@ ACLOCAL_AMFLAGS = -I m4
 libtraildb_la_CFLAGS = -std=c99 \
                        -DJUDYERROR=judyerror_macro_missing_fix_this \
                        -O3 \
+                       -fvisibility=hidden \
                        -g \
                        -Wall \
                        -Wextra \
@@ -17,7 +18,7 @@ libtraildb_la_CFLAGS = -std=c99 \
                        -Wstrict-prototypes
 
 AM_CPPFLAGS = -Isrc/xxhash -Isrc/dsfmt
-AM_CFLAGS=-O3 -g
+AM_CFLAGS=-O3 -g -fvisibility=hidden
 
 libtraildb_la_LIBADD = src/xxhash/xxhash.lo src/dsfmt/dSFMT.lo
 libtraildb_la_SOURCES = \
@@ -46,7 +47,15 @@ include_HEADERS = \
   src/judy_128_map.h \
   src/xxhash/xxhash.c
 
-bin_PROGRAMS = util/traildb_bench
+bin_PROGRAMS = util/traildb_bench tdbcli/tdb
 util_traildb_bench_SOURCES = util/traildb_bench.c
 util_traildb_bench_CFLAGS  = ${libtraildb_la_CFLAGS} -Isrc/
 util_traildb_bench_LDADD   = libtraildb.la
+
+tdbcli_tdb_CFLAGS = -Isrc/ \
+                    -DJUDYERROR=judyerror_macro_missing_fix_this \
+                    -O3 \
+                    -g \
+                    -Wall
+tdbcli_tdb_SOURCES = tdbcli/main.c tdbcli/op_dump.c tdbcli/op_make.c tdbcli/jsmn/jsmn.c
+tdbcli_tdb_LDADD = libtraildb.la

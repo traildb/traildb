@@ -45,93 +45,8 @@ static int event_satisfies_filter(const tdb_item *event,
     return 1;
 }
 
-#if 0
-int tdb_get_trail(const tdb *db,
-                  uint64_t trail_id,
-                  tdb_item **items,
-                  uint64_t *items_buf_len,
-                  uint64_t *num_items,
-                  int edge_encoded)
-{
-    return tdb_get_trail_filtered(db,
-                                  trail_id,
-                                  items,
-                                  items_buf_len,
-                                  num_items,
-                                  edge_encoded,
-                                  db->filter,
-                                  db->filter_len);
-}
 
-int tdb_get_trail_filtered(const tdb *db,
-                           uint64_t trail_id,
-                           tdb_item **items,
-                           uint64_t *items_buf_len,
-                           uint64_t *num_items,
-                           int edge_encoded,
-                           const tdb_item *filter,
-                           uint64_t filter_len)
-{
-    static const uint64_t INITIAL_ITEMS_BUF_LEN = 1U << 16;
-    int r;
-
-    if (!*items_buf_len){
-        if (!(*items = malloc(INITIAL_ITEMS_BUF_LEN * sizeof(tdb_item))))
-            return TDB_ERR_NOMEM;
-        *items_buf_len = INITIAL_ITEMS_BUF_LEN;
-    }
-    while (1){
-        if ((r = tdb_decode_trail_filtered(db,
-                                           trail_id,
-                                           *items,
-                                           *items_buf_len,
-                                           num_items,
-                                           edge_encoded,
-                                           filter,
-                                           filter_len)))
-            return r;
-
-        if (*num_items < *items_buf_len)
-            return 0;
-        else{
-            *items_buf_len *= 2;
-            free(*items);
-            if (!(*items = malloc(*items_buf_len * sizeof(tdb_item)))){
-                *items_buf_len = 0;
-                return TDB_ERR_NOMEM;
-            }
-        }
-    }
-}
-
-int tdb_decode_trail(const tdb *db,
-                     uint64_t trail_id,
-                     tdb_item *dst,
-                     uint64_t dst_size,
-                     uint64_t *num_items,
-                     int edge_encoded)
-{
-    return tdb_decode_trail_filtered(db,
-                                     trail_id,
-                                     dst,
-                                     dst_size,
-                                     num_items,
-                                     edge_encoded,
-                                     db->filter,
-                                     db->filter_len);
-}
-
-int tdb_decode_trail_filtered(const tdb *db,
-                              uint64_t trail_id,
-                              tdb_item *dst,
-                              uint64_t dst_size,
-                              uint64_t *num_items,
-                              int edge_encoded,
-                              const tdb_item *filter,
-                              uint64_t filter_len)
-#endif
-
-tdb_cursor *tdb_cursor_new(const tdb *db)
+TDB_EXPORT tdb_cursor *tdb_cursor_new(const tdb *db)
 {
     tdb_cursor *c = NULL;
 
@@ -157,7 +72,7 @@ err:
     return NULL;
 }
 
-void tdb_cursor_free(tdb_cursor *c)
+TDB_EXPORT void tdb_cursor_free(tdb_cursor *c)
 {
     if (c){
         free(c->state->events_buffer);
@@ -166,7 +81,26 @@ void tdb_cursor_free(tdb_cursor *c)
     }
 }
 
-tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id)
+TDB_EXPORT void tdb_cursor_unset_event_filter(tdb_cursor *cursor)
+{
+    cursor->state->filter = NULL;
+    cursor->state->filter_len = 0;
+}
+
+TDB_EXPORT tdb_error tdb_cursor_set_event_filter(tdb_cursor *cursor,
+                                                 const struct tdb_event_filter *filter)
+{
+    if (cursor->state->edge_encoded)
+        return TDB_ERR_ONLY_DIFF_FILTER;
+    else{
+        cursor->state->filter = filter->items;
+        cursor->state->filter_len = filter->count;
+        return TDB_ERR_OK;
+    }
+}
+
+TDB_EXPORT tdb_error tdb_get_trail(tdb_cursor *cursor,
+                                   uint64_t trail_id)
 {
     struct tdb_decode_state *s = cursor->state;
     const tdb *db = s->db;
@@ -200,7 +134,7 @@ tdb_error tdb_get_trail(tdb_cursor *cursor, uint64_t trail_id)
         return TDB_ERR_INVALID_TRAIL_ID;
 }
 
-uint64_t tdb_get_trail_length(tdb_cursor *cursor)
+TDB_EXPORT uint64_t tdb_get_trail_length(tdb_cursor *cursor)
 {
     uint64_t count = 0;
     while (_tdb_cursor_next_batch(cursor))
@@ -208,7 +142,7 @@ uint64_t tdb_get_trail_length(tdb_cursor *cursor)
     return count;
 }
 
-int _tdb_cursor_next_batch(tdb_cursor *cursor)
+TDB_EXPORT int _tdb_cursor_next_batch(tdb_cursor *cursor)
 {
     struct tdb_decode_state *s = cursor->state;
     const struct huff_codebook *codebook =
@@ -289,40 +223,18 @@ int _tdb_cursor_next_batch(tdb_cursor *cursor)
                                                  s->filter_len)){
 
             /* no filter or filter matches, finalize the event */
-            if (!edge_encoded || s->first_satisfying){
+            if (!edge_encoded){
                 /* dump all the fields of this event in the result, if edge
-                   encoding is not requested or this is the first event
-                   that satisfies the filter */
-
-                /* FIXME should we add this i = orig_i + 2;
-                   otherwise we will get duplicate items in the dst.
-                   TODO create a test for this
+                   encoding is not requested
                 */
                 for (field = 1; field < s->db->num_fields; field++)
                     dst[i++] = s->previous_items[field];
-
-                /*
-                consider a sequence of events like
-
-                (A, X), (A, Y), (B, X), (B, Y), (B, Y)
-
-                and a CNF filter "B & Y". Without 'first_satisfying'
-                special case, the query would return
-
-                Y instead of (B, Y)
-
-                when edge_encoded=1
-                */
-                s->first_satisfying = 0;
             }
             ++num_events;
             *num_items = (i - (orig_i + 2));
         }else{
             /* filter doesn't match - ignore this event */
             i = orig_i;
-            /* FIXME should we add to cover all edges that may
-            get filtered out */
-            // s->first_satisfying = 1;
         }
     }
 
@@ -338,5 +250,5 @@ libtraildb.so
 this is "strategy 3" from
 http://www.greenend.org.uk/rjk/tech/inline.html
 */
-extern const tdb_event *tdb_cursor_next(tdb_cursor *cursor);
+TDB_EXPORT extern const tdb_event *tdb_cursor_next(tdb_cursor *cursor);
 
