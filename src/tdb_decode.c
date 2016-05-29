@@ -105,6 +105,16 @@ TDB_EXPORT tdb_error tdb_get_trail(tdb_cursor *cursor,
     struct tdb_decode_state *s = cursor->state;
     const tdb *db = s->db;
 
+    if ((s->trail_id == trail_id) && (s->batch_index == 1)) {
+        /* Shortcut: if resetting cursor on the same trail id and we didn't get
+           past first batch yet, we can just reset num_events and keep decoder
+           state as is, to avoid decoding same data twice.
+        */
+        cursor->num_events_left = s->events_buffer_num_events;
+        cursor->next_event = s->events_buffer;
+        return 0;
+    }
+
     if (trail_id < db->num_trails){
         /* initialize cursor for a new trail */
 
@@ -123,6 +133,7 @@ TDB_EXPORT tdb_error tdb_get_trail(tdb_cursor *cursor,
                      tdb_get_trail_offs(db, trail_id);
         s->size = 8 * trail_size - read_bits(s->data, 0, 3);
         s->offset = 3;
+        s->batch_index = 0;
         s->tstamp = db->min_timestamp;
 
         s->trail_id = trail_id;
@@ -240,6 +251,12 @@ TDB_EXPORT int _tdb_cursor_next_batch(tdb_cursor *cursor)
 
     cursor->next_event = s->events_buffer;
     cursor->num_events_left = num_events;
+
+    if (num_events) {
+        s->events_buffer_num_events = num_events;
+        s->batch_index++;
+    }
+
     return num_events > 0 ? 1: 0;
 }
 

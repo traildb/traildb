@@ -39,7 +39,10 @@ struct tdb_decode_state{
 
     /* internal buffer */
     void *events_buffer;
-    uint64_t events_buffer_len;
+    uint64_t events_buffer_len; /* in bytes */
+    uint64_t events_buffer_num_events; /* number of events decoded */
+
+    uint64_t batch_index;
 
     /* trail state */
     uint64_t trail_id;
