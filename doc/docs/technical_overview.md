@@ -150,6 +150,34 @@ Note that the `tdb_event_filter` handle needs to be available as long
 as you keep using the cursor. You can use the same filter in multiple
 cursors.
 
+If you want to use the same filter in all cursors, call
+[`tdb_set_opt`](api/#tdb_set_opt) with the key `TDB_OPT_EVENT_FILTER`.
+This makes sure that all cursors created with this TrailDB
+handle will get the filter applied. You can still override the filter
+at the cursor level with [`tdb_cursor_set_event_filter()`](api/#tdb_cursor_set_event_filter).
+
+In effect, this defines [a
+view](https://en.wikipedia.org/wiki/View_(SQL)) to TrailDB. See also
+the next entry about materialized views.
+
+###### Create TrailDB extracts (materialized views)
+
+It is possible to extract a subset of events from an existing TrailDB
+to a new TrailDB. A benefit of doing this is that the new TrailDB is
+smaller than the original, which can make queries faster.
+
+To create an extract (a materialized view), open an existing TrailDB
+as usual. Create [an event filter](api/#event_filters) that defines the
+subset of events, and set it to the TrailDB handle with
+[`tdb_set_opt`](api/#tdb_set_opt) using the key `TDB_OPT_EVENT_FILTER`.
+
+Now you can create the extract by calling
+[tdb_cons_open()](api/#tdb_cons_open) as usual, followed by
+[tdb_cons_append()](api/#tdb_cons_append) using the TrailDB handle
+initialized above. The [tdb_cons_append()](api/#tdb_cons_append)
+function will add only events matching with the filter to the new
+TrailDB.
+
 # Limits
 
  - Maximum number of trails: 2<sup>59</sup> - 1
