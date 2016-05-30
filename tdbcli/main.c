@@ -51,12 +51,14 @@ static void print_usage_and_exit()
 "                  for 'dump' this is the output file for events\n"
 "                    (default: stdout)\n"
 "-f --fields       field specification - see below for details\n"
+"-F --filter       filter specification -- see below for details\n"
 "--csv-header      read fields from the CSV header - see below for details\n"
 "--json-no-empty   don't output empty values to JSON output\n"
 "--skip-bad-input  don't quit on malformed input lines, skip them\n"
 "--tdb-format      TrailDB output format:\n"
 "                   'pkg' for the default one-file format,\n"
 "                   'dir' for a directory\n"
+"-v --verbose      print diagnostic output to stderr\n"
 "\n"
 "FIELD SPECIFICATION:\n"
 "The --fields option determines how fields from the input are mapped to\n"
@@ -84,6 +86,26 @@ static void print_usage_and_exit()
 "2) --fields uuid,time,field2,field3,...\n"
 "    - outputs only the specified fields from TrailDB\n"
 "\n"
+"FILTER SPECIFICATION:\n"
+"The --filter option specifies an event filter for dumping a subset of\n"
+"events from an existing TrailDB. The filter is a boolean query, expressed\n"
+"in Conjunctive Normal Form. Remember to surround the query in quotes.\n"
+"\n"
+"Syntax:\n"
+" - Disjunctions (OR) are separated by whitespace.\n"
+" - Conjunctions (AND) are separated by the '&' character.\n"
+" - Terms are one of the following:\n"
+"    - field_name=value (equals)\n"
+"    - field_name!=value (not equals)\n"
+"    - field_name=@filename (read value from a file. Useful for reading\n"
+"      binary values or values including delimiter characters)\n"
+"    - field= (empty value)\n"
+"\n"
+"Example:\n"
+"--filter='author=Asimov & name=Foundation name=@book_name & price!='\n"
+"(author is Asimov AND name is Foundation OR a name read from the file\n"
+"'book_name' AND price is not empty)\n"
+"\n"
 );
 exit(1);
 }
@@ -103,6 +125,8 @@ static void initialize(int argc, char **argv, int op)
         {"output", required_argument, 0, 'o'},
         {"delimiter", required_argument, 0, 'd'},
         {"fields", required_argument, 0, 'f'},
+        {"filter", required_argument, 0, 'F'},
+        {"verbose", no_argument, 0, 'v'},
         {"tdb-format", required_argument, 0, -2},
         {"csv-header", no_argument, 0, -3},
         {"json-no-empty", no_argument, 0, -4},
@@ -128,7 +152,7 @@ static void initialize(int argc, char **argv, int op)
     do{
         c = getopt_long(argc,
                         argv,
-                        "cji:o:f:d:t:",
+                        "cvji:o:f:F:d:t:",
                         long_options,
                         &option_index);
 
@@ -154,6 +178,12 @@ static void initialize(int argc, char **argv, int op)
                 break;
             case 'f':
                 options.fields_arg = optarg;
+                break;
+            case 'F':
+                options.filter_arg = optarg;
+                break;
+            case 'v':
+                options.verbose = 1;
                 break;
             case -2:
                 options.output_format_is_set = 1;
