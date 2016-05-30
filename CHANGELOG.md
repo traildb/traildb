@@ -7,11 +7,11 @@
     [views](http://traildb.io/docs/technical_overview/#return-a-subset-of-events-with-event-filters)
     or [materialized views](http://traildb.io/docs/technical_overview/#create-traildb-extracts-materialized-views).
 
-  - `--filter` flag for `tdb` CLI: Define event filters on the command
-    line for easy grepping of events. Also added `--verbose` flag for
-    troubleshooting filters.
+  - `--filter` flag for the `tdb` CLI: Define event filters on the
+    command line for easy grepping of events. Also added `--verbose` flag
+    for troubleshooting filters.
 
-  - Updated installation instructions for FreeBSD.
+  - Added installation instructions for FreeBSD.
 
 ## 0.5 (2016-05-24)
 
