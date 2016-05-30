@@ -99,7 +99,7 @@ static void print_usage_and_exit()
 "    - field_name!=value (not equals)\n"
 "    - field_name=@filename (read value from a file. Useful for reading\n"
 "      binary values or values including delimiter characters)\n"
-"    - field= (empty value)\n"
+"    - field_name= (empty value)\n"
 "\n"
 "Example:\n"
 "--filter='author=Asimov & name=Foundation name=@book_name & price!='\n"
