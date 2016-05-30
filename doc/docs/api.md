@@ -220,10 +220,18 @@ tdb_error tdb_set_opt(tdb *db,
 Currently the supported options are:
 
 * key `TDB_OPT_ONLY_DIFF_ITEMS`
-    - value `0` - Cursors should return all items (default).
-    - value `1` - Cursors should return mostly distinct items.
+    - value: `0` - Cursors should return all items (default).
+    - value: `1` - Cursors should return mostly distinct items.
 * key `TDB_OPT_CURSOR_EVENT_BUFFER_SIZE`
-    - value `number of events` - Set the size of the cursor readahead buffer.
+    - value: `number of events` - Set the size of the cursor readahead buffer.
+* key `TDB_OPT_EVENT_FILTER`
+    - value: pointer to `const struct tdb_event_filter*` as returned
+      by [tdb_event_filter_new()](#tdb_event_filter_new). This filter is
+      applied to all new cursors created with the `db` handle, that is,
+      [tdb_cursor_set_event_filter()](#tdb_cursor_set_event_filter) is
+      called automatically. In effect, this defines a view (a subset of
+      events) of `db`. The event filter must stay alive for the lifetime
+      of the `db` handle.
 
 Return 0 on success, an error code otherwise.
 
