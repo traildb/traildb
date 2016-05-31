@@ -1,5 +1,6 @@
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/traildb/traildb?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Travis CI](https://travis-ci.org/traildb/traildb.svg?branch=master)](https://travis-ci.org/traildb/traildb)
+[![Coverage Status](https://coveralls.io/repos/github/traildb/traildb/badge.svg?branch=master)](https://coveralls.io/github/traildb/traildb?branch=master)
 
 # TrailDB
 
