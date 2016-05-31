@@ -140,7 +140,6 @@ void j128m_next(const struct judy_128_map *j128m,
     Word_t *lo_ptr;
     Word_t *hi_ptr;
     Pvoid_t lo_map;
-    //fprintf(stderr, "j128m_next: hi %lu lo %lu\r\n", hi_key, lo_key);
 
     JLG(hi_ptr, j128m->hi_map, hi_key);
     if (hi_ptr) {
@@ -161,7 +160,6 @@ void j128m_next(const struct judy_128_map *j128m,
                 uint64_t zero = 0;
                 JLF(lo_ptr, lo_map, zero);
                 if (lo_ptr) {
-                    //fprintf(stderr, "j128m_next: zero %lu\r\n", zero);
                     *pv = lo_ptr;
                     *start_key = hi_key;
                     *start_key <<= 64;
