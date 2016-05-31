@@ -8,7 +8,7 @@ matrix:
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install python judy libarchive; fi
-  - pip install --user cpp-coveralls
+  - pip install cpp-coveralls
 
 addons:
   apt:
