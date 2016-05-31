@@ -70,13 +70,13 @@ int main(int argc, char** argv)
     assert(setrlimit(RLIMIT_AS, &limit) == 0);
 
     for (i = 0; i < NUM_CONS_ITER; i++)
-        do_cons(argv[1], 0);
+        do_cons(getenv("TDB_TMP_DIR"), 0);
 
     for (i = 0; i < NUM_CONS_ITER; i++)
-        do_cons(argv[1], 1);
+        do_cons(getenv("TDB_TMP_DIR"), 1);
 
     for (i = 0; i < NUM_OPEN_ITER; i++)
-        do_open(argv[1]);
+        do_open(getenv("TDB_TMP_DIR"));
 
     return 0;
 }

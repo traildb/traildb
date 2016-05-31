@@ -28,7 +28,7 @@ int main(int argc, char** argv)
 
     tdb_cons* c = tdb_cons_init();
     test_cons_settings(c);
-    assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
+    assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), fields, 2) == 0);
 
     tdb_cons_add(c, uuid, 0, values1, lengths1);
     tdb_cons_add(c, uuid, 0, values2, lengths2);
@@ -38,7 +38,7 @@ int main(int argc, char** argv)
     tdb_cons_close(c);
 
     tdb *t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, getenv("TDB_TMP_DIR")) == 0);
 
     assert(tdb_lexicon_size(t, 0) == 0);
     assert(tdb_lexicon_size(t, 1) == 4);

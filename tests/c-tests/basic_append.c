@@ -172,8 +172,8 @@ static void simple_append(const char *root)
 
 int main(int argc, char** argv)
 {
-    empty_tdb_append(argv[1]);
-    mismatching_fields(argv[1]);
-    simple_append(argv[1]);
+    empty_tdb_append(getenv("TDB_TMP_DIR"));
+    mismatching_fields(getenv("TDB_TMP_DIR"));
+    simple_append(getenv("TDB_TMP_DIR"));
     return 0;
 }
