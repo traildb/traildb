@@ -23,4 +23,4 @@ script:
   - ./waf test
 
 after_success:
-  - ~/.local/bin/coveralls --include src --build-root build/test/ --gcov-options '\-lp'
+  - `python -c 'import site; print "%s/bin/" % site.USER_BASE'`/coveralls --include src --build-root build/test/ --gcov-options '\-lp'
