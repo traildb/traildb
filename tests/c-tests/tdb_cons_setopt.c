@@ -16,8 +16,12 @@ int main(int argc, char** argv)
     const uint64_t lengths[] = {3, 2};
     tdb_opt_value val = {.value = UINT64_MAX};
     uint64_t i;
+    char pkgname[4096];
+    strcpy(pkgname, getenv("TDB_TMP_DIR"));
+    strcat(pkgname, "test.tdb");
     tdb_cons* c = tdb_cons_init();
-    assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
+    test_cons_settings(c);
+    assert(tdb_cons_open(c, pkgname, fields, 2) == 0);
 
     assert(tdb_cons_set_opt(c, TDB_OPT_ONLY_DIFF_ITEMS, TDB_TRUE) ==
            TDB_ERR_UNKNOWN_OPTION);
@@ -41,7 +45,7 @@ int main(int argc, char** argv)
     assert(tdb_cons_finalize(c) == 0);
     tdb_cons_close(c);
     tdb* t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, pkgname) == 0);
 
     tdb_cursor *cursor = tdb_cursor_new(t);
     const tdb_event *event;

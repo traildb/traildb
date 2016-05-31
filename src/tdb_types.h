@@ -10,7 +10,7 @@
    Internally we deal with ids:
     (uint64_t) trail_id  -> (16 byte) uuid
     (uint32_t) field     -> (0-terminated str) field_name
-    (uint44_t) val       -> (bytes) value
+    (uint64_t) val       -> (bytes) value
 
    The complete picture looks like:
 

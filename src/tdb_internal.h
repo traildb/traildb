@@ -134,9 +134,11 @@ struct _tdb {
 
     /* TDB_OPT_CURSOR_EVENT_BUFFER_SIZE */
     uint64_t opt_cursor_event_buffer_size;
-
     /* TDB_OPT_ONLY_DIFF_ITEMS */
     int opt_edge_encoded;
+    /* TDB_OPT_EVENT_FILTER */
+    const struct tdb_event_filter *opt_event_filter;
+
 };
 
 void tdb_lexicon_read(const tdb *db, tdb_field field, struct tdb_lexicon *lex);

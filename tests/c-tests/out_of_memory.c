@@ -39,7 +39,7 @@ int main(int argc, char** argv)
 
         tdb_cons* c = tdb_cons_init();
         test_cons_settings(c);
-        assert(tdb_cons_open(c, argv[1], fields, 1) == 0);
+        assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), fields, 1) == 0);
 
         /* the reason for this check is to ensure that we are using a
            debug version of libtraildb, compiled with

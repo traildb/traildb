@@ -10,11 +10,11 @@ int main(int argc, char** argv)
     tdb_field field;
     tdb_cons* c = tdb_cons_init();
     test_cons_settings(c);
-    assert(tdb_cons_open(c, argv[1], fields, 5) == 0);
+    assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), fields, 5) == 0);
     assert(tdb_cons_finalize(c) == 0);
 
     tdb* t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, getenv("TDB_TMP_DIR")) == 0);
 
     assert(tdb_get_field(t, "world", &field) == 0);
     assert(field == 2);

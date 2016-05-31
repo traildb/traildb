@@ -111,7 +111,7 @@ static void two_field_case(const char *root)
 
 int main(int argc, char** argv)
 {
-    simple_case(argv[1]);
-    two_field_case(argv[1]);
+    simple_case(getenv("TDB_TMP_DIR"));
+    two_field_case(getenv("TDB_TMP_DIR"));
     return 0;
 }

@@ -384,36 +384,30 @@ done:
     return ret;
 }
 
-TDB_EXPORT void tdb_willneed(const tdb *db)
+static void tdb_madvise(const tdb *db, int advice)
 {
     if (db && db->num_fields > 0){
         tdb_field i;
         for (i = 0; i < db->num_fields - 1; i++)
             madvise(db->lexicons[i].ptr,
                     db->lexicons[i].mmap_size,
-                    MADV_WILLNEED);
+                    advice);
 
-        madvise(db->uuids.ptr, db->uuids.mmap_size, MADV_WILLNEED);
-        madvise(db->codebook.ptr, db->codebook.mmap_size, MADV_WILLNEED);
-        madvise(db->toc.ptr, db->toc.mmap_size, MADV_WILLNEED);
-        madvise(db->trails.ptr, db->trails.mmap_size, MADV_WILLNEED);
+        madvise(db->uuids.ptr, db->uuids.mmap_size, advice);
+        madvise(db->codebook.ptr, db->codebook.mmap_size, advice);
+        madvise(db->toc.ptr, db->toc.mmap_size, advice);
+        madvise(db->trails.ptr, db->trails.mmap_size, advice);
     }
+}
+
+TDB_EXPORT void tdb_willneed(const tdb *db)
+{
+    tdb_madvise(db, MADV_WILLNEED);
 }
 
 TDB_EXPORT void tdb_dontneed(const tdb *db)
 {
-    if (db && db->num_fields > 0){
-        tdb_field i;
-        for (i = 0; i < db->num_fields - 1; i++)
-            madvise(db->lexicons[i].ptr,
-                    db->lexicons[i].mmap_size,
-                    MADV_DONTNEED);
-
-        madvise(db->uuids.ptr, db->uuids.mmap_size, MADV_DONTNEED);
-        madvise(db->codebook.ptr, db->codebook.mmap_size, MADV_DONTNEED);
-        madvise(db->toc.ptr, db->toc.mmap_size, MADV_DONTNEED);
-        madvise(db->trails.ptr, db->trails.mmap_size, MADV_DONTNEED);
-    }
+    tdb_madvise(db, MADV_DONTNEED);
 }
 
 TDB_EXPORT void tdb_close(tdb *db)
@@ -695,9 +689,17 @@ TDB_EXPORT tdb_error tdb_set_opt(tdb *db,
                                  tdb_opt_key key,
                                  tdb_opt_value value)
 {
+    /*
+    NOTE: If a new option can cause the db return a subset of
+    events, like TDB_OPT_ONLY_DIFF_ITEMS or TDB_OPT_EVENT_FILTER,
+    you need to add them to the list in tdb_cons_append().
+    */
     switch (key){
         case TDB_OPT_ONLY_DIFF_ITEMS:
             db->opt_edge_encoded = value.value ? 1: 0;
+            return 0;
+        case TDB_OPT_EVENT_FILTER:
+            db->opt_event_filter = (const struct tdb_event_filter*)value.ptr;
             return 0;
         case TDB_OPT_CURSOR_EVENT_BUFFER_SIZE:
             if (value.value > 0)
@@ -716,6 +718,9 @@ TDB_EXPORT tdb_error tdb_get_opt(tdb *db,
     switch (key){
         case TDB_OPT_ONLY_DIFF_ITEMS:
             *value = db->opt_edge_encoded ? TDB_TRUE: TDB_FALSE;
+            return 0;
+        case TDB_OPT_EVENT_FILTER:
+            value->ptr = db->opt_event_filter;
             return 0;
         case TDB_OPT_CURSOR_EVENT_BUFFER_SIZE:
             value->value = db->opt_cursor_event_buffer_size;

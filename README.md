@@ -1,5 +1,6 @@
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/traildb/traildb?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Travis CI](https://travis-ci.org/traildb/traildb.svg?branch=master)](https://travis-ci.org/traildb/traildb)
+[![Coverage Status](https://coveralls.io/repos/github/traildb/traildb/badge.svg?branch=master)](https://coveralls.io/github/traildb/traildb?branch=master)
 
 # TrailDB
 
@@ -48,14 +49,4 @@ Alternatively you may use autotools
 
 #### Run Tests
 
-    $ ./waf install --test_build
-    $ ./test-driver.py
-
-On FreeBSD, you may need to: `CFLAGS='-L/usr/local/lib -I/usr/local/include' ./test-driver.py`
-
-or on Linux
-
-    $ make distclean
-    $ cd tests
-    $ ./coverage.py
-
+    $ ./waf test
