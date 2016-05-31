@@ -22,7 +22,7 @@ int main(int argc, char** argv)
 
     tdb_cons* c = tdb_cons_init();
     test_cons_settings(c);
-    assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
+    assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), fields, 2) == 0);
 
     assert(tdb_cons_add(c, uuid, 1, event1, lengths) == 0);
     assert(tdb_cons_add(c, uuid, 2, event2, lengths) == 0);
@@ -32,7 +32,7 @@ int main(int argc, char** argv)
     tdb_cons_close(c);
 
     tdb* t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, getenv("TDB_TMP_DIR")) == 0);
 
     tdb_field field_b;
     assert(tdb_get_field(t, "b", &field_b) == 0);
@@ -60,7 +60,7 @@ int main(int argc, char** argv)
     assert(value.ptr == f);
 
     /* test filtered tdb_cons_append (materialized view) */
-    tdb_path(path, "%s.%u", argv[1], 1);
+    tdb_path(path, "%s/%u", getenv("TDB_TMP_DIR"), 1);
     c = tdb_cons_init();
     test_cons_settings(c);
     assert(tdb_cons_open(c, path, fields, 2) == 0);
