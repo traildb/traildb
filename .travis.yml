@@ -8,7 +8,7 @@ matrix:
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install python judy libarchive; fi
-  - pip install cpp-coveralls
+  - pip install --user cpp-coveralls
 
 addons:
   apt:
@@ -23,4 +23,4 @@ script:
   - ./waf test
 
 after_success:
-  - coveralls --include src --build-root build/test/ --gcov-options '\-lp'
+  - ~/.local/bin/coveralls --include src --build-root build/test/ --gcov-options '\-lp'
