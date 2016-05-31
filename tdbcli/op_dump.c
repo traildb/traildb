@@ -1,7 +1,10 @@
+#define _DEFAULT_SOURCE
+
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <strings.h>
 
 #include <traildb.h>
 #include "tdbcli.h"
@@ -187,6 +190,7 @@ int op_dump(struct tdbcli_options *opt)
     FILE *output = stdout;
     int err;
     tdb *db = tdb_init();
+    struct tdb_event_filter *filter = NULL;
 
     if (!db)
         DIE("Out of memory.");
@@ -206,6 +210,13 @@ int op_dump(struct tdbcli_options *opt)
             opt->input,
             tdb_error_str(err));
 
+    if (opt->filter_arg){
+        tdb_opt_value value;
+        value.ptr = filter = parse_filter(db, opt->filter_arg, opt->verbose);
+        if (tdb_set_opt(db, TDB_OPT_EVENT_FILTER, value))
+            DIE("Could not set event filter");
+    }
+
     init_fields_from_arg(opt, db);
     if (opt->num_fields)
         dump_trails(db, output, opt);
@@ -214,6 +225,8 @@ int op_dump(struct tdbcli_options *opt)
         if (fclose(output))
             DIE("Closing %s failed. Disk full?", opt->output);
 
+    if (filter)
+        tdb_event_filter_free(filter);
     tdb_close(db);
     return 0;
 }
