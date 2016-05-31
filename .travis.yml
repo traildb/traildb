@@ -23,4 +23,4 @@ script:
   - ./waf test
 
 after_success:
-  - COV=$(python -c 'import site; print "%s/bin/" % site.USER_BASE'); $COV/coveralls --include src --build-root build/ --gcov-options '\-lp'
+  - COV=$(python -c 'import site; print "%s/bin/" % site.USER_BASE'); $COV/coveralls --include src --build-root build/test/ --gcov-options '\-lp'
