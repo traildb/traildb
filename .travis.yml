@@ -23,4 +23,4 @@ script:
   - ./waf test
 
 after_success:
-  - coveralls --include src --build-root build --gcov-options '\-lp'
+  - coveralls --include src --build-root build/test/ --gcov-options '\-lp'

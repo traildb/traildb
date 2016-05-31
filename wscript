@@ -75,6 +75,7 @@ def build(bld, test_build=False):
             "-DEVENTS_ARENA_INCREMENT=100",
             "-fprofile-arcs",
             "-ftest-coverage",
+            "--coverage",
             "-fPIC",
         ])
     else:
@@ -102,7 +103,7 @@ def build(bld, test_build=False):
                 target      = os.path.splitext(testname)[0],
                 source      = [test],
                 includes    = "src",
-                cflags      = ["-fprofile-arcs", "-ftest-coverage", "-fPIC"],
+                cflags      = ["-fprofile-arcs", "-ftest-coverage", "-fPIC", "--coverage"],
                 ldflags     = ["-fprofile-arcs"],
                 use         = ["traildb"],
                 uselib      = ["ARCHIVE", "JUDY"],
