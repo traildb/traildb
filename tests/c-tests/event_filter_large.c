@@ -45,7 +45,8 @@ int main(int argc, char **argv)
     uint32_t i = 0;
 
     tdb_cons* c = tdb_cons_init();
-    assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
+    test_cons_settings(c);
+    assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), fields, 2) == 0);
 
     for (i = 0; i < MAX_NUMBER; i++){
         char yes = 't';
@@ -64,7 +65,7 @@ int main(int argc, char **argv)
     tdb_cons_close(c);
 
     tdb* t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, getenv("TDB_TMP_DIR")) == 0);
 
     tdb_field f_number, f_is_odd;
     assert(tdb_get_field(t, "number", &f_number) == 0);

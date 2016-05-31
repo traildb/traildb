@@ -64,7 +64,7 @@ int main(int argc, char** argv)
     const tdb_event *event;
 
     uint64_t i, num_events = sizeof(TSTAMPS1) / sizeof(TSTAMPS1[0]);
-    tdb *db = make_tdb(argv[1], TSTAMPS1, num_events, 0);
+    tdb *db = make_tdb(getenv("TDB_TMP_DIR"), TSTAMPS1, num_events, 0);
     tdb_cursor *cursor = tdb_cursor_new(db);
     assert(tdb_get_trail(cursor, 0) == 0);
     for (i = 0; (event = tdb_cursor_next(cursor)); i++)
@@ -74,7 +74,7 @@ int main(int argc, char** argv)
     tdb_cursor_free(cursor);
 
     num_events = sizeof(TSTAMPS2) / sizeof(TSTAMPS2[0]);
-    db = make_tdb(argv[1], TSTAMPS2, num_events, 0);
+    db = make_tdb(getenv("TDB_TMP_DIR"), TSTAMPS2, num_events, 0);
     cursor = tdb_cursor_new(db);
     assert(tdb_get_trail(cursor, 0) == 0);
     for (i = 1; (event = tdb_cursor_next(cursor)); i++)
@@ -85,7 +85,7 @@ int main(int argc, char** argv)
     tdb_cursor_free(cursor);
 
     num_events = sizeof(TSTAMPS3) / sizeof(TSTAMPS3[0]);
-    db = make_tdb(argv[1], TSTAMPS3, num_events, 0);
+    db = make_tdb(getenv("TDB_TMP_DIR"), TSTAMPS3, num_events, 0);
     cursor = tdb_cursor_new(db);
     assert(tdb_get_trail(cursor, 0) == 0);
     for (i = 0; (event = tdb_cursor_next(cursor)); i++)
@@ -94,8 +94,8 @@ int main(int argc, char** argv)
     tdb_close(db);
     tdb_cursor_free(cursor);
 
-    make_tdb(argv[1], TSTAMPS4, sizeof(TSTAMPS4) / sizeof(TSTAMPS4[0]), 1);
-    make_tdb(argv[1], TSTAMPS5, sizeof(TSTAMPS5) / sizeof(TSTAMPS5[0]), 1);
+    make_tdb(getenv("TDB_TMP_DIR"), TSTAMPS4, sizeof(TSTAMPS4) / sizeof(TSTAMPS4[0]), 1);
+    make_tdb(getenv("TDB_TMP_DIR"), TSTAMPS5, sizeof(TSTAMPS5) / sizeof(TSTAMPS5[0]), 1);
 
     return 0;
 }

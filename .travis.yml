@@ -8,6 +8,7 @@ matrix:
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install python judy libarchive; fi
+  - pip install --user cpp-coveralls
 
 addons:
   apt:
@@ -17,8 +18,9 @@ addons:
     - pkg-config
 
 script:
-  - ./waf configure build
-  - ./waf configure build --test_build
-  - sudo ./waf install --test_build
-  - ./test-driver.py
+  - ./waf configure
+  - ./waf build
+  - ./waf test
 
+after_success:
+  - COV=$(python -c 'import site; print "%s/bin/" % site.USER_BASE'); $COV/coveralls --include src --build-root build/test/ --gcov-options '\-lp'

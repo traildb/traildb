@@ -48,14 +48,4 @@ Alternatively you may use autotools
 
 #### Run Tests
 
-    $ ./waf install --test_build
-    $ ./test-driver.py
-
-On FreeBSD, you may need to: `CFLAGS='-L/usr/local/lib -I/usr/local/include' ./test-driver.py`
-
-or on Linux
-
-    $ make distclean
-    $ cd tests
-    $ ./coverage.py
-
+    $ ./waf test
