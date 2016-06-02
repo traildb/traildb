@@ -25,7 +25,7 @@ For RPM-based distros:
 
 For OSX:
 
-	$ brew install judy libarchive pkg-config
+	$ brew install homebrew/boneyard/judy libarchive pkg-config
 
 For FreeBSD:
 
