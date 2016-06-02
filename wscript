@@ -21,7 +21,7 @@ errmsg_judy = "not found"
 
 if sys.platform == "darwin":
     errmsg_libarchive = "not found; install with 'brew install libarchive'"
-    errmsg_judy = "not found; install with 'brew install judy && brew link judy'"
+    errmsg_judy = "not found; install with 'brew install homebrew/boneyard/judy && brew link judy'"
 
 def configure(cnf):
     cnf.load("compiler_c")
