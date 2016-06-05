@@ -13,6 +13,10 @@
 
   - Added installation instructions for FreeBSD.
 
+### Bugfixes
+
+  - Make opening single-file tdbs thread-safe
+
 ## 0.5 (2016-05-24)
 
 Initial open-source release.
