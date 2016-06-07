@@ -50,6 +50,7 @@ static tdb_error toc_parse(FILE *f, struct pkg_toc *toc, uint64_t num_lines)
     char *buf = NULL;
     size_t n = 0;
     uint64_t i;
+    char *saveptr = NULL;
 
     /* ignore magic line */
     if (getline(&buf, &n, f) == -1)
@@ -59,19 +60,19 @@ static tdb_error toc_parse(FILE *f, struct pkg_toc *toc, uint64_t num_lines)
         if (getline(&buf, &n, f) == -1)
             return TDB_ERR_IO_READ;
 
-        char *tok = strtok(buf, " ");
+        char *tok = strtok_r(buf, " ", &saveptr);
         if (tok == NULL) {
             return TDB_ERR_INVALID_PACKAGE;
         }
         toc[i].fname = strdup(tok);
 
-        tok = strtok(NULL, " ");
+        tok = strtok_r(NULL, " ", &saveptr);
         if (tok == NULL) {
             return TDB_ERR_INVALID_PACKAGE;
         }
         toc[i].offset = strtoull(tok, NULL, 10);
 
-        tok = strtok(NULL, " ");
+        tok = strtok_r(NULL, " ", &saveptr);
         if (tok == NULL) {
             return TDB_ERR_INVALID_PACKAGE;
         }
