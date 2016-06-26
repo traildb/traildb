@@ -53,7 +53,8 @@ typedef enum{
     TDB_ERR_TRAIL_TOO_LONG = -265,
 
     /* querying */
-    TDB_ERR_ONLY_DIFF_FILTER = -513
+    TDB_ERR_ONLY_DIFF_FILTER = -513,
+    TDB_ERR_NO_SUCH_ITEM = -514
 
 } tdb_error;
 
