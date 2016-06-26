@@ -3,6 +3,10 @@
 
 ### New features
 
+  - Added [tdb_event_filter_num_clauses](http://traildb.io/docs/api/#tdb_event_filter_num_clauses)
+    and [tdb_event_filter_get_item](http://traildb.io/docs/api/#tdb_event_filter_get_item) for reading
+    items and clauses in an existing filter.
+
   - `TDB_OPT_EVENT_FILTER` option for `tdb_set_opt` which can be used to create
     [views](http://traildb.io/docs/technical_overview/#return-a-subset-of-events-with-event-filters)
     or [materialized views](http://traildb.io/docs/technical_overview/#create-traildb-extracts-materialized-views).

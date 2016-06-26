@@ -176,6 +176,17 @@ tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter);
 /* Free an event filter */
 void tdb_event_filter_free(struct tdb_event_filter *filter);
 
+/* Get an item in a clause */
+tdb_error tdb_event_filter_get_item(const struct tdb_event_filter *filter,
+                                    uint64_t clause_index,
+                                    uint64_t item_index,
+                                    tdb_item *item,
+                                    int *is_negative);
+
+/* Get the number of clauses in this filter */
+uint64_t tdb_event_filter_num_clauses(const struct tdb_event_filter *filter);
+
+
 /*
 ------------
 Trail cursor
