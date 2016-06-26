@@ -19,7 +19,9 @@
 
 ### Bugfixes
 
-  - Make opening single-file tdbs thread-safe
+  - Make opening single-file tdbs thread-safe.
+
+  - Fix handling of empty values in `tdb_cons_append`.
 
 ## 0.5 (2016-05-24)
 
