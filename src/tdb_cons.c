@@ -533,8 +533,10 @@ static void append_event(tdb_cons *cons,
     for (i = 0; i < event->num_items; i++){
         tdb_val val = tdb_item_val(event->items[i]);
         tdb_field field = tdb_item_field(event->items[i]);
+        tdb_val new_val = 0;
         /* translate val */
-        tdb_val new_val = lexicon_maps[field - 1][val - 1];
+        if (val)
+            new_val = lexicon_maps[field - 1][val - 1];
         tdb_item item = tdb_make_item(field, new_val);
         memcpy(arena_add_item(&cons->items), &item, sizeof(tdb_item));
         ++new_event->num_items;
