@@ -7,16 +7,21 @@
 # ./waf install
 # ./waf uninstall
 import sys, os
+import tempfile, shutil
 
 APPNAME = "traildb"
 VERSION = "0.5"
+
+SKIP_TESTS = []
+if sys.platform == "darwin":
+    SKIP_TESTS += ["judy_128_map_test.c", "out_of_memory.c"]
 
 errmsg_libarchive = "not found"
 errmsg_judy = "not found"
 
 if sys.platform == "darwin":
     errmsg_libarchive = "not found; install with 'brew install libarchive'"
-    errmsg_judy = "not found; install with 'brew install judy && brew link judy'"
+    errmsg_judy = "not found; install with 'brew install homebrew/boneyard/judy && brew link judy'"
 
 def configure(cnf):
     cnf.load("compiler_c")
@@ -48,12 +53,8 @@ def configure(cnf):
         uselib="JUDY", features="c cprogram test_exec",
         errmsg="Found a broken version of Judy. Install a newer version.")
 
-def options(ctx):
-    ctx.load("compiler_c")
-    ctx.add_option('--test_build',
-                   action='store_true',
-                   default=False,
-                   help='Build a version of TrailDB suitable for testing')
+def options(opt):
+    opt.load("compiler_c")
 
 def build(bld, test_build=False):
     tdbcflags = [
@@ -69,18 +70,16 @@ def build(bld, test_build=False):
         "-Wshadow",
         "-Wstrict-prototypes"
     ]
-    if bld.options.test_build:
-        tdbcflags.append("-DEVENTS_ARENA_INCREMENT=100")
+    if bld.variant == "test":
+        tdbcflags.extend([
+            "-DEVENTS_ARENA_INCREMENT=100",
+            "-fprofile-arcs",
+            "-ftest-coverage",
+            "--coverage",
+            "-fPIC",
+        ])
     else:
         tdbcflags.append("-fvisibility=hidden")
-
-    bld.shlib(
-        target         = "traildb",
-        source         = bld.path.ant_glob("src/**/*.c"),
-        cflags         = tdbcflags,
-        uselib         = ["ARCHIVE", "JUDY"],
-        vnum            = "0",  # .so versioning
-    )
 
     bld.stlib(
         target         = "traildb",
@@ -88,6 +87,42 @@ def build(bld, test_build=False):
         cflags         = tdbcflags,
         uselib         = ["ARCHIVE", "JUDY"],
         install_path   = "${PREFIX}/lib",  # opt-in to have .a installed
+    )
+
+    if bld.variant == "test":
+        bld.load("waf_unit_test")
+        basetmp = tempfile.mkdtemp()
+        os.environ["TDB_TMP_DIR"] = "."
+
+        for test in bld.path.ant_glob("tests/c-tests/*.c"):
+            testname = os.path.basename(test.abspath())
+            if testname in SKIP_TESTS:
+                continue
+            tsk = bld.program(
+                features    = "test",
+                target      = os.path.splitext(testname)[0],
+                source      = [test],
+                includes    = "src",
+                cflags      = ["-fprofile-arcs", "-ftest-coverage", "-fPIC", "--coverage"],
+                ldflags     = ["-fprofile-arcs"],
+                use         = ["traildb"],
+                uselib      = ["ARCHIVE", "JUDY"],
+            )
+            tsk.ut_cwd = basetmp+"/"+testname
+            os.mkdir(tsk.ut_cwd)
+
+        from waflib.Tools import waf_unit_test
+        bld.add_post_fun(waf_unit_test.summary)
+        bld.add_post_fun(waf_unit_test.set_exit_code)
+        bld.add_post_fun(lambda _: shutil.rmtree(basetmp))
+        return
+
+    bld.shlib(
+        target         = "traildb",
+        source         = bld.path.ant_glob("src/**/*.c"),
+        cflags         = tdbcflags,
+        uselib         = ["ARCHIVE", "JUDY"],
+        vnum            = "0",  # .so versioning
     )
 
     # Build traildb_bench
@@ -120,6 +155,12 @@ def build(bld, test_build=False):
     pc = bld(source='traildb.pc.in', target='%s-%s.pc' % (APPNAME, VERSION), install_path='${PREFIX}/lib/pkgconfig')
     pc.env.prefix  = bld.env.PREFIX
     pc.env.version = VERSION
+
+
+from waflib.Build import BuildContext
+class test(BuildContext):
+        cmd = 'test'
+        variant = 'test'
 
 
 JUDY_TEST="""

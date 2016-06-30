@@ -37,7 +37,7 @@ int main(int argc, char **argv)
     Word_t key;
     int tst;
 
-    assert(tdb_cons_open(c, argv[1], fields, 0) == 0);
+    assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), fields, 0) == 0);
     dsfmt_init_gen_rand(&state, 2489);
 
     for (i = 0; i < NUM_TRAILS; i++){
@@ -60,7 +60,7 @@ int main(int argc, char **argv)
     tdb_cons_close(c);
 
     tdb* t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, getenv("TDB_TMP_DIR")) == 0);
 
     assert(tdb_num_trails(t) == NUM_TRAILS);
     assert(tdb_num_events(t) == NUM_TRAILS * NUM_EVENTS);

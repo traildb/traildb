@@ -66,6 +66,10 @@ TDB_EXPORT tdb_cursor *tdb_cursor_new(const tdb *db)
                                            sizeof(tdb_item))))
         goto err;
 
+    if (db->opt_event_filter){
+        if (tdb_cursor_set_event_filter(c, db->opt_event_filter))
+            goto err;
+    }
     return c;
 err:
     tdb_cursor_free(c);

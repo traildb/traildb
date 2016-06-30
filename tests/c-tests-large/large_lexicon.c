@@ -23,7 +23,7 @@ int main(int argc, char** argv)
         massive[i] = i;
 
     tdb_cons* c = tdb_cons_init();
-    assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
+    assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), fields, 2) == 0);
 
     assert(tdb_cons_add(c, uuid, 0, values, lengths) == 0);
     massive[0] = 1;
@@ -36,7 +36,7 @@ int main(int argc, char** argv)
     tdb_cons_close(c);
 
     tdb *t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, getenv("TDB_TMP_DIR")) == 0);
 
     assert(tdb_lexicon_size(t, 1) == 4);
     assert(tdb_lexicon_size(t, 2) == 2);

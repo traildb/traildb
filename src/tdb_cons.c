@@ -405,6 +405,71 @@ TDB_EXPORT tdb_error tdb_cons_add(tdb_cons *cons,
 }
 
 /*
+this function adds events from db to cons one by one, using the
+public API. We need to use this with filtered dbs or otherwise when
+we need to re-create lexicons.
+*/
+static tdb_error tdb_cons_append_subset_lexicon(tdb_cons *cons, const tdb *db)
+{
+    const char **values = NULL;
+    uint64_t *lengths = NULL;
+    uint64_t i, trail_id;
+    int ret = 0;
+    const uint64_t num_fields = tdb_num_fields(db);
+
+    tdb_cursor *cursor = tdb_cursor_new(db);
+    if (!cursor)
+        return TDB_ERR_NOMEM;
+
+    if (!(values = malloc(num_fields * sizeof(char*)))){
+        ret = TDB_ERR_NOMEM;
+        goto done;
+    }
+
+    if (!(lengths = malloc(num_fields * sizeof(uint64_t)))){
+        ret = TDB_ERR_NOMEM;
+        goto done;
+    }
+
+    for (trail_id = 0; trail_id < tdb_num_trails(db); trail_id++){
+        const tdb_event *event;
+        const uint8_t *uuid = tdb_get_uuid(db, trail_id);
+
+        if ((ret = tdb_get_trail(cursor, trail_id)))
+            goto done;
+
+        while ((event = tdb_cursor_next(cursor))){
+            /*
+            with TDB_OPT_ONLY_DIFF_ITEMS event->items may be sparse,
+            hence we need to reset lengths to zero
+            */
+            memset(lengths, 0, num_fields * sizeof(uint64_t));
+            for (i = 0; i < event->num_items; i++){
+                tdb_field field = tdb_item_field(event->items[i]);
+                tdb_val val = tdb_item_val(event->items[i]);
+                values[field - 1] = tdb_get_value(db,
+                                                  field,
+                                                  val,
+                                                  &lengths[field - 1]);
+            }
+
+            if ((ret = tdb_cons_add(cons,
+                                    uuid,
+                                    event->timestamp,
+                                    values,
+                                    lengths)))
+                goto done;
+        }
+    }
+
+done:
+    free(values);
+    free(lengths);
+    tdb_cursor_free(cursor);
+    return ret;
+}
+
+/*
 Append the lexicons of an existing TrailDB, db, to this cons. Used by
 tdb_cons_append().
 */
@@ -468,41 +533,31 @@ static void append_event(tdb_cons *cons,
     for (i = 0; i < event->num_items; i++){
         tdb_val val = tdb_item_val(event->items[i]);
         tdb_field field = tdb_item_field(event->items[i]);
+        tdb_val new_val = 0;
         /* translate val */
-        tdb_val new_val = lexicon_maps[field - 1][val - 1];
+        if (val)
+            new_val = lexicon_maps[field - 1][val - 1];
         tdb_item item = tdb_make_item(field, new_val);
         memcpy(arena_add_item(&cons->items), &item, sizeof(tdb_item));
         ++new_event->num_items;
     }
 }
 
-
 /*
-This is a variation of tdb_cons_add(): Instead of accepting fields as
-strings, it reads them as integer items from an existing TrailDB and
-remaps them to match with this cons.
+this function is an optimized version of tdb_cons_append_subset_lexicon():
+instead of mapping items to strings and back, we know that all entries from
+the lexicon will be needed, so we can merge the lexicons and add remap items
+in db to items in cons, without going through strings.
 */
-TDB_EXPORT tdb_error tdb_cons_append(tdb_cons *cons, const tdb *db)
+static tdb_error tdb_cons_append_full_lexicon(tdb_cons *cons, const tdb *db)
 {
     tdb_val **lexicon_maps = NULL;
     uint64_t i, trail_id;
-    tdb_field field;
     int ret = 0;
 
     tdb_cursor *cursor = tdb_cursor_new(db);
     if (!cursor)
         return TDB_ERR_NOMEM;
-
-    /* NOTE we could be much more permissive with what can be joined:
-    we could support "full outer join" and replace all missing fields
-    with NULLs automatically.
-    */
-    if (cons->num_ofields != db->num_fields - 1)
-        return TDB_ERR_APPEND_FIELDS_MISMATCH;
-
-    for (field = 0; field < cons->num_ofields; field++)
-        if (strcmp(cons->ofield_names[field], tdb_get_field_name(db, field + 1)))
-            return TDB_ERR_APPEND_FIELDS_MISMATCH;
 
     if (db->min_timestamp < cons->min_timestamp)
         cons->min_timestamp = db->min_timestamp;
@@ -535,6 +590,42 @@ done:
     tdb_cursor_free(cursor);
     return ret;
 }
+
+/*
+Merge an existing tdb to the new cons.
+*/
+TDB_EXPORT tdb_error tdb_cons_append(tdb_cons *cons, const tdb *db)
+{
+    tdb_field field;
+
+    /* NOTE we could be much more permissive with what can be joined:
+    we could support "full outer join" and replace all missing fields
+    with NULLs automatically.
+    */
+    if (cons->num_ofields != db->num_fields - 1)
+        return TDB_ERR_APPEND_FIELDS_MISMATCH;
+
+    for (field = 0; field < cons->num_ofields; field++)
+        if (strcmp(cons->ofield_names[field], tdb_get_field_name(db, field + 1)))
+            return TDB_ERR_APPEND_FIELDS_MISMATCH;
+
+    /* NOTE: When you add new options in tdb, remember to add them to
+    the list below if they cause only a subset of events to be returned.
+    */
+    if (db->opt_event_filter || db->opt_edge_encoded)
+        /*
+        Standard append: recreate lexicons through strings.
+        We need to do this when only a subset of events is appended.
+        */
+        return tdb_cons_append_subset_lexicon(cons, db);
+    else
+        /*
+        Optimized append: merge lexicons, remap items.
+        We can do this when all events are appended.
+        */
+        return tdb_cons_append_full_lexicon(cons, db);
+}
+
 
 TDB_EXPORT tdb_error tdb_cons_finalize(tdb_cons *cons)
 {

@@ -384,36 +384,30 @@ done:
     return ret;
 }
 
-TDB_EXPORT void tdb_willneed(const tdb *db)
+static void tdb_madvise(const tdb *db, int advice)
 {
     if (db && db->num_fields > 0){
         tdb_field i;
         for (i = 0; i < db->num_fields - 1; i++)
             madvise(db->lexicons[i].ptr,
                     db->lexicons[i].mmap_size,
-                    MADV_WILLNEED);
+                    advice);
 
-        madvise(db->uuids.ptr, db->uuids.mmap_size, MADV_WILLNEED);
-        madvise(db->codebook.ptr, db->codebook.mmap_size, MADV_WILLNEED);
-        madvise(db->toc.ptr, db->toc.mmap_size, MADV_WILLNEED);
-        madvise(db->trails.ptr, db->trails.mmap_size, MADV_WILLNEED);
+        madvise(db->uuids.ptr, db->uuids.mmap_size, advice);
+        madvise(db->codebook.ptr, db->codebook.mmap_size, advice);
+        madvise(db->toc.ptr, db->toc.mmap_size, advice);
+        madvise(db->trails.ptr, db->trails.mmap_size, advice);
     }
+}
+
+TDB_EXPORT void tdb_willneed(const tdb *db)
+{
+    tdb_madvise(db, MADV_WILLNEED);
 }
 
 TDB_EXPORT void tdb_dontneed(const tdb *db)
 {
-    if (db && db->num_fields > 0){
-        tdb_field i;
-        for (i = 0; i < db->num_fields - 1; i++)
-            madvise(db->lexicons[i].ptr,
-                    db->lexicons[i].mmap_size,
-                    MADV_DONTNEED);
-
-        madvise(db->uuids.ptr, db->uuids.mmap_size, MADV_DONTNEED);
-        madvise(db->codebook.ptr, db->codebook.mmap_size, MADV_DONTNEED);
-        madvise(db->toc.ptr, db->toc.mmap_size, MADV_DONTNEED);
-        madvise(db->trails.ptr, db->trails.mmap_size, MADV_DONTNEED);
-    }
+    tdb_madvise(db, MADV_DONTNEED);
 }
 
 TDB_EXPORT void tdb_close(tdb *db)
@@ -695,9 +689,17 @@ TDB_EXPORT tdb_error tdb_set_opt(tdb *db,
                                  tdb_opt_key key,
                                  tdb_opt_value value)
 {
+    /*
+    NOTE: If a new option can cause the db return a subset of
+    events, like TDB_OPT_ONLY_DIFF_ITEMS or TDB_OPT_EVENT_FILTER,
+    you need to add them to the list in tdb_cons_append().
+    */
     switch (key){
         case TDB_OPT_ONLY_DIFF_ITEMS:
             db->opt_edge_encoded = value.value ? 1: 0;
+            return 0;
+        case TDB_OPT_EVENT_FILTER:
+            db->opt_event_filter = (const struct tdb_event_filter*)value.ptr;
             return 0;
         case TDB_OPT_CURSOR_EVENT_BUFFER_SIZE:
             if (value.value > 0)
@@ -716,6 +718,9 @@ TDB_EXPORT tdb_error tdb_get_opt(tdb *db,
     switch (key){
         case TDB_OPT_ONLY_DIFF_ITEMS:
             *value = db->opt_edge_encoded ? TDB_TRUE: TDB_FALSE;
+            return 0;
+        case TDB_OPT_EVENT_FILTER:
+            value->ptr = db->opt_event_filter;
             return 0;
         case TDB_OPT_CURSOR_EVENT_BUFFER_SIZE:
             value->value = db->opt_cursor_event_buffer_size;
@@ -785,4 +790,37 @@ TDB_EXPORT void tdb_event_filter_free(struct tdb_event_filter *filter)
 {
     free(filter->items);
     free(filter);
+}
+
+TDB_EXPORT tdb_error tdb_event_filter_get_item(const struct tdb_event_filter *filter,
+                                               uint64_t clause_index,
+                                               uint64_t item_index,
+                                               tdb_item *item,
+                                               int *is_negative)
+{
+    uint64_t clause, i;
+    for (clause = 0, i = 0; clause < clause_index; clause++){
+        i += filter->items[i] + 1;
+        if (i == filter->count)
+            goto invalid;
+    }
+    if (item_index * 2 < filter->items[i]){
+        i += item_index * 2 + 1;
+        *is_negative = filter->items[i] ? 1: 0;
+        *item = filter->items[i + 1];
+        return TDB_ERR_OK;
+    }
+invalid:
+    *item = 0;
+    *is_negative = 0;
+    return TDB_ERR_NO_SUCH_ITEM;
+}
+
+TDB_EXPORT uint64_t tdb_event_filter_num_clauses(
+    const struct tdb_event_filter *filter)
+{
+    uint64_t num_clauses, i;
+    for (num_clauses = 0, i = 0; i < filter->count; num_clauses++)
+        i += filter->items[i] + 1;
+    return num_clauses;
 }

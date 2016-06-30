@@ -34,7 +34,7 @@ int main(int argc, char** argv)
 
     tdb_cons* c = tdb_cons_init();
     test_cons_settings(c);
-    assert(tdb_cons_open(c, argv[1], fields, 2) == 0);
+    assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), fields, 2) == 0);
 
     for (i = 0; i < sizeof(EVENTS) / sizeof(struct event); i++){
         const char *values[] = {"cli", EVENTS[i].value};
@@ -46,7 +46,7 @@ int main(int argc, char** argv)
     tdb_cons_close(c);
 
     tdb* t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, getenv("TDB_TMP_DIR")) == 0);
     tdb_cursor *cursor = tdb_cursor_new(t);
 
     for (i = 0; i < sizeof(EVENTS) / sizeof(struct event); i++){

@@ -220,10 +220,18 @@ tdb_error tdb_set_opt(tdb *db,
 Currently the supported options are:
 
 * key `TDB_OPT_ONLY_DIFF_ITEMS`
-    - value `0` - Cursors should return all items (default).
-    - value `1` - Cursors should return mostly distinct items.
+    - value: `0` - Cursors should return all items (default).
+    - value: `1` - Cursors should return mostly distinct items.
 * key `TDB_OPT_CURSOR_EVENT_BUFFER_SIZE`
-    - value `number of events` - Set the size of the cursor readahead buffer.
+    - value: `number of events` - Set the size of the cursor readahead buffer.
+* key `TDB_OPT_EVENT_FILTER`
+    - value: pointer to `const struct tdb_event_filter*` as returned
+      by [tdb_event_filter_new()](#tdb_event_filter_new). This filter is
+      applied to all new cursors created with the `db` handle, that is,
+      [tdb_cursor_set_event_filter()](#tdb_cursor_set_event_filter) is
+      called automatically. In effect, this defines a view (a subset of
+      events) of `db`. The event filter must stay alive for the lifetime
+      of the `db` handle.
 
 Return 0 on success, an error code otherwise.
 
@@ -568,3 +576,47 @@ tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter)
 * `filter` filter handle.
 
 Return 0 success, an error code otherwise (out of memory).
+
+
+### tdb_event_filter_num_clauses
+Get the number of clauses in this filter.
+```c
+uint64_t tdb_event_filter_num_clauses(const struct tdb_event_filter *filter);
+```
+* `filter` filter handle.
+
+Return the number of clauses. Note that a new filter has one clause by
+default, so the return value is always at least one.
+
+
+### tdb_event_filter_get_item
+Get an item added to this filter.
+```c
+tdb_error tdb_event_filter_get_item(const struct tdb_event_filter *filter,
+                                    uint64_t clause_index,
+                                    uint64_t item_index,
+                                    tdb_item *item,
+                                    int *is_negative)
+```
+* `filter` filter handle.
+* `clause_index` clause index: `0 < clause_index < tdb_event_filter_num_clauses()`.
+* `item_index` item index in the clause.
+* `item` returned item.
+* `is_negative` return 1 if the item negative, 0 otherwise, as set in [tdb_event_filter_add_term](#tdb_event_filter_add_term).
+
+Returns 0 if an item was found at this location, `TDB_ERR_NO_SUCH_ITEM` otherwise. Note
+that empty clauses always return `TDB_ERR_NO_SUCH_ITEM` although the clauses themselves
+are valid.
+
+Here is an example how to deconstruct a filter back to clauses and items:
+```c
+for (clause = 0; clause < tdb_event_filter_num_clauses(filter); clause++){
+    uint64_t item, idx = 0;
+    int is_negative;
+    while (!tdb_event_filter_get_item(filter, clause, idx, &item, &is_negative)){
+        /* do something with 'item' in 'clause' */
+        ++idx;
+    }
+}
+```
+

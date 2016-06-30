@@ -12,7 +12,7 @@ int main(int argc, char** argv)
     const char *fields[] = {};
     tdb_cons* c = tdb_cons_init();
     test_cons_settings(c);
-    assert(tdb_cons_open(c, argv[1], fields, 0) == 0);
+    assert(tdb_cons_open(c, getenv("TDB_TMP_DIR"), fields, 0) == 0);
     uint64_t i, j, cmp, sum = 0;
     uint64_t zero = 0;
     tdb_field field;
@@ -31,7 +31,7 @@ int main(int argc, char** argv)
     tdb_cons_close(c);
 
     tdb* t = tdb_init();
-    assert(tdb_open(t, argv[1]) == 0);
+    assert(tdb_open(t, getenv("TDB_TMP_DIR")) == 0);
     tdb_cursor *cursor = tdb_cursor_new(t);
 
     assert(tdb_num_fields(t) == 1);
