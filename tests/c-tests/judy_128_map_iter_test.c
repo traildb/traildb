@@ -29,19 +29,19 @@ int main(int argc, char **argv)
 
 
     PWord_t ptr = NULL;
-    ptr = j128m_insert(&jm, uint128_key(1, 0)); *ptr = 10;
     ptr = j128m_insert(&jm, uint128_key(1, 1)); *ptr = 11;
     ptr = j128m_insert(&jm, uint128_key(1, 2)); *ptr = 12;
-    ptr = j128m_insert(&jm, uint128_key(2, 0)); *ptr = 20;
+    ptr = j128m_insert(&jm, uint128_key(1, 3)); *ptr = 13;
     ptr = j128m_insert(&jm, uint128_key(2, 1)); *ptr = 21;
     ptr = j128m_insert(&jm, uint128_key(2, 2)); *ptr = 22;
+    ptr = j128m_insert(&jm, uint128_key(2, 3)); *ptr = 23;
 
     __uint128_t idx = 0;
     PWord_t pv = NULL;
     j128m_find(&jm, &pv, &idx);
 
-    uint64_t expected[6] = {10, 11, 12,
-                            20, 21, 22};
+    uint64_t expected[6] = {11, 12, 13,
+                            21, 22, 23};
 
     int i = 0;
     while (pv != NULL) {
@@ -49,6 +49,12 @@ int main(int argc, char **argv)
         j128m_next(&jm, &pv, &idx);
         i++;
     }
+    assert(i == 6);
+
+    assert(j128m_get(&jm, uint128_key(1, 1)) != NULL);
+    assert(j128m_del(&jm, uint128_key(1, 1)) == 1);
+    /* Causes double free error: assert(j128m_del(&jm, uint128_key(1, 1)) == 1); */
+    assert(j128m_get(&jm, uint128_key(1, 1)) == NULL);
 
     return 0;
 }
