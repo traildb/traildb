@@ -28,7 +28,7 @@ def configure(cnf):
 
     cnf.define("DSFMT_MEXP", 521)
     cnf.define("HAVE_ARCHIVE_H", 1)
-    cnf.env.append_value("CFLAGS", "-std=c99")
+    cnf.env.append_value("CFLAGS", "-std=gnu99")
     cnf.env.append_value("CFLAGS", "-O3")
     cnf.env.append_value("CFLAGS", "-g")
 
@@ -57,6 +57,18 @@ def options(opt):
     opt.load("compiler_c")
 
 def build(bld, test_build=False):
+
+    # Third-party code is compiled without extra warnings flags, as it's not cleaned up for them
+    # NOTE: tdb_sort.c is special-cased because it includes third-party sort.h
+    bld.objects(source=bld.path.ant_glob("src/dsfmt/*.c"), target="dsfmt")
+    bld.objects(source=bld.path.ant_glob("src/xxhash/*.c"), target="xxhash")
+    bld.objects(source=bld.path.ant_glob("src/tdb_sort.c"), target="tdbsort")
+    bld.objects(source=bld.path.ant_glob("src/dsfmt/*.c"), cflags=["-fPIC"], target="dsfmt-so")
+    bld.objects(source=bld.path.ant_glob("src/xxhash/*.c"), cflags=["-fPIC"], target="xxhash-so")
+    bld.objects(source=bld.path.ant_glob("src/tdb_sort.c"), cflags=["-fPIC"], target="tdbsort-so")
+
+    tdbsources = bld.path.ant_glob("src/*.c", excl="src/tdb_sort.c")
+
     tdbcflags = [
         "-Wextra",
         "-Wconversion",
@@ -75,7 +87,6 @@ def build(bld, test_build=False):
             "-DEVENTS_ARENA_INCREMENT=100",
             "-fprofile-arcs",
             "-ftest-coverage",
-            "--coverage",
             "-fPIC",
         ])
     else:
@@ -83,8 +94,9 @@ def build(bld, test_build=False):
 
     bld.stlib(
         target         = "traildb",
-        source         = bld.path.ant_glob("src/**/*.c"),
+        source         = tdbsources,
         cflags         = tdbcflags,
+        use            = ["dsfmt", "xxhash", "tdbsort"],
         uselib         = ["ARCHIVE", "JUDY"],
         install_path   = "${PREFIX}/lib",  # opt-in to have .a installed
     )
@@ -103,7 +115,7 @@ def build(bld, test_build=False):
                 target      = os.path.splitext(testname)[0],
                 source      = [test],
                 includes    = "src",
-                cflags      = ["-fprofile-arcs", "-ftest-coverage", "-fPIC", "--coverage"],
+                cflags      = ["-fprofile-arcs", "-ftest-coverage", "-fPIC"],
                 ldflags     = ["-fprofile-arcs"],
                 use         = ["traildb"],
                 uselib      = ["ARCHIVE", "JUDY"],
@@ -119,8 +131,9 @@ def build(bld, test_build=False):
 
     bld.shlib(
         target         = "traildb",
-        source         = bld.path.ant_glob("src/**/*.c"),
+        source         = tdbsources,
         cflags         = tdbcflags,
+        use            = ["dsfmt-so", "xxhash-so", "tdbsort-so"],
         uselib         = ["ARCHIVE", "JUDY"],
         vnum            = "0",  # .so versioning
     )

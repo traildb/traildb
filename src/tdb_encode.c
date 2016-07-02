@@ -20,6 +20,7 @@
 #include "tdb_huffman.h"
 #include "tdb_error.h"
 #include "tdb_io.h"
+#include "tdb_sort.h"
 
 #define EDGE_INCREMENT     1000000
 #define GROUPBUF_INCREMENT 1000000
@@ -41,18 +42,6 @@ struct jm_fold_state{
 
     tdb_error ret;
 };
-
-static int compare(const void *p1, const void *p2)
-{
-    const struct tdb_grouped_event *x = (const struct tdb_grouped_event*)p1;
-    const struct tdb_grouped_event *y = (const struct tdb_grouped_event*)p2;
-
-    if (x->timestamp > y->timestamp)
-        return 1;
-    else if (x->timestamp < y->timestamp)
-        return -1;
-    return 0;
-}
 
 static void *groupby_uuid_handle_one_trail(
     __uint128_t uuid __attribute__((unused)),
@@ -99,10 +88,7 @@ static void *groupby_uuid_handle_one_trail(
     num_events = j;
 
     /* sort events of this trail by time */
-    /* TODO make this stable sort */
-    /* TODO this could really benefit from Timsort since raw data
-       is often partially sorted */
-    qsort(s->buf, num_events, sizeof(struct tdb_grouped_event), compare);
+    events_sort(s->buf, num_events);
 
     /* delta-encode timestamps */
     uint64_t prev_timestamp = s->min_timestamp;
