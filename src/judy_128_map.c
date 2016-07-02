@@ -58,7 +58,7 @@ Word_t *j128m_get(const struct judy_128_map *j128m, __uint128_t key)
     return NULL;
 }
 
-int j128m_del(const struct judy_128_map *j128m, __uint128_t key)
+int j128m_del(struct judy_128_map *j128m, __uint128_t key)
 {
     uint64_t hi_key = (key >> 64) & UINT64_MAX;
     uint64_t lo_key = key & UINT64_MAX;
@@ -72,8 +72,12 @@ int j128m_del(const struct judy_128_map *j128m, __uint128_t key)
         JLD(rc, lo_map, lo_key);
         int num_left;
         JLC(num_left, lo_map, 0, -1);
-        if (num_left == 0)
+        if (num_left == 0) {
             JLD(rc, j128m->hi_map, hi_key);
+        }
+        else {
+            *(Pvoid_t*)hi_ptr = lo_map;
+        }
     }
 
     return rc;
