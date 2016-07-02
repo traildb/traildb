@@ -58,37 +58,6 @@ Word_t *j128m_get(const struct judy_128_map *j128m, __uint128_t key)
     return NULL;
 }
 
-int j128m_del(struct judy_128_map *j128m, __uint128_t key)
-{
-    uint64_t hi_key = (key >> 64) & UINT64_MAX;
-    uint64_t lo_key = key & UINT64_MAX;
-    Word_t *hi_ptr;
-    Pvoid_t lo_map;
-
-    int rc = -1;
-    JLG(hi_ptr, j128m->hi_map, hi_key);
-    if (hi_ptr){
-        lo_map = (Pvoid_t)*hi_ptr;
-        JLD(rc, lo_map, lo_key);
-        int num_left;
-        JLC(num_left, lo_map, 0, -1);
-        if (num_left == 0) {
-            JLD(rc, j128m->hi_map, hi_key);
-        }
-        else {
-            *(Pvoid_t*)hi_ptr = lo_map;
-        }
-    }
-
-    return rc;
-
-out_of_memory:
-    /* this really should be impossible:
-       deleting shouldn't consume extra memory */
-    fprintf(stderr, "j128m_del out of memory! this shouldn't happen\n");
-    exit(1);
-}
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
 

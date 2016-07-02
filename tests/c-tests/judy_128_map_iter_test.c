@@ -51,10 +51,5 @@ int main(int argc, char **argv)
     }
     assert(i == 6);
 
-    assert(j128m_get(&jm, uint128_key(1, 1)) != NULL);
-    assert(j128m_del(&jm, uint128_key(1, 1)) == 1);
-    /* Causes double free error: assert(j128m_del(&jm, uint128_key(1, 1)) == 1); */
-    assert(j128m_get(&jm, uint128_key(1, 1)) == NULL);
-
     return 0;
 }
