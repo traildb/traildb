@@ -20,8 +20,110 @@
 
 #include "tdb_index.h"
 
+/*
+
+# TDB Index
+
+Tdb_index is a simple mapping
+
+tdb_item -> [trail_id, ...]
+
+indicating trails that have at least one occurrence of the item. As a
+TrailDB can contain tens of millions of items and trails, creating and
+storing this mapping can get expensive.
+
+As an optimization, instead of the item -> trail_id mapping, we
+partition a TrailDB to 2^16 = 65536 pages. Each pages contains
+min(1, num_trails / 2^16) trails. The optimized index mapping is
+
+tdb_item -> [page_id, ...]
+
+By definition, page_id can be represented with a uint16_t, which saves
+space compared to a uint64_t trail_id. To use the index, we need to
+check every trail in the page for possible matches. This is less costly
+than it sounds since processing TrailDBs is typically memory or disk IO
+bound and to access a single trail, we need to read at least one OS
+page (4KB) of data anyways. Hence, the optimized page-level index should
+perform almost as well as the item-level index, while being much cheaper
+to construct and store. See inline comments below for more information
+about optimization related to constructing the index.
+
+## Index Binary Format
+
+HEADER
+    [ header           (sizeof(struct header)) ]
+    [ field 0 offset   (8 bytes) ]
+    ...
+    [ field M offset   ) ]
+FIELD SECTION
+    PAGES
+        [ item 0 page_id, ... (list of 2 byte values) ]
+        ...
+        [ item K page_id, ... ]
+    OFFSETS
+        [ are offsets 4 or 8 bytes (4 bytes) ]
+        [ item 0 offset (4 or 8 bytes) ]
+        ...
+        [ item K offset ]
+
+To find the list of candidate trails for an item X, we need to perform
+the following steps:
+
+1. Find the correct FIELD SECTION for X using the HEADER.
+2. Use OFFSETS to find the list of pages in the FIELD SECTION.
+3. Read the list of pages and expand each page to all trail_ids it contains.
+
+Thus, looking up the list of pages for an item is an O(1) operation.
+
+## Optimizing Index Construction
+
+We construct the index
+
+tdb_item -> [page_id, ...]
+
+### Optimization 1) Multi-threading
+
+by iterating over all trails in the TrailDB. We can shard a TrailDB to
+K shards and perform this operation in K threads in parallel. Since we
+don't know which items occur in which shards, we need to maintain a
+dynamic mapping (JudyL), keyed by tdb_item, in each shard. The value of
+JudyL needs to be a dynamically growing list of some kind.
+
+A straightforward implementation of a dictionary of lists incurs a large
+number of small allocations which are relatively expensive. We can
+optimize away a good number of these allocations if we assume that there
+is a long tail of infrequently occurring items, which is often the case
+with real-world TrailDBs.
+
+### Optimization 2) Dense packing of small lists
+
+JudyL is a mapping uint64_t -> uint64_t. Thus, we can store a list of
+maximum four 16-bit page_ids in a single value of the mapping. We call
+this specially packed mapping `small_items`. If an item has more than
+four page ids, we spill over the rest of pages to a separate mapping,
+`large_items`, which is a straightforward JudyL -> Judy1 -> PageID
+mapping.
+
+Each thread constructs its `small_items` and `large_items` mappings
+independently for the pages in its shard. Once all threads have
+finished, we can merge results together as an O(N) operation, since all
+page_ids are already stored in the sorted order.
+
+### Optimization 3) Deduplication of lists
+
+Typically there are many items in the mapping that have exactly the same
+value, i.e. the list of pages where the item occurs. Storing duplicate
+lists is redundant. We can save space by storing only distinct lists
+and updating OFFSETS to point at the shared list. This optimization is
+applied only to values of `small_items` i.e. only to lists of up to
+four pages.
+*/
+
+/* UINT16_MAX as unsigned long long */
 #define UINT16_MAX_LLU 65535LLU
+/* Number of distinct page_ids - we reserve page_id=0 for special use */
 #define INDEX_NUM_PAGES (UINT16_MAX - 1)
+/* Version identifier for forward compatibility */
 #define INDEX_VERSION 1
 
 struct job_arg{
@@ -49,6 +151,11 @@ struct tdb_index{
     uint64_t size;
 };
 
+/*
+Pack a 16-bit page identifier `page` in the 64-bit value `old_val`.
+
+Return 0 if the value is already full.
+*/
 static inline uint64_t add_small(Word_t *old_val, uint64_t page)
 {
     uint64_t v0 = *old_val & UINT16_MAX_LLU;
@@ -77,6 +184,9 @@ static inline uint64_t add_small(Word_t *old_val, uint64_t page)
     return 0;
 }
 
+/*
+Unpack four 16-bit page IDs from a 64-bit value `old_val`.
+*/
 static inline void get_small(Word_t old_val,
                              uint16_t *v0,
                              uint16_t *v1,
@@ -89,6 +199,13 @@ static inline void get_small(Word_t old_val,
     *v3 = ((old_val & (UINT16_MAX_LLU << 48LLU)) >> 48LLU) & UINT16_MAX;
 }
 
+/*
+Construct
+
+tdb_item -> [page_id, ...]
+
+mapping for a single shard of pages.
+*/
 static void *job_index_shard(void *arg0)
 {
     struct job_arg *arg = (struct job_arg*)arg0;
@@ -130,6 +247,12 @@ static void *job_index_shard(void *arg0)
     return NULL;
 }
 
+/*
+Write one FIELD SECTION (see above for details), given
+the mapping:
+
+tdb_item -> [page_id, ...]
+*/
 static uint64_t write_field(FILE *out,
                             const tdb *db,
                             tdb_field field,
@@ -162,15 +285,18 @@ static uint64_t write_field(FILE *out,
     if (!(shards = malloc(num_shards * sizeof(struct shard_data))))
         DIE("Could not allocate shard data");
 
+    /* write pages for each item in this field */
     for (i = 0; i < num_items; i++){
         const tdb_item item = tdb_make_item(field, i);
         uint16_t key[] = {0, 0, 0, 0};
         int key_idx = 0;
         uint64_t prev = 0;
 
+        /* get data for `item` from each shard - order matters! */
         memset(shards, 0, num_shards * sizeof(struct shard_data));
         for (j = 0; j < num_shards; j++){
             JLG(shards[j].small_ptr, args[j].small_items, item);
+            /* collect small values of this mapping */
             if (shards[j].small_ptr){
                 get_small(*shards[j].small_ptr,
                           &shards[j].v0,
@@ -204,6 +330,12 @@ static uint64_t write_field(FILE *out,
         }
 
         if (key_idx < 5){
+            /*
+            if this item doesn't have large items, it is eligible
+            for deduplication (optimization 3 above). If this exact
+            list is already stored, we can just update the offset of
+            the item and continue.
+            */
             Word_t dedup_key;
             Word_t *ptr;
             memcpy(&dedup_key, key, 8);
@@ -215,6 +347,10 @@ static uint64_t write_field(FILE *out,
                 *ptr = offset;
         }
 
+        /*
+        write the list of page ids, starting from the
+        contents of the small_items.
+        */
         offsets[i] = offset;
         for (j = 0; j < num_shards; j++){
             if (shards[j].v0){
@@ -242,6 +378,10 @@ static uint64_t write_field(FILE *out,
                 offset += 2;
             }
             if (shards[j].large_ptr){
+                /*
+                write the list of page ids, continue with
+                large_items
+                */
                 const Pvoid_t large = (const Pvoid_t)*shards[j].large_ptr;
                 Word_t key = 0;
                 int tst;
@@ -260,6 +400,10 @@ static uint64_t write_field(FILE *out,
 
     offsets[i] = offset;
 
+    /*
+    if all offsets fit in uint32_t, write them as 4 byte values,
+    otherwise use 8 bytes. Indicate the choice in the first 4 bytes.
+    */
     if (offset > UINT32_MAX){
         const uint32_t EIGHT = 8;
         TDB_WRITE(out, &EIGHT, 4);
@@ -279,6 +423,10 @@ done:
     DIE("IO error when writing index (disk full?)");
 }
 
+/*
+Produce a sanity check of a checksum that can be used to make sure that
+the index matches with the db it was based on.
+*/
 static uint64_t db_checksum(const tdb *db)
 {
     XXH64_state_t hash_state;
@@ -293,6 +441,9 @@ static uint64_t db_checksum(const tdb *db)
     return XXH64_digest(&hash_state);
 }
 
+/*
+Initialize the index blob.
+*/
 static FILE *init_file(const tdb *db,
                        const char *path,
                        uint64_t trails_per_page)
@@ -311,6 +462,10 @@ done:
     DIE("Writing index header failed. Disk full?");
 }
 
+/*
+Write the index to disk. See above for the specification of
+the binary format.
+*/
 static void write_index(FILE *out,
                         const tdb *db,
                         const struct job_arg *args,
@@ -344,6 +499,9 @@ done:
     DIE("Writing index failed. Disk full?");
 }
 
+/*
+Get pages for the given item.
+*/
 static const uint16_t *get_index_pages(const struct tdb_index *index,
                                        tdb_item item,
                                        uint16_t *num_pages)
@@ -369,6 +527,9 @@ static const uint16_t *get_index_pages(const struct tdb_index *index,
         DIE("Corrupted index (item %"PRIu64")", item);
 }
 
+/*
+Perform a bitwise-AND operation between two bitmaps.
+*/
 static void intersect(char *dst, const char *src, uint64_t len)
 {
     uint64_t i;
@@ -376,6 +537,11 @@ static void intersect(char *dst, const char *src, uint64_t len)
         dst[i] &= src[i];
 }
 
+/*
+Return a list of trail IDs that can contain matches for the given filter
+(some may be false positives, due to the index being at the page level,
+not at the exact item level).
+*/
 uint64_t *tdb_index_match_candidates(const struct tdb_index *index,
                                      const struct tdb_event_filter *filter,
                                      uint64_t *num_candidates)
@@ -432,6 +598,10 @@ uint64_t *tdb_index_match_candidates(const struct tdb_index *index,
     return candidates;
 }
 
+/*
+Utility function that tests if any of the canonical index
+paths are found for the given TrailDB path.
+*/
 char *tdb_index_find(const char *root)
 {
     char path[TDB_MAX_PATH_SIZE];
@@ -459,6 +629,9 @@ done:
     DIE("Path %s too long", root);
 }
 
+/*
+Open an index.
+*/
 struct tdb_index *tdb_index_open(const char *tdb_path, const char *index_path)
 {
     int fd;
@@ -499,12 +672,18 @@ struct tdb_index *tdb_index_open(const char *tdb_path, const char *index_path)
     return index;
 }
 
+/*
+Close an index.
+*/
 void tdb_index_close(struct tdb_index *index)
 {
     munmap((char*)index->data, index->size);
     free(index);
 }
 
+/*
+Create an index.
+*/
 tdb_error tdb_index_create(const char *tdb_path, const char *index_path)
 {
     struct job_arg *args;
@@ -541,7 +720,9 @@ tdb_error tdb_index_create(const char *tdb_path, const char *index_path)
         jobs[i].arg = &args[i];
     }
 
+    /* construct the item -> pages mapping on K threads in parallel */
     execute_jobs(job_index_shard, jobs, num_shards, num_shards);
+    /* write the mapping to disk */
     write_index(out, db, args, num_shards);
 
     if (fclose(out))
