@@ -28,25 +28,27 @@ Tdb_index is a simple mapping
 
 tdb_item -> [trail_id, ...]
 
-indicating trails that have at least one occurrence of the item. As a
-TrailDB can contain tens of millions of items and trails, creating and
-storing this mapping can get expensive.
+indicating trails that have at least one occurrence of the item. An
+inverted index like this is especially useful for queries that match a
+small number of trails based on infrequent items. By using the index,
+one can avoid checking every trail in the db ("full table scan").
+However, a TrailDB can contain tens of millions of items and trails, so
+creating and storing this mapping can be expensive.
 
-As an optimization, instead of the item -> trail_id mapping, we
-partition a TrailDB to 2^16 = 65536 pages. Each pages contains
-min(1, num_trails / 2^16) trails. The optimized index mapping is
+To make the index faster and smaller, instead of using the mapping above
+we partition TrailDB to 2^16 = 65536 pages. Each page contains min(1,
+num_trails / 2^16) trails. Hence the optimized index mapping becomes
 
 tdb_item -> [page_id, ...]
 
-By definition, page_id can be represented with a uint16_t, which saves
+By definition, page_id can be represented with a uint16_t that saves
 space compared to a uint64_t trail_id. To use the index, we need to
 check every trail in the page for possible matches. This is less costly
-than it sounds since processing TrailDBs is typically memory or disk IO
-bound and to access a single trail, we need to read at least one OS
-page (4KB) of data anyways. Hence, the optimized page-level index should
-perform almost as well as the item-level index, while being much cheaper
-to construct and store. See inline comments below for more information
-about optimization related to constructing the index.
+than it sounds: processing TrailDBs is typically bounded by disk or
+memory bandwidth. To access a single trail, we need to read at least one
+OS page (4KB, or more in the case of SSD pages) of data anyways. Hence,
+the optimized page-level index should perform almost as well as the
+item-level index, while being much cheaper to construct and store.
 
 ## Index Binary Format
 
@@ -77,11 +79,11 @@ Thus, looking up the list of pages for an item is an O(1) operation.
 
 ## Optimizing Index Construction
 
-We construct the index
+### Optimization 1) Multi-threading
+
+We construct the mapping
 
 tdb_item -> [page_id, ...]
-
-### Optimization 1) Multi-threading
 
 by iterating over all trails in the TrailDB. We can shard a TrailDB to
 K shards and perform this operation in K threads in parallel. Since we
@@ -89,25 +91,25 @@ don't know which items occur in which shards, we need to maintain a
 dynamic mapping (JudyL), keyed by tdb_item, in each shard. The value of
 JudyL needs to be a dynamically growing list of some kind.
 
-A straightforward implementation of a dictionary of lists incurs a large
-number of small allocations which are relatively expensive. We can
-optimize away a good number of these allocations if we assume that there
-is a long tail of infrequently occurring items, which is often the case
-with real-world TrailDBs.
-
 ### Optimization 2) Dense packing of small lists
+
+A straightforward implementation of a dictionary of lists incurs a
+large number of small allocations that are relatively expensive. We can
+optimize away a good number of these allocations if we assume that there
+is a long tail of infrequently occurring items which is often the case
+with real-world TrailDBs.
 
 JudyL is a mapping uint64_t -> uint64_t. Thus, we can store a list of
 maximum four 16-bit page_ids in a single value of the mapping. We call
 this specially packed mapping `small_items`. If an item has more than
 four page ids, we spill over the rest of pages to a separate mapping,
-`large_items`, which is a straightforward JudyL -> Judy1 -> PageID
-mapping.
+`large_items`, which is a straightforward but more expensive,
+JudyL -> Judy1 -> PageID mapping.
 
 Each thread constructs its `small_items` and `large_items` mappings
-independently for the pages in its shard. Once all threads have
-finished, we can merge results together as an O(N) operation, since all
-page_ids are already stored in the sorted order.
+independently for the pages in its shard. Once all the threads have
+finished, we can merge results as an O(N) operation, since all page_ids
+are already stored in the sorted order.
 
 ### Optimization 3) Deduplication of lists
 
@@ -115,8 +117,8 @@ Typically there are many items in the mapping that have exactly the same
 value, i.e. the list of pages where the item occurs. Storing duplicate
 lists is redundant. We can save space by storing only distinct lists
 and updating OFFSETS to point at the shared list. This optimization is
-applied only to values of `small_items` i.e. only to lists of up to
-four pages.
+applied only to values of `small_items` i.e. only to lists of up to four
+pages.
 */
 
 /* UINT16_MAX as unsigned long long */
