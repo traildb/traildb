@@ -7,7 +7,9 @@
 #include <strings.h>
 
 #include <traildb.h>
+
 #include "tdbcli.h"
+#include "tdb_index.h"
 
 #define SAFE_FPRINTF(fmt, ...)\
     if (fprintf(output, fmt, ##__VA_ARGS__) < 1){\
@@ -99,11 +101,13 @@ static void dump_header(FILE *output, const struct tdbcli_options *opt)
 
 static void dump_trails(const tdb *db,
                         FILE *output,
-                        const struct tdbcli_options *opt)
+                        const struct tdbcli_options *opt,
+                        const uint64_t *trail_filter,
+                        uint64_t num_trails)
 {
     const char **out_values = NULL;
     uint64_t *out_lengths = NULL;
-    uint64_t trail_id;
+    uint64_t i;
     uint8_t hexuuid[32];
     int err;
 
@@ -119,8 +123,12 @@ static void dump_trails(const tdb *db,
     if (opt->format == FORMAT_CSV && opt->csv_has_header)
         dump_header(output, opt);
 
-    for (trail_id = 0; trail_id < tdb_num_trails(db); trail_id++){
+    if (!trail_filter)
+        num_trails = tdb_num_trails(db);
+
+    for (i = 0; i < num_trails; i++){
         const tdb_event *event;
+        uint64_t trail_id = trail_filter ? trail_filter[i]: i;
 
         if ((err = tdb_get_trail(cursor, trail_id)))
             DIE("Could not get %"PRIu64"th trail: %s\n",
@@ -190,7 +198,10 @@ int op_dump(struct tdbcli_options *opt)
     FILE *output = stdout;
     int err;
     tdb *db = tdb_init();
+
     struct tdb_event_filter *filter = NULL;
+    uint64_t *trail_filter = NULL;
+    uint64_t num_trails;
 
     if (!db)
         DIE("Out of memory.");
@@ -211,15 +222,40 @@ int op_dump(struct tdbcli_options *opt)
             tdb_error_str(err));
 
     if (opt->filter_arg){
+        const char *index_path = NULL;
+        char *free_path = NULL;
         tdb_opt_value value;
+
         value.ptr = filter = parse_filter(db, opt->filter_arg, opt->verbose);
         if (tdb_set_opt(db, TDB_OPT_EVENT_FILTER, value))
             DIE("Could not set event filter");
+
+        if (!opt->no_index &&
+            ((index_path = opt->index_path) ||
+             (index_path = free_path = tdb_index_find(opt->input)))){
+
+            struct tdb_index *index = tdb_index_open(opt->input, index_path);
+            trail_filter = tdb_index_match_candidates(index,
+                                                      filter,
+                                                      &num_trails);
+            if (opt->verbose)
+                fprintf(stderr,
+                        "Using index at %s. "
+                        "Evaluating %"PRIu64"/%"PRIu64" (%2.2f%%) trails.\n",
+                        index_path,
+                        num_trails,
+                        tdb_num_trails(db),
+                        (100. * num_trails) / tdb_num_trails(db));
+            tdb_index_close(index);
+        }else if (opt->verbose)
+            fprintf(stderr, "Not using an index.\n");
+
+        free(free_path);
     }
 
     init_fields_from_arg(opt, db);
     if (opt->num_fields)
-        dump_trails(db, output, opt);
+        dump_trails(db, output, opt, trail_filter, num_trails);
 
     if (output != stdout)
         if (fclose(output))
@@ -227,6 +263,9 @@ int op_dump(struct tdbcli_options *opt)
 
     if (filter)
         tdb_event_filter_free(filter);
+
+    free(trail_filter);
     tdb_close(db);
     return 0;
 }
+

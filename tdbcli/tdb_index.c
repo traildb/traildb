@@ -1,4 +1,6 @@
 
+#define _DEFAULT_SOURCE /* strdup() */
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -216,8 +218,7 @@ static void *job_index_shard(void *arg0)
 
     tdb* db = tdb_init();
     if ((err = tdb_open(db, arg->tdb_path))){
-        printf("Opening TrailDB failed: %s\n", tdb_error_str(err));
-        exit(1);
+        DIE("Opening TrailDB failed: %s", tdb_error_str(err));
     }
 
     tdb_cursor *cursor = tdb_cursor_new(db);
@@ -227,7 +228,7 @@ static void *job_index_shard(void *arg0)
         const tdb_event *event;
 
         if (tdb_get_trail(cursor, i))
-            DIE("get_trail %"PRIu64" failed\n", i);
+            DIE("get_trail %"PRIu64" failed", i);
 
         while ((event = tdb_cursor_next(cursor))){
             for (j = 0; j < event->num_items; j++){
@@ -280,7 +281,7 @@ static uint64_t write_field(FILE *out,
         DIE("Getting file offset failed");
 
     if (!(offsets = calloc(num_items + 1, 8)))
-        DIE("Could not allocate offsets for %"PRIu64" items in field %u\n",
+        DIE("Could not allocate offsets for %"PRIu64" items in field %u",
             num_items,
             field);
 

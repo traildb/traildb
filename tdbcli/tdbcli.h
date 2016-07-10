@@ -32,6 +32,8 @@ struct tdbcli_options{
 
     /* filter */
     const char *filter_arg;
+    const char *index_path;
+    int no_index;
 
     /* csv */
     int csv_has_header;
@@ -57,5 +59,6 @@ struct tdb_event_filter *parse_filter(const tdb *db,
 
 int op_dump(struct tdbcli_options *opt);
 int op_make(struct tdbcli_options *opt);
+int op_index(struct tdbcli_options *opt);
 
 #endif /* __TDB_CLI_H__ */
