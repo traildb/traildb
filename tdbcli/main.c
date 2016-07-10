@@ -240,8 +240,16 @@ static void initialize(int argc, char **argv, int op)
         }
     }while (c != -1);
 
-    if (!options.num_threads)
-        options.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+    if (!options.num_threads){
+        /*
+        _SC_NPROCESSORS_ONLN returns Hyperthreaded 'cores'. Setting
+        num_threads higher than the number of real cores is detrimental
+        to performance. This is a simple stupid heuristic that mitigates
+        the effect.
+        */
+        if ((options.num_threads = sysconf(_SC_NPROCESSORS_ONLN)) > 2)
+            options.num_threads /= 2;
+    }
 }
 
 int main(int argc, char **argv)
