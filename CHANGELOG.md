@@ -3,6 +3,9 @@
 
 ### New features
 
+  - Item index for `tdb` CLI. This can speed up `--filter` expressions that access infrequent items
+    significantly.
+
   - Added [tdb_event_filter_num_clauses](http://traildb.io/docs/api/#tdb_event_filter_num_clauses)
     and [tdb_event_filter_get_item](http://traildb.io/docs/api/#tdb_event_filter_get_item) for reading
     items and clauses in an existing filter.
