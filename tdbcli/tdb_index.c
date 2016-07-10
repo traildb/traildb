@@ -712,13 +712,15 @@ void tdb_index_close(struct tdb_index *index)
 /*
 Create an index.
 */
-tdb_error tdb_index_create(const char *tdb_path, const char *index_path)
+tdb_error tdb_index_create(const char *tdb_path,
+                           const char *index_path,
+                           uint32_t num_shards)
 {
     struct job_arg *args;
     struct thread_job *jobs;
-    uint64_t i, num_shards = 8;
     tdb* db = tdb_init();
     tdb_error err;
+    uint64_t i;
 
     if ((err = tdb_open(db, tdb_path))){
         DIE("Opening TrailDB at %s failed: %s\n",

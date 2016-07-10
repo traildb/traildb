@@ -35,8 +35,13 @@ int op_index(struct tdbcli_options *opt)
     if (!access(out_path, W_OK))
         DIE("Output file %s already exists", out_path);
 
+    if (opt->verbose)
+        fprintf(stderr,
+                "Indexing will use %u threads (change it with -T).\n",
+                opt->num_threads);
+
     gettimeofday(&start_time, NULL);
-    if (tdb_index_create(opt->input, out_path))
+    if (tdb_index_create(opt->input, out_path, opt->num_threads))
         DIE("Creating index failed");
     gettimeofday(&end_time, NULL);
 

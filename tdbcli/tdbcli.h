@@ -21,6 +21,7 @@ struct tdbcli_options{
     int format;
     const char *input;
     const char *output;
+    uint32_t num_threads;
 
     char *fields_arg;
 

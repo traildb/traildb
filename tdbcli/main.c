@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include <traildb.h>
 
@@ -57,6 +58,8 @@ static void print_usage_and_exit()
 "                    (default: stdout)\n"
 "                   for 'index' this is the index path\n"
 "                    (default: <input.tdb>.index or <input>/index)\n"
+"-T --threads      number of threads in parallel operations\n"
+"                    (default: autodetect the number of cores)\n"
 "-f --fields       field specification - see below for details\n"
 "-F --filter       filter specification -- see below for details\n"
 "--index-path      use a custom index file at this path for filters\n"
@@ -135,6 +138,7 @@ static void initialize(int argc, char **argv, int op)
         {"delimiter", required_argument, 0, 'd'},
         {"fields", required_argument, 0, 'f'},
         {"filter", required_argument, 0, 'F'},
+        {"threads", required_argument, 0, 'T'},
         {"verbose", no_argument, 0, 'v'},
         {"tdb-format", required_argument, 0, -2},
         {"csv-header", no_argument, 0, -3},
@@ -166,7 +170,7 @@ static void initialize(int argc, char **argv, int op)
     do{
         c = getopt_long(argc,
                         argv,
-                        "cvji:o:f:F:d:t:",
+                        "cvji:o:f:F:d:t:T:",
                         long_options,
                         &option_index);
 
@@ -195,6 +199,12 @@ static void initialize(int argc, char **argv, int op)
                 break;
             case 'F':
                 options.filter_arg = optarg;
+                break;
+            case 'T':
+                errno = 0;
+                options.num_threads = strtoul(optarg, NULL, 10);
+                if (errno || !options.num_threads)
+                    DIE("Invalid value for --threads: '%s'\n", optarg);
                 break;
             case 'v':
                 options.verbose = 1;
@@ -229,6 +239,9 @@ static void initialize(int argc, char **argv, int op)
                 print_usage_and_exit();
         }
     }while (c != -1);
+
+    if (!options.num_threads)
+        options.num_threads = sysconf(_SC_NPROCESSORS_ONLN);
 }
 
 int main(int argc, char **argv)
