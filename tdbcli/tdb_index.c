@@ -734,10 +734,10 @@ tdb_error tdb_index_create(const char *tdb_path,
     FILE *out = init_file(db, index_path, trails_per_page);
 
     if (!(args = calloc(num_shards, sizeof(struct job_arg))))
-        DIE("Couldn't allocate %"PRIu64" features args\n", num_shards);
+        DIE("Couldn't allocate %u features args\n", num_shards);
 
     if (!(jobs = calloc(num_shards, sizeof(struct thread_job))))
-        DIE("Couldn't allocate %"PRIu64" features jobs\n", num_shards);
+        DIE("Couldn't allocate %u features jobs\n", num_shards);
 
     for (i = 0; i < num_shards; i++){
         args[i].tdb_path = tdb_path;
