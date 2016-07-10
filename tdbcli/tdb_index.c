@@ -1,5 +1,5 @@
 
-#define _DEFAULT_SOURCE /* strdup() */
+#define _DEFAULT_SOURCE /* strdup(), mkstemp() */
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -454,15 +454,20 @@ static uint64_t db_checksum(const tdb *db)
 Initialize the index blob.
 */
 static FILE *init_file(const tdb *db,
-                       const char *path,
+                       char *path,
                        uint64_t trails_per_page)
 {
     FILE *out;
+    int fd;
     struct header head = {.version = INDEX_VERSION,
                           .checksum = db_checksum(db),
                           .trails_per_page = trails_per_page};
     int __attribute__((unused)) ret; /* TDB_WRITE */
-    if (!(out = fopen(path, "w")))
+
+    if ((fd = mkstemp(path)) == -1)
+        DIE("Could not open temp file at %s", path);
+
+    if (!(out = fdopen(fd, "w")))
         DIE("Could not create an index at %s", path);
 
     TDB_WRITE(out, &head, sizeof(struct header));
@@ -712,26 +717,30 @@ void tdb_index_close(struct tdb_index *index)
 /*
 Create an index.
 */
-tdb_error tdb_index_create(const char *tdb_path,
+tdb_error tdb_index_create(const char *db_path,
                            const char *index_path,
                            uint32_t num_shards)
 {
+    char tmp_path[TDB_MAX_PATH_SIZE];
     struct job_arg *args;
     struct thread_job *jobs;
     tdb* db = tdb_init();
     tdb_error err;
     uint64_t i;
+    int ret;
 
-    if ((err = tdb_open(db, tdb_path))){
+    if ((err = tdb_open(db, db_path))){
         DIE("Opening TrailDB at %s failed: %s\n",
-            tdb_path,
+            db_path,
             tdb_error_str(err));
     }
 
     const uint64_t num_trails = tdb_num_trails(db);
     const uint64_t trails_per_page = 1 + num_trails / INDEX_NUM_PAGES;
     const uint64_t pages_per_shard = 1 + (INDEX_NUM_PAGES / num_shards);
-    FILE *out = init_file(db, index_path, trails_per_page);
+
+    TDB_PATH(tmp_path, "%s.tmp.XXXXXX", index_path);
+    FILE *out = init_file(db, tmp_path, trails_per_page);
 
     if (!(args = calloc(num_shards, sizeof(struct job_arg))))
         DIE("Couldn't allocate %u features args\n", num_shards);
@@ -740,7 +749,7 @@ tdb_error tdb_index_create(const char *tdb_path,
         DIE("Couldn't allocate %u features jobs\n", num_shards);
 
     for (i = 0; i < num_shards; i++){
-        args[i].tdb_path = tdb_path;
+        args[i].tdb_path = db_path;
         args[i].trails_per_page = trails_per_page;
         args[i].start_trail = i * pages_per_shard * trails_per_page;
         args[i].end_trail = (i + 1) * pages_per_shard * trails_per_page;
@@ -755,12 +764,17 @@ tdb_error tdb_index_create(const char *tdb_path,
     /* write the mapping to disk */
     write_index(out, db, args, num_shards);
 
-    if (fclose(out))
+    if (fflush(out) || fclose(out))
         DIE("Closing index failed. Disk full?");
+
+    if (rename(tmp_path, index_path))
+        DIE("Renaming %s -> %s failed", tmp_path, index_path);
 
     /* FIXME free args.small_items and args.large_items */
     tdb_close(db);
     return 0;
+done:
+    DIE("Path name too long");
 }
 
 #if 0
