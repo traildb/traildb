@@ -137,10 +137,24 @@ def build(bld, test_build=False):
     # Build tdbcli
     bld.program(
         target       = "tdb",
-        source       = bld.path.ant_glob("tdbcli/**/*.c"),
+        source       = bld.path.ant_glob("tdbcli/**/*.c") +
+                       bld.path.ant_glob("src/xxhash/*.c"),
         includes     = "src",
         use          = "traildb",
-        uselib       = ["ARCHIVE", "JUDY"],
+        ldflags      = ["-pthread"],
+        uselib       = ["JUDY"],
+    )
+
+    # Build libtdbindex.so
+    bld.shlib(
+        target       = "tdbindex",
+        source       = ["tdbcli/tdb_index.c", "tdbcli/thread_util.c"] +
+                       bld.path.ant_glob("src/xxhash/*.c"),
+        includes     = "src",
+        use          = "traildb",
+        ldflags      = ["-pthread"],
+        uselib       = ["JUDY"],
+        vnum            = "0",  # .so versioning
     )
 
     # Mark header files that must be installed
