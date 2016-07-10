@@ -61,9 +61,9 @@ HEADER
     [ field M offset   ) ]
 FIELD SECTION
     PAGES
-        [ item 0 page_id, ... (list of 2 byte values) ]
+        [ item 0 num_pages] [ item 0 page_id, ... (list of 2 byte values) ]
         ...
-        [ item K page_id, ... ]
+        [ item K num_pages ] [ item K page_id, ... ]
     OFFSETS
         [ are offsets 4 or 8 bytes (4 bytes) ]
         [ item 0 offset (4 or 8 bytes) ]
@@ -153,6 +153,7 @@ struct tdb_index{
     const struct header *head;
     const void *data;
     uint64_t size;
+    uint64_t num_trails;
 };
 
 /*
@@ -280,7 +281,7 @@ static uint64_t write_field(FILE *out,
     if ((offset = ftell(out)) == -1)
         DIE("Getting file offset failed");
 
-    if (!(offsets = calloc(num_items + 1, 8)))
+    if (!(offsets = calloc(num_items, 8)))
         DIE("Could not allocate offsets for %"PRIu64" items in field %u",
             num_items,
             field);
@@ -355,6 +356,9 @@ static uint64_t write_field(FILE *out,
         contents of the small_items.
         */
         offsets[i] = offset;
+        /* write placeholder for the num pages */
+        TDB_WRITE(out, &prev, 2);
+        offset += 2;
         for (j = 0; j < num_shards; j++){
             if (shards[j].v0){
                 assert(shards[j].v0 > prev);
@@ -399,9 +403,11 @@ static uint64_t write_field(FILE *out,
                 }
             }
         }
+        TDB_SEEK(out, offsets[i]);
+        uint32_t num_pages = (uint32_t)(((offset - offsets[i]) / 2) - 1);
+        TDB_WRITE(out, &num_pages, 2);
+        TDB_SEEK(out, offset);
     }
-
-    offsets[i] = offset;
 
     /*
     if all offsets fit in uint32_t, write them as 4 byte values,
@@ -410,11 +416,11 @@ static uint64_t write_field(FILE *out,
     if (offset > UINT32_MAX){
         const uint32_t EIGHT = 8;
         TDB_WRITE(out, &EIGHT, 4);
-        TDB_WRITE(out, offsets, (num_items + 1) * 8);
+        TDB_WRITE(out, offsets, num_items * 8);
     }else{
         const uint32_t FOUR = 4;
         TDB_WRITE(out, &FOUR, 4);
-        for (i = 0; i < num_items + 1; i++)
+        for (i = 0; i < num_items; i++)
             TDB_WRITE(out, &offsets[i], 4);
     }
 
@@ -520,12 +526,12 @@ static const uint16_t *get_index_pages(const struct tdb_index *index,
     memcpy(&width, data, 4);
     if (width == 4){
         const uint32_t *offsets = data + 4;
-        *num_pages = (offsets[idx + 1] - offsets[idx]) / 2;
-        return (const uint16_t*)(index->data + offsets[idx]);
+        memcpy(num_pages, index->data + offsets[idx], 2);
+        return (const uint16_t*)(index->data + offsets[idx] + 2);
     }else if (width == 8){
         const uint64_t *offsets = data + 4;
-        *num_pages = (offsets[idx + 1] - offsets[idx]) / 2;
-        return (const uint16_t*)(index->data + offsets[idx]);
+        memcpy(num_pages, index->data + offsets[idx], 2);
+        return (const uint16_t*)(index->data + offsets[idx] + 2);
     }else
         DIE("Corrupted index (item %"PRIu64")", item);
 }
@@ -603,13 +609,19 @@ uint64_t *tdb_index_match_candidates(const struct tdb_index *index,
         DIE("Could not allocate a buffer for %"PRIu64" match candidates",
             *num_candidates);
 
-    for (k = 0, i = 0; i < INDEX_NUM_PAGES; i++)
-        if (read_bits(conjunction, i, 1))
-            for (j = 0; j < index->head->trails_per_page; j++)
-                candidates[k++] = i * index->head->trails_per_page + j;
-
+    for (k = 0, i = 0; i < INDEX_NUM_PAGES; i++){
+        if (read_bits(conjunction, i, 1)){
+            for (j = 0; j < index->head->trails_per_page; j++){
+                uint64_t trail_id = i * index->head->trails_per_page + j;
+                if (trail_id < index->num_trails)
+                    candidates[k++] = trail_id;
+            }
+        }
+    }
     free(conjunction);
     free(disjunction);
+
+    *num_candidates = k;
     return candidates;
 }
 
@@ -679,6 +691,7 @@ struct tdb_index *tdb_index_open(const char *tdb_path, const char *index_path)
         DIE("Memory mapping index at %s failed", index_path);
 
     index->head = (const struct header*)index->data;
+    index->num_trails = tdb_num_trails(db);
 
     if (db_checksum(db) != index->head->checksum)
         DIE("TrailDB at %s and index at %s mismatch", tdb_path, index_path);
