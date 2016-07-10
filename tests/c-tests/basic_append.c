@@ -72,6 +72,45 @@ struct event{
     char value2[1];
 };
 
+static void empty_value(const char *root)
+{
+    static uint8_t uuid[16];
+    const char *fields[] = {"f1", "f2"};
+    const uint64_t lengths[] = {1, 0};
+    char path[TDB_MAX_PATH_SIZE];
+    tdb_path(path, "%s.%u", root, 0);
+    tdb_cons* c = tdb_cons_init();
+    test_cons_settings(c);
+    assert(tdb_cons_open(c, path, fields, 2) == 0);
+    assert(tdb_cons_add(c, uuid, 1, fields, lengths) == 0);
+    assert(tdb_cons_finalize(c) == 0);
+
+    tdb* db = tdb_init();
+    assert(tdb_open(db, path) == 0);
+
+    tdb_path(path, "%s.%u", root, 1);
+    c = tdb_cons_init();
+    test_cons_settings(c);
+    assert(tdb_cons_open(c, path, fields, 2) == 0);
+    assert(tdb_cons_append(c, db) == 0);
+    assert(tdb_cons_finalize(c) == 0);
+    tdb_close(db);
+
+    db = tdb_init();
+    assert(tdb_open(db, path) == 0);
+    assert(tdb_lexicon_size(db, 1) == 2);
+    assert(tdb_lexicon_size(db, 2) == 1);
+
+    tdb_cursor *cursor = tdb_cursor_new(db);
+    assert(tdb_get_trail(cursor, 0) == 0);
+    const tdb_event *event = tdb_cursor_next(cursor);
+    assert(event->items[0] == tdb_make_item(1, 1));
+    assert(event->items[1] == tdb_make_item(2, 0));
+
+    tdb_cursor_free(cursor);
+    tdb_close(db);
+}
+
 static void simple_append(const char *root)
 {
     static uint8_t uuid[16];
@@ -170,10 +209,13 @@ static void simple_append(const char *root)
     tdb_close(db);
 }
 
+
+
 int main(int argc, char** argv)
 {
     empty_tdb_append(getenv("TDB_TMP_DIR"));
     mismatching_fields(getenv("TDB_TMP_DIR"));
     simple_append(getenv("TDB_TMP_DIR"));
+    empty_value(getenv("TDB_TMP_DIR"));
     return 0;
 }
