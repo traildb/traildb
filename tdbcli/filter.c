@@ -1,3 +1,6 @@
+
+#define _DEFAULT_SOURCE /* strdup() */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
