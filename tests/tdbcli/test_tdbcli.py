@@ -107,7 +107,8 @@ class TestBasicFilter(TdbCliTest):
         self.assertFilter('second!=0 & first=48 first=469 first=500',
                           events)
 
-class TestLargeFilter(TdbCliTest):
+# Multiple trails per page, num_trails > 2**16
+class TestMediumFilter(TdbCliTest):
     def events(self):
         for i in range(100000):
             yield {'uuid': self.hexuuid(i),
@@ -123,6 +124,32 @@ class TestLargeFilter(TdbCliTest):
             self.assertFilter('first=%d' % i, [events[i]], index_only=True)
         for i in range(99000, 100000):
             self.assertFilter('first=%d' % i, [events[i]], index_only=True)
+
+# Test overflow mapping when > 4 pages / item
+class TestLargeFilter(TdbCliTest):
+    def events(self):
+        for i in range(1000000):
+            yield {'uuid': self.hexuuid(i),
+                   'time': str(i + 100),
+                   'first': str(i),
+                   'second': str(i % 10),
+                   'third': 'const'}
+
+    def test_single_item(self):
+        events = list(self.events())
+        for i in range(10):
+            self.assertFilter('first=%d' % i, [events[i]], index_only=True)
+        for i in range(999990, 1000000):
+            self.assertFilter('first=%d' % i, [events[i]], index_only=True)
+
+        self.assertFilter('third=const', events)
+        self.assertFilter('third!=const', [])
+        events = [x for x in self.events() if x['second'] == '5']
+        self.assertFilter('second=5', events)
+        events = [x for x in self.events()\
+                  if x['second'] == '0' and x['first'] == '500']
+        self.assertFilter('second=0 & first=500', events)
+
 
 if __name__ == '__main__':
     unittest.main()
