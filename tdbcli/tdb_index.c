@@ -561,6 +561,16 @@ uint64_t *tdb_index_match_candidates(const struct tdb_index *index,
     if (!(disjunction = calloc(1, BUFFER_SIZE)))
         DIE("Could not allocate disjunction buffer");
 
+    /*
+    We can pre-evaluate CNF queries at the page level:
+    Each clause (disjunction) is evaluated by constructing a bitmap
+    that represents the union of pages in the clause. Clauses are
+    combined together by conjunction, i.e. by producing the intersection
+    between the clauses with bitwise-AND.
+
+    Page-level negation is a special case: We need to evaluate each
+    trail for negations, so the page-level index is useless for negations.
+    */
     for (i = 0; i < tdb_event_filter_num_clauses(filter); i++){
         tdb_item item;
         int is_negative;
@@ -572,6 +582,7 @@ uint64_t *tdb_index_match_candidates(const struct tdb_index *index,
                 memset(disjunction, 0xff, BUFFER_SIZE);
                 break;
             }else{
+                /* union this item with the previous ones in this clause */
                 uint16_t n;
                 const uint16_t *pages = get_index_pages(index, item, &n);
                 for (k = 0; k < n; k++)
@@ -579,6 +590,7 @@ uint64_t *tdb_index_match_candidates(const struct tdb_index *index,
             }
             ++j;
         }
+        /* intersect this clause with the previous clauses */
         intersect(conjunction, disjunction, BUFFER_SIZE);
     }
 
