@@ -41,7 +41,11 @@ void events_sort(struct tdb_grouped_event *buf, uint64_t num_events)
     _events_tim_sort(buf, num_events);
     for (int i = 0; i < num_events-1; i++){
         int j = i+1;
-        if (buf[j].timestamp == buf[i].timestamp){
+        if (buf[j].timestamp < buf[i].timestamp){
+            /* double-check sort.h is not buggy, avoiding data corruption */
+            fprintf(stderr, "critical: bug found in sort function, aborting\n");
+            abort();
+        } else if (buf[j].timestamp == buf[i].timestamp){
             do
                 j++;
             while (j<num_events && buf[j].timestamp == buf[i].timestamp);
