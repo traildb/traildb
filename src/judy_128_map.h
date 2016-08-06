@@ -17,6 +17,12 @@ Word_t *j128m_insert(struct judy_128_map *j128m, __uint128_t key);
 
 Word_t *j128m_get(const struct judy_128_map *j128m, __uint128_t key);
 
+int j128m_del(struct judy_128_map *j128m, __uint128_t key);
+
+void j128m_find(const struct judy_128_map *j128m, PWord_t *pv, __uint128_t *key);
+
+void j128m_next(const struct judy_128_map *j128m, PWord_t *pv, __uint128_t *key);
+
 void *j128m_fold(const struct judy_128_map *j128m,
                  judy_128_fold_fn fun,
                  void *state);
