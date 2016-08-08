@@ -1,2 +1,0 @@
-c-tests/judy_128_map_test.c
-c-tests/out_of_memory.c
