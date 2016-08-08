@@ -702,9 +702,10 @@ TDB_EXPORT tdb_error tdb_set_opt(tdb *db,
             db->opt_event_filter = (const struct tdb_event_filter*)value.ptr;
             return 0;
         case TDB_OPT_CURSOR_EVENT_BUFFER_SIZE:
-            if (value.value > 0)
+            if (value.value > 0){
                 db->opt_cursor_event_buffer_size = value.value;
-            else
+                return 0;
+            }else
                 return TDB_ERR_INVALID_OPTION_VALUE;
         default:
             return TDB_ERR_UNKNOWN_OPTION;
