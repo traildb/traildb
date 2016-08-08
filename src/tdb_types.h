@@ -52,10 +52,18 @@ typedef struct __attribute__((packed)){
 } tdb_event;
 
 typedef struct{
+    const tdb *db;
+    const tdb_event *event;
+    uint64_t cursor_idx;
+} tdb_multi_event;
+
+typedef struct{
     struct tdb_decode_state *state;
     const char *next_event;
     uint64_t num_events_left;
 } tdb_cursor;
+
+typedef struct tdb_multi_cursor tdb_multi_cursor;
 
 #define tdb_item_field32(item) (item & 127)
 #define tdb_item_val32(item)   ((item >> 8) & UINT32_MAX)
