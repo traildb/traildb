@@ -51,10 +51,32 @@ make install
 
 # Install on OS X
 
-This assumes you are using Homebrew on OS X.
+### Using Homebrew
+
+TrailDB package is available in Homebrew:
 
 ```sh
 brew install traildb
+```
+
+### Building from source
+
+Install the dependencies:
+
+```sh
+brew install judy libarchive pkg-config
+```
+
+Build TrailDB using `waf`
+```sh
+./waf configure
+./waf build
+```
+
+`waf` writes the output to the `build` directory. You can install the
+library and the `tdb` command line tool to a system-wide directory with
+```sh
+./waf install
 ```
 
 # Test that it works
