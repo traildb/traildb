@@ -58,7 +58,15 @@ sudo dpkg -i libjudy-dev_1.0.5-5_amd64.deb libjudydebian1_1.0.5-5_amd64.deb
 
 # Install on OS X
 
-This assumes you are using Homebrew on OS X.
+### Using Homebrew
+
+TrailDB package is available in Homebrew:
+
+```sh
+brew install traildb
+```
+
+### Building from source
 
 Install the dependencies:
 
