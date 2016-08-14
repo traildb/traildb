@@ -59,7 +59,13 @@ struct tdb_event_filter *parse_filter(const tdb *db,
                                       int verbose);
 
 int op_dump(struct tdbcli_options *opt);
+
 int op_make(struct tdbcli_options *opt);
+
 int op_index(struct tdbcli_options *opt);
+
+int op_merge(struct tdbcli_options *opt,
+             const char **inputs,
+             uint32_t num_inputs);
 
 #endif /* __TDB_CLI_H__ */

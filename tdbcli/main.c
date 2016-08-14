@@ -11,10 +11,11 @@
 
 static struct tdbcli_options options;
 
-static const char *OPS[] = {"make", "dump", "index"};
+static const char *OPS[] = {"make", "dump", "index", "merge"};
 #define OP_MAKE 0
 #define OP_DUMP 1
 #define OP_INDEX 2
+#define OP_MERGE 3
 
 long int safely_to_int(const char *str, const char *field)
 {
@@ -32,12 +33,13 @@ static void print_usage_and_exit()
 "\ntdb - a command line interface for manipulating TrailDBs\n"
 "\n"
 "USAGE:\n"
-"tdb <command> [options]\n"
+"tdb <command> [options] [args]\n"
 "\n"
 "Command is one of the following:\n"
 "make    create a TrailDB\n"
 "dump    dump an existing TrailDB to an output file\n"
 "index   create an index for an existing TrailDB to speed up --filter\n"
+"merge   merges a set of TrailDBs into a new TrailDB\n"
 "\n"
 "OPTIONS:\n"
 "-c --csv          read input as CSV or output CSV (default)\n"
@@ -51,6 +53,8 @@ static void print_usage_and_exit()
 "                    (default: a.tdb)\n"
 "                   for 'index' this is the TrailDB to be indexed\n"
 "                    (default: a.tdb)\n"
+"                   for 'merge' this is not supported\n"
+"                    give a list of tdbs as args\n"
 "-o --output       write output to the given file:\n"
 "                   for 'make' this is the TrailDB to be created\n"
 "                    (default: a.tdb)\n"
@@ -58,6 +62,8 @@ static void print_usage_and_exit()
 "                    (default: stdout)\n"
 "                   for 'index' this is the index path\n"
 "                    (default: <input.tdb>.index or <input>/index)\n"
+"                   for 'merge' this is the TrailDB to be created\n"
+"                    (default: a.tdb)\n"
 "-T --threads      number of threads in parallel operations\n"
 "                    (default: autodetect the number of cores)\n"
 "-f --fields       field specification - see below for details\n"
@@ -102,6 +108,7 @@ static void print_usage_and_exit()
 "The --filter option specifies an event filter for dumping a subset of\n"
 "events from an existing TrailDB. The filter is a boolean query, expressed\n"
 "in Conjunctive Normal Form. Remember to surround the query in quotes.\n"
+"Filters are supported in the 'dump' and 'merge' modes.\n"
 "\n"
 "Syntax:\n"
 " - Disjunctions (OR) are separated by whitespace.\n"
@@ -122,7 +129,7 @@ static void print_usage_and_exit()
 exit(1);
 }
 
-static void initialize(int argc, char **argv, int op)
+static int initialize(int argc, char **argv, int op)
 {
     static const char DEFAULT_MAKE_INPUT[] = "-";
     static const char DEFAULT_MAKE_OUTPUT[] = "a";
@@ -153,7 +160,7 @@ static void initialize(int argc, char **argv, int op)
 
     /* defaults */
 
-    if (op == OP_MAKE){
+    if (op == OP_MAKE || op == OP_MERGE){
         options.input = DEFAULT_MAKE_INPUT;
         options.output = DEFAULT_MAKE_OUTPUT;
     }else if (op == OP_DUMP){
@@ -250,11 +257,12 @@ static void initialize(int argc, char **argv, int op)
         if ((options.num_threads = sysconf(_SC_NPROCESSORS_ONLN)) > 2)
             options.num_threads /= 2;
     }
+    return optind + 1;
 }
 
 int main(int argc, char **argv)
 {
-    int i, op = -1;
+    int i, idx, op = -1;
 
     if (argc < 2)
         print_usage_and_exit();
@@ -268,7 +276,7 @@ int main(int argc, char **argv)
     if (op == -1)
         print_usage_and_exit();
 
-    initialize(argc, argv, op);
+    idx = initialize(argc, argv, op);
 
     switch (op){
         case OP_MAKE:
@@ -277,6 +285,10 @@ int main(int argc, char **argv)
             return op_dump(&options);
         case OP_INDEX:
             return op_index(&options);
+        case OP_MERGE:
+            return op_merge(&options,
+                            (const char**)&argv[idx],
+                            argc - idx);
         default:
             print_usage_and_exit();
     }
