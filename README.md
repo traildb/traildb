@@ -15,6 +15,16 @@ Learn more at [traildb.io](http://traildb.io).
 
 For detailed installation instructions, see [Getting Started guide](http://traildb.io/docs/getting_started/).
 
+### Installing binaries
+
+On OSX, TrailDB is available through homebrew:
+
+    $ brew install traildb
+
+Linux binaries are not available yet.
+
+### Compiling and installing from source
+
 #### Install Dependencies
 
 	$ apt-get install libarchive-dev libjudy-dev pkg-config

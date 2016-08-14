@@ -701,6 +701,7 @@ struct tdb_index *tdb_index_open(const char *tdb_path, const char *index_path)
     if (db_checksum(db) != index->head->checksum)
         DIE("TrailDB at %s and index at %s mismatch", tdb_path, index_path);
 
+    close(fd);
     tdb_close(db);
     return index;
 }

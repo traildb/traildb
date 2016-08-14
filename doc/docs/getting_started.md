@@ -18,7 +18,7 @@ to adapt the steps for other distributions.
 
 Install the dependencies:
 ```sh
-apt-get install libjudy-dev libarchive-dev pkg-config
+apt-get install libjudy-dev libarchive-dev pkg-config build-essential
 ```
 
 Build TrailDB using `waf`
@@ -35,11 +35,6 @@ library and the `tdb` command line tool to a system-wide directory with
 
 That's all. See below for instructions for testing the installation.
 
-Note that some old versions of Ubuntu and Debian include a version of
-Judy that is broken (1.0.5-1 or older). The build will fail if a broken
-version is found. You can install a newer version of Judy manually if
-your system is affected.
-
 Alternatively, TrailDB provides an autotools-based build system which
 can be run as follows:
 ```sh
@@ -49,9 +44,29 @@ make
 make install
 ```
 
+Note that some old versions of Ubuntu and Debian include a version of
+Judy that is broken (1.0.5-1 or older). The build will fail if a broken
+version is found. You can install a newer version of Judy manually if
+your system is affected.
+
+To install fixed version of Judy on Ubuntu 14.04 to 15.04, you can use packages from Ubuntu Xenial (16.04):
+```sh
+wget https://mirrors.kernel.org/ubuntu/pool/universe/j/judy/libjudy-dev_1.0.5-5_amd64.deb \
+	 https://mirrors.kernel.org/ubuntu/pool/universe/j/judy/libjudydebian1_1.0.5-5_amd64.deb
+sudo dpkg -i libjudy-dev_1.0.5-5_amd64.deb libjudydebian1_1.0.5-5_amd64.deb
+```
+
 # Install on OS X
 
-This assumes you are using Homebrew on OS X.
+### Using Homebrew
+
+TrailDB package is available in Homebrew:
+
+```sh
+brew install traildb
+```
+
+### Building from source
 
 Install the dependencies:
 

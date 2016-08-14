@@ -165,8 +165,10 @@ def build(bld, test_build=False):
         "src/tdb_limits.h"
     ])
 
-    # Build pkgconfig metadata file
-    pc = bld(source='traildb.pc.in', target='%s-%s.pc' % (APPNAME, VERSION), install_path='${PREFIX}/lib/pkgconfig')
+    # Build pkgconfig metadata file.
+    # We install into /usr/share/pkgconfig as that one seems to be used across all distributions.
+    # Otherwise, we might want to have distro-specific paths hardcoded here.
+    pc = bld(source='traildb.pc.in', target='%s-%s.pc' % (APPNAME, VERSION), install_path='${PREFIX}/share/pkgconfig')
     pc.env.prefix  = bld.env.PREFIX
     pc.env.version = VERSION
 
