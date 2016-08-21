@@ -26,6 +26,8 @@
 
   - Fix handling of empty values in `tdb_cons_append`.
 
+  - Fix handling of disk full situations in `tdb_cons_append`.
+
 ## 0.5 (2016-05-24)
 
 Initial open-source release.
