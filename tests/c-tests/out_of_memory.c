@@ -52,7 +52,7 @@ int main(int argc, char** argv)
         for (i = 0; i < NUM_ITER; i++){
             memcpy(value, &i, 4);
             int ret = tdb_cons_add(c, uuid, 0, values, lengths);
-            assert(ret == 0 || ret == TDB_ERR_NOMEM);
+            assert(ret == 0 || ret == TDB_ERR_NOMEM || ret == TDB_ERR_IO_WRITE);
             if (ret == TDB_ERR_NOMEM){
                 break;
             }
