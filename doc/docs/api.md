@@ -100,7 +100,7 @@ to the current value of the key. Return 0 on success, an error code otherwise.
 Finalize TrailDB construction. Finalization takes care of compacting the
 events and creating a valid TrailDB file.
 ```c
-tdb_error tdb_cons_finalize(tdb_cons *cons, uint64_t flags)
+tdb_error tdb_cons_finalize(tdb_cons *cons)
 ```
 
 * `cons` TrailDB constructor handle.
