@@ -387,7 +387,6 @@ TDB_EXPORT tdb_error tdb_cons_add(tdb_cons *cons,
         tdb_item item;
         void *dst;
 
-        /* TODO add a test for sparse trails */
         if (value_lengths[i]){
             if (!(val = (tdb_val)jsm_insert(&cons->lexicons[i],
                                             values[i],
@@ -397,7 +396,12 @@ TDB_EXPORT tdb_error tdb_cons_add(tdb_cons *cons,
         }
         item = tdb_make_item(field, val);
         if (!(dst = arena_add_item(&cons->items)))
-            return TDB_ERR_NOMEM;
+            /*
+            cons->items is a file-backed arena, so this is most
+            likely caused by disk being full, hence an IO error.
+            */
+            return TDB_ERR_IO_WRITE;
+
         memcpy(dst, &item, sizeof(tdb_item));
         ++event->num_items;
     }
@@ -515,14 +519,17 @@ error:
 Take an event from the old db, translate its items to new vals
 and append to the new cons
 */
-static void append_event(tdb_cons *cons,
-                         const tdb_event *event,
-                         Word_t *uuid_ptr,
-                         tdb_val **lexicon_maps)
+static tdb_error append_event(tdb_cons *cons,
+                              const tdb_event *event,
+                              Word_t *uuid_ptr,
+                              tdb_val **lexicon_maps)
 {
     uint64_t i;
     struct tdb_cons_event *new_event =
         (struct tdb_cons_event*)arena_add_item(&cons->events);
+
+    if (!new_event)
+        return TDB_ERR_NOMEM;
 
     new_event->item_zero = cons->items.next;
     new_event->num_items = 0;
@@ -538,9 +545,17 @@ static void append_event(tdb_cons *cons,
         if (val)
             new_val = lexicon_maps[field - 1][val - 1];
         tdb_item item = tdb_make_item(field, new_val);
-        memcpy(arena_add_item(&cons->items), &item, sizeof(tdb_item));
+        void *dst = arena_add_item(&cons->items);
+        if (!dst)
+            /*
+            cons->items is a file-backed arena, so this is most
+            likely caused by disk being full, hence an IO error.
+            */
+            return TDB_ERR_IO_WRITE;
+        memcpy(dst, &item, sizeof(tdb_item));
         ++new_event->num_items;
     }
+    return TDB_ERR_OK;
 }
 
 /*
@@ -579,7 +594,8 @@ static tdb_error tdb_cons_append_full_lexicon(tdb_cons *cons, const tdb *db)
             goto done;
 
         while ((event = tdb_cursor_next(cursor)))
-            append_event(cons, event, uuid_ptr, lexicon_maps);
+            if ((ret = append_event(cons, event, uuid_ptr, lexicon_maps)))
+                goto done;
     }
 done:
     if (lexicon_maps){
