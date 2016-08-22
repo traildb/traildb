@@ -526,6 +526,121 @@ typedef struct{
 and a number of field-value pairs, encoded as items.
 
 
+### tdb_cursor_peek
+Return the next event from the cursor without consuming it.
+```c
+const tdb_event *tdb_cursor_peek(tdb_cursor *cursor)
+```
+* `cursor` cursor handle.
+
+See [tdb_cursor_next](#tdb_cursor_next) for more details about `tdb_event`.
+
+
+# Join trails with multi-cursors
+
+A multi-cursor merges multiple trails represented by `tdb_cursor`
+together to produce a single merged trail that has its events sorted in
+the ascending timestamp order. The trails can originate from a single
+TrailDB or multiple separate TrailDBs. In effect, a multi-cursor performs
+efficient merge sort of the underlying trails on the fly.
+
+You need to initialize all underlying `tdb_cursor`s to point at the
+desired trails with [tdb_get_trail](#tdb_get_trail) as usual. Then,
+call [tdb_multi_cursor_reset](#tdb_multi_cursor_reset) to reset the
+multi-cursor state. After this, you can iterate over the joined
+trail with [tdb_multi_cursor_next](#tdb_multi_cursor_next), event
+by event, or get multiple joined events with a single call using
+[tdb_multi_cursor_next_batch](#tdb_multi_cursor_next_batch). You can
+repeat these steps for arbitrarily many trails using the same handles.
+
+### tdb_multi_cursor_new
+Create a new multi-cursor handle.
+```c
+tdb_multi_cursor *tdb_multi_cursor_new(tdb_cursor **cursors, uint64_t num_cursors)
+```
+* `cursors` a list of cursors to be merged.
+* `num_cursors` number of cursors in `cursors`
+
+Return NULL if memory allocation fails.
+
+
+### tdb_multi_cursor_free
+Free a multi-cursor handle.
+```c
+void tdb_multi_cursor_free(tdb_multi_cursor *mcursor)
+```
+* `mcursor` a multi-cursor handle
+
+
+### tdb_multi_cursor_reset
+Reset a multi-cursor handle to reflect the state of the underlying cursors. Call
+this function every time after [tdb_get_trail](#tdb_get_trail).
+```c
+void tdb_multi_cursor_reset(tdb_multi_cursor *mcursor);
+```
+* `mcursor` a multi-cursor handle
+
+
+### tdb_multi_cursor_next
+Consume the next event, in the ascending timestamp order, from the underlying
+cursors.
+```c
+const tdb_multi_event *tdb_multi_cursor_next(tdb_multi_cursor *mcursor)
+```
+* `mcursor` a multi-cursor handle
+
+Return a multi event struct or NULL if the cursor has no more events. The
+multi event structure is defined as follows:
+
+```c
+typedef struct{
+    const tdb *db;
+    const tdb_event *event;
+    uint64_t cursor_idx;
+} tdb_multi event;
+```
+
+`db` is a TrailDB handle to the TrailDB that contains this `event`.
+See [tdb_cursor_next](#tdb_cursor_next) for more details about
+`tdb_event`. Use the `db` handle to translate `event->items` to
+values. The `cursor_idx` index points to the array of cursors given in
+[tdb_multi_cursor_new](#tdb_multi_cursor_new).
+
+### tdb_multi_cursor_next_batch
+An optimized version of [tdb_multi_cursor_next](#tdb_multi_cursor_next).
+Instead of returning a single event, this function returns an array of
+events with a single function call.
+```c
+uint64_t tdb_multi_cursor_next_batch(tdb_multi_cursor *mcursor,
+                                     tdb_multi_event *events,
+                                     uint64_t max_events);
+```
+* `mcursor` a multi-cursor handle
+* `events` a pre-allocated array of `tdb_multi_event` structs
+* `max_events` size of the `events` array
+
+Returns the number of events added to `events`, at most `max_events`.
+If the value returned is 0, all events have been exhausted. See
+[tdb_multi_cursor_next](#tdb_multi_cursor_next) for the definition of
+`tdb_multi_event`.
+
+Note that the pointers in the `events` array are valid only until the
+next call to one of the multi-cursor functions. If you want to persist
+the underlying events, you should copy them to another data structure.
+
+
+### tdb_multi_cursor_peek
+Return the next event, in the ascending timestamp order, from the underlying
+cursors without consuming it.
+```c
+const tdb_multi_event *tdb_multi_cursor_peek(tdb_multi_cursor *mcursor);
+```
+* `mcursor` a multi-cursor handle
+
+See [tdb_multi_cursor_next](#tdb_multi_cursor_next) for the definition
+of `tdb_multi_event`.
+
+
 # Filter events
 
 An event filter is a boolean query over fields, expressed in [conjunctive normal

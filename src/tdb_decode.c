@@ -134,8 +134,11 @@ TDB_EXPORT tdb_error tdb_get_trail(tdb_cursor *cursor,
         cursor->next_event = s->events_buffer;
 
         return 0;
-    }else
+    }else{
+        cursor->num_events_left = 0;
+        cursor->next_event = NULL;
         return TDB_ERR_INVALID_TRAIL_ID;
+    }
 }
 
 TDB_EXPORT uint64_t tdb_get_trail_length(tdb_cursor *cursor)
@@ -255,4 +258,5 @@ this is "strategy 3" from
 http://www.greenend.org.uk/rjk/tech/inline.html
 */
 TDB_EXPORT extern const tdb_event *tdb_cursor_next(tdb_cursor *cursor);
+TDB_EXPORT extern const tdb_event *tdb_cursor_peek(tdb_cursor *cursor);
 
