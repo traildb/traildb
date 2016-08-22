@@ -3,6 +3,8 @@
 
 ### New features
 
+  - Multi-cursors: [join trails over multiple TrailDBs efficiently][http://traildb.io/docs/api/#join-trails-with-multi-cursors]. This is a convenient way to stich together e.g. time-sharded TrailDBs or merge together user profiles stored under separate UUIDs.
+
   - Item index for `tdb` CLI. This can speed up `--filter` expressions that access infrequent items
     significantly.
 
@@ -17,6 +19,10 @@
   - `--filter` flag for the `tdb` CLI: Define event filters on the
     command line for easy grepping of events. Also added `--verbose` flag
     for troubleshooting filters.
+
+  - `tdb merge` for `tdb` CLI. This operation is used to merge multipled tdbs into a single tdb.
+
+  - Added a `brew` package for OS X.
 
   - Added installation instructions for FreeBSD.
 
