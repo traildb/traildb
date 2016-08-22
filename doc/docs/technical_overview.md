@@ -178,6 +178,26 @@ initialized above. The [tdb_cons_append()](api/#tdb_cons_append)
 function will add only events matching with the filter to the new
 TrailDB.
 
+You can also create materialized views on the command line with
+the `tdb merge` command.
+
+###### Join trails over multiple TrailDBs
+
+It is a common pattern to shard TrailDBs by time, e.g. by day. Now if you
+want to return the full trail of a user over K days, you need to handle
+each of the K TrailDBs separately.
+
+[Multi-cursors](api/#join-trails-with-multi-cursors) provide a
+convenient way to stich together trails in multiple (or a single)
+TrailDB(s). You need to initialize the cursors for each of the K
+TrailDBs as usual, pass them to a multi-cursor instance, and use the
+multi-cursor to iterate over a joined trail seamlessly.
+
+Multi-cursors work even if the underlying cursors are overlapping in
+time since they perform an efficient `O(Kn)` merge sort on the fly.
+Note that you can also apply event filters to the underlying cursors to
+produce a joined trail over a subset of events.
+
 # Limits
 
  - Maximum number of trails: 2<sup>59</sup> - 1
