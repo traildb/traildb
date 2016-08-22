@@ -3,7 +3,7 @@
 
 ### New features
 
-  - Multi-cursors: [join trails over multiple TrailDBs efficiently][http://traildb.io/docs/api/#join-trails-with-multi-cursors]. This is a convenient way to stich together e.g. time-sharded TrailDBs or merge together user profiles stored under separate UUIDs.
+  - Multi-cursors: [join trails over multiple TrailDBs efficiently](http://traildb.io/docs/api/#join-trails-with-multi-cursors). This is a convenient way to stich together e.g. time-sharded TrailDBs or merge together user profiles stored under separate UUIDs.
 
   - Item index for `tdb` CLI. This can speed up `--filter` expressions that access infrequent items
     significantly.
