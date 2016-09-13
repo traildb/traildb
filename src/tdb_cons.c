@@ -327,25 +327,27 @@ done:
 
 TDB_EXPORT void tdb_cons_close(tdb_cons *cons)
 {
-    uint64_t i;
-    for (i = 0; i < cons->num_ofields; i++){
-        if (cons->ofield_names)
-            free(cons->ofield_names[i]);
-        if (cons->lexicons)
-            jsm_free(&cons->lexicons[i]);
-    }
-    free(cons->lexicons);
-    if (cons->items.fd)
-        fclose(cons->items.fd);
-    if (cons->events.data)
-        free(cons->events.data);
-    if (cons->items.data)
-        free(cons->items.data);
+    if(cons){
+        uint64_t i;
+        for (i = 0; i < cons->num_ofields; i++){
+            if (cons->ofield_names)
+                free(cons->ofield_names[i]);
+            if (cons->lexicons)
+                jsm_free(&cons->lexicons[i]);
+        }
+        free(cons->lexicons);
+        if (cons->items.fd)
+            fclose(cons->items.fd);
+        if (cons->events.data)
+            free(cons->events.data);
+        if (cons->items.data)
+            free(cons->items.data);
 
-    j128m_free(&cons->trails);
-    free(cons->ofield_names);
-    free(cons->root);
-    free(cons);
+        j128m_free(&cons->trails);
+        free(cons->ofield_names);
+        free(cons->root);
+        free(cons);
+    }
 }
 
 /*
