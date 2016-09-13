@@ -1,13 +1,3 @@
-
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <assert.h>
-#include <float.h>
-
-// explicitly set to non-maximum value
-#define DSFMT_MEXP 521
 #include <traildb.h>
 
 int main(int argc, char **argv)
