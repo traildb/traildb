@@ -410,6 +410,11 @@ TDB_EXPORT void tdb_dontneed(const tdb *db)
     tdb_madvise(db, MADV_DONTNEED);
 }
 
+TDB_EXPORT void tdb_random(const tdb *db)
+{
+    tdb_madvise(db, MADV_RANDOM);
+}
+
 TDB_EXPORT void tdb_close(tdb *db)
 {
     if (db){

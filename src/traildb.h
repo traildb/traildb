@@ -69,11 +69,16 @@ tdb_error tdb_open(tdb *db, const char *root);
 /* Close a TrailDB */
 void tdb_close(tdb *db);
 
+/* These calls all invoke madvise() system call on each file TrailDB has open. */
+
 /* Inform the operating system that memory can be paged for this TrailDB */
 void tdb_dontneed(const tdb *db);
 
 /* Inform the operating system that this TrailDB will be needed soon */
 void tdb_willneed(const tdb *db);
+
+/* Inform the operating system that this TrailDB will be accessed in random fashion. */
+void tdb_random(const tdb *db);
 
 /* Get the number of trails */
 uint64_t tdb_num_trails(const tdb *db);
