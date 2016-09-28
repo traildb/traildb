@@ -63,6 +63,11 @@ typedef struct{
     uint64_t num_events_left;
 } tdb_cursor;
 
+typedef struct{
+    uint64_t marker;
+    tdb_cursor *cursor;
+} tdb_iter;
+
 typedef struct tdb_multi_cursor tdb_multi_cursor;
 
 #define tdb_item_field32(item) (item & 127)
