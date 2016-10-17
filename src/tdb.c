@@ -789,8 +789,10 @@ TDB_EXPORT tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter
 
 TDB_EXPORT void tdb_event_filter_free(struct tdb_event_filter *filter)
 {
-    free(filter->items);
-    free(filter);
+    if(filter){
+        free(filter->items);
+        free(filter);
+    }
 }
 
 TDB_EXPORT tdb_error tdb_event_filter_get_item(const struct tdb_event_filter *filter,
