@@ -177,6 +177,12 @@ Event filter
 /* Create a new event filter */
 struct tdb_event_filter *tdb_event_filter_new(void);
 
+/* Create a new event filter that matches all events */
+struct tdb_event_filter *tdb_event_filter_new_match_all(void);
+
+/* Create a new event filter that matches nothing */
+struct tdb_event_filter *tdb_event_filter_new_match_none(void);
+
 /* Add a new term (item) in an OR-clause */
 tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
                                     tdb_item term,

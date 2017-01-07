@@ -29,11 +29,15 @@ struct tdb_cons_event{
     uint64_t prev_event_idx;
 };
 
+#define TDB_FILTER_MATCH_ALL 1
+#define TDB_FILTER_MATCH_NONE 2
+
 struct tdb_event_filter{
     uint64_t count;
     uint64_t size;
     uint64_t clause_len_idx;
     tdb_item *items;
+    uint64_t options;
 };
 
 struct tdb_decode_state{
@@ -51,8 +55,7 @@ struct tdb_decode_state{
     uint64_t tstamp;
 
     /* options */
-    const tdb_item *filter;
-    uint64_t filter_len;
+    const struct tdb_event_filter *filter;
     int filter_type;
 
     int edge_encoded;
