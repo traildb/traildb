@@ -136,6 +136,38 @@ static void test_queries()
     assert(tdb_get_trail_length(c) == 2);
 }
 
+static void test_whitelisting()
+{
+    uint64_t i;
+    tdb *t = open_test_tdb();
+    struct tdb_event_filter *none = tdb_event_filter_new_match_none();
+    tdb_opt_value value = {.ptr = none};
+    /* blacklist everything */
+    assert(tdb_set_opt(t, TDB_OPT_EVENT_FILTER, value) == 0);
+    tdb_cursor *c = tdb_cursor_new(t);
+    for (i = 0; i < NUM_TRAILS; i++){
+        assert(tdb_get_trail(c, i) == 0);
+        assert(tdb_get_trail_length(c) == 0);
+    }
+    /* whitelist two trails, add a custom filter to a third */
+    struct tdb_event_filter *all = tdb_event_filter_new_match_all();
+    struct tdb_event_filter *f = create_event_filter(t, 0);
+    value.ptr = all;
+    assert(tdb_set_trail_opt(t, 100, TDB_OPT_EVENT_FILTER, value) == 0);
+    assert(tdb_set_trail_opt(t, 200, TDB_OPT_EVENT_FILTER, value) == 0);
+    value.ptr = f;
+    assert(tdb_set_trail_opt(t, 300, TDB_OPT_EVENT_FILTER, value) == 0);
+    for (i = 0; i < NUM_TRAILS; i++){
+        assert(tdb_get_trail(c, i) == 0);
+        if (i == 100 || i == 200)
+            assert(tdb_get_trail_length(c) == 3);
+        else if (i == 300)
+            assert(tdb_get_trail_length(c) == 1);
+        else
+            assert(tdb_get_trail_length(c) == 0);
+    }
+}
+
 static void test_append()
 {
     uint64_t TRAIL_ID = 500;
@@ -168,6 +200,7 @@ int main(int argc, char** argv)
 
     test_trail_opt();
     test_queries();
+    test_whitelisting();
     test_append();
 
     return 0;
