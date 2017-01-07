@@ -3,6 +3,8 @@
 
 ### New features
 
+  - Trail-level options: [tdb_set_trail_opt](http://traildb.io/docs/api/#tdb_set_trail_opt). This is especially useful for creating granular views using `TDB_OPT_EVENT_FILTER`. See [Setting Options](http://traildb.io/docs/api/#setting-options).
+
   - Multi-cursors: [join trails over multiple TrailDBs efficiently](http://traildb.io/docs/api/#join-trails-with-multi-cursors). This is a convenient way to stich together e.g. time-sharded TrailDBs or merge together user profiles stored under separate UUIDs.
 
   - Item index for `tdb` CLI. This can speed up `--filter` expressions that access infrequent items
@@ -33,6 +35,10 @@
   - Fix handling of empty values in `tdb_cons_append`.
 
   - Fix handling of disk full situations in `tdb_cons_append`.
+
+  - Fix semantics of how `TDB_OPT_EVENT_FILTER` filters are applied to cursors.
+    Now the changes are applied at every call to `tdb_get_trail`, not at the
+    creation of the cursor.
 
 ## 0.5 (2016-05-24)
 
