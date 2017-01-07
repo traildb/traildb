@@ -3,7 +3,6 @@
 
 #define CURSOR_FILTER 1
 #define TRAIL_FILTER 2
-#define DB_FILTER 3
 
 static inline uint64_t tdb_get_trail_offs(const tdb *db, uint64_t trail_id)
 {
@@ -122,7 +121,12 @@ TDB_EXPORT tdb_error tdb_get_trail(tdb_cursor *cursor,
         uint64_t trail_size;
         tdb_field field;
 
-        /* reset the filter */
+        /*
+        db->opt_event_filter may have changed since the last
+        tdb_get_trail call, so we will always reset it. Also
+        we need to reset any trail-level filter that may have
+        been set previously.
+        */
         if (s->filter_type == TRAIL_FILTER){
             if (db->opt_event_filter){
                 /*
@@ -131,11 +135,19 @@ TDB_EXPORT tdb_error tdb_get_trail(tdb_cursor *cursor,
                 */
                 s->filter = db->opt_event_filter->items;
                 s->filter_len = db->opt_event_filter->count;
+                if (s->edge_encoded){
+                    /*
+                    setting a filter in the edge-encoded mode fails as in
+                    tdb_cursor_set_event_filter above
+                    */
+                    cursor->num_events_left = 0;
+                    cursor->next_event = NULL;
+                    return TDB_ERR_ONLY_DIFF_FILTER;
+                }
             }else{
                 s->filter = NULL;
                 s->filter_len = 0;
             }
-            s->filter_type = DB_FILTER;
         }
 
         /*
