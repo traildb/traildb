@@ -630,7 +630,9 @@ TDB_EXPORT tdb_error tdb_cons_append(tdb_cons *cons, const tdb *db)
     /* NOTE: When you add new options in tdb, remember to add them to
     the list below if they cause only a subset of events to be returned.
     */
-    if (db->opt_event_filter || db->opt_edge_encoded)
+    if (db->opt_event_filter ||
+        db->opt_edge_encoded ||
+        db->opt_trail_event_filters)
         /*
         Standard append: recreate lexicons through strings.
         We need to do this when only a subset of events is appended.

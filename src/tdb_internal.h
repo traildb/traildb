@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 
+#include <Judy.h>
+
 #include "traildb.h"
 #include "arena.h"
 #include "judy_str_map.h"
@@ -51,7 +53,7 @@ struct tdb_decode_state{
     /* options */
     const tdb_item *filter;
     uint64_t filter_len;
-    uint64_t filter_size;
+    int filter_type;
 
     int edge_encoded;
 
@@ -135,6 +137,9 @@ struct _tdb {
     int opt_edge_encoded;
     /* TDB_OPT_EVENT_FILTER */
     const struct tdb_event_filter *opt_event_filter;
+
+    /* trail-level event filters */
+    Pvoid_t opt_trail_event_filters;
 
 };
 
