@@ -439,32 +439,37 @@ static tdb_error tdb_cons_append_subset_lexicon(tdb_cons *cons, const tdb *db)
 
     for (trail_id = 0; trail_id < tdb_num_trails(db); trail_id++){
         const tdb_event *event;
-        const uint8_t *uuid = tdb_get_uuid(db, trail_id);
 
         if ((ret = tdb_get_trail(cursor, trail_id)))
             goto done;
+        /*
+        lookup UUID only if there are events:
+        expensive to perform many unnecessary lookups with selective filters
+        */
+        if (tdb_cursor_peek(cursor)){
+            const uint8_t *uuid = tdb_get_uuid(db, trail_id);
+            while ((event = tdb_cursor_next(cursor))){
+                /*
+                with TDB_OPT_ONLY_DIFF_ITEMS event->items may be sparse,
+                hence we need to reset lengths to zero
+                */
+                memset(lengths, 0, num_fields * sizeof(uint64_t));
+                for (i = 0; i < event->num_items; i++){
+                    tdb_field field = tdb_item_field(event->items[i]);
+                    tdb_val val = tdb_item_val(event->items[i]);
+                    values[field - 1] = tdb_get_value(db,
+                                                      field,
+                                                      val,
+                                                      &lengths[field - 1]);
+                }
 
-        while ((event = tdb_cursor_next(cursor))){
-            /*
-            with TDB_OPT_ONLY_DIFF_ITEMS event->items may be sparse,
-            hence we need to reset lengths to zero
-            */
-            memset(lengths, 0, num_fields * sizeof(uint64_t));
-            for (i = 0; i < event->num_items; i++){
-                tdb_field field = tdb_item_field(event->items[i]);
-                tdb_val val = tdb_item_val(event->items[i]);
-                values[field - 1] = tdb_get_value(db,
-                                                  field,
-                                                  val,
-                                                  &lengths[field - 1]);
+                if ((ret = tdb_cons_add(cons,
+                                        uuid,
+                                        event->timestamp,
+                                        values,
+                                        lengths)))
+                    goto done;
             }
-
-            if ((ret = tdb_cons_add(cons,
-                                    uuid,
-                                    event->timestamp,
-                                    values,
-                                    lengths)))
-                goto done;
         }
     }
 
@@ -589,15 +594,20 @@ static tdb_error tdb_cons_append_full_lexicon(tdb_cons *cons, const tdb *db)
         Word_t *uuid_ptr;
         const tdb_event *event;
 
-        memcpy(&uuid_key, tdb_get_uuid(db, trail_id), 16);
-        uuid_ptr = j128m_insert(&cons->trails, uuid_key);
-
         if ((ret = tdb_get_trail(cursor, trail_id)))
             goto done;
 
-        while ((event = tdb_cursor_next(cursor)))
-            if ((ret = append_event(cons, event, uuid_ptr, lexicon_maps)))
-                goto done;
+        /*
+        lookup UUID only if there are events:
+        expensive to perform many unnecessary lookups with selective filters
+        */
+        if (tdb_cursor_peek(cursor)){
+            memcpy(&uuid_key, tdb_get_uuid(db, trail_id), 16);
+            uuid_ptr = j128m_insert(&cons->trails, uuid_key);
+            while ((event = tdb_cursor_next(cursor)))
+                if ((ret = append_event(cons, event, uuid_ptr, lexicon_maps)))
+                    goto done;
+        }
     }
 done:
     if (lexicon_maps){

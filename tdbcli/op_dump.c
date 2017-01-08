@@ -135,19 +135,21 @@ static void dump_trails(const tdb *db,
                 trail_id,
                 tdb_error_str(err));
 
-        tdb_uuid_hex(tdb_get_uuid(db, trail_id), hexuuid);
+        if (tdb_cursor_peek(cursor)){
+            tdb_uuid_hex(tdb_get_uuid(db, trail_id), hexuuid);
 
-        while ((event = tdb_cursor_next(cursor))){
-            populate_fields(event,
-                            (const char*)hexuuid,
-                            db,
-                            opt,
-                            out_values,
-                            out_lengths);
-            if (opt->format == FORMAT_CSV)
-                dump_csv_event(output, opt, out_values, out_lengths);
-            else
-                dump_json_event(output, opt, out_values, out_lengths);
+            while ((event = tdb_cursor_next(cursor))){
+                populate_fields(event,
+                                (const char*)hexuuid,
+                                db,
+                                opt,
+                                out_values,
+                                out_lengths);
+                if (opt->format == FORMAT_CSV)
+                    dump_csv_event(output, opt, out_values, out_lengths);
+                else
+                    dump_json_event(output, opt, out_values, out_lengths);
+            }
         }
     }
 
