@@ -36,6 +36,9 @@ struct tdbcli_options{
     const char *index_path;
     int no_index;
 
+    /* uuids */
+    const char *uuids;
+
     /* csv */
     int csv_has_header;
 
@@ -54,9 +57,7 @@ struct tdbcli_options{
 
 long int safely_to_int(const char *str, const char *field);
 
-struct tdb_event_filter *parse_filter(const tdb *db,
-                                      const char *filter_expression,
-                                      int verbose);
+struct tdb_event_filter *apply_filter(tdb *db, struct tdbcli_options *opt);
 
 int op_dump(struct tdbcli_options *opt);
 

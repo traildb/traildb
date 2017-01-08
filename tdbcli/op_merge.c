@@ -98,15 +98,9 @@ int op_merge(struct tdbcli_options *opt,
             DIE("Invalid --tdb-format. "
                 "Maybe TrailDB was compiled without libarchive");
 
-    /* set the filter if set */
-    if (opt->filter_arg){
-        for (i = 0; i < num_inputs; i++){
-            tdb_opt_value value;
-            value.ptr = parse_filter(dbs[i], opt->filter_arg, opt->verbose);
-            if (tdb_set_opt(dbs[i], TDB_OPT_EVENT_FILTER, value))
-                DIE("Could not set event filter");
-        }
-    }
+    /* apply --filter and --uuids */
+    for (i = 0; i < num_inputs; i++)
+        apply_filter(dbs[i], opt);
 
     for (i = 0; i < num_inputs; i++){
         if ((err = tdb_cons_append(cons, dbs[i])))

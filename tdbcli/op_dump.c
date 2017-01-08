@@ -221,14 +221,10 @@ int op_dump(struct tdbcli_options *opt)
             opt->input,
             tdb_error_str(err));
 
-    if (opt->filter_arg){
+    filter = apply_filter(db, opt);
+    if (filter){
         const char *index_path = NULL;
         char *free_path = NULL;
-        tdb_opt_value value;
-
-        value.ptr = filter = parse_filter(db, opt->filter_arg, opt->verbose);
-        if (tdb_set_opt(db, TDB_OPT_EVENT_FILTER, value))
-            DIE("Could not set event filter");
 
         if (!opt->no_index &&
             ((index_path = opt->index_path) ||
