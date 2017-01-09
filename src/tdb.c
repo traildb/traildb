@@ -751,7 +751,8 @@ TDB_EXPORT struct tdb_event_filter *tdb_event_filter_new(void)
 
 static tdb_error ensure_filter_size(struct tdb_event_filter *filter)
 {
-    if (filter->count + 2 >= filter->size){
+    /* ensure we can fit the largest term (time range) in the array */
+    if (filter->count + 3 >= filter->size){
         filter->size *= 2;
         filter->items = realloc(filter->items, filter->size * sizeof(tdb_item));
         if (!filter->items)
@@ -783,18 +784,11 @@ TDB_EXPORT tdb_error tdb_event_filter_add_time_range(struct tdb_event_filter *fi
     if ((ret = ensure_filter_size(filter)))
         return ret;
 
-    uint64_t query_flags = START_INCLUSIVE;
+    uint64_t query_flags = TIME_RANGE;
     filter->items[filter->count++] = query_flags;
     filter->items[filter->count++] = start_time;
-    filter->items[filter->clause_len_idx] += 2;
-
-    if ((ret = ensure_filter_size(filter)))
-        return ret;
-
-    query_flags = END_EXCLUSIVE;
-    filter->items[filter->count++] = query_flags;
     filter->items[filter->count++] = end_time;
-    filter->items[filter->clause_len_idx] += 2;
+    filter->items[filter->clause_len_idx] += 3;
         
     return TDB_ERR_OK;
 }

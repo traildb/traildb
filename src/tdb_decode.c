@@ -27,9 +27,9 @@ static int event_satisfies_filter(const tdb_item *event,
             uint64_t filter_item = filter[i++];
 
             /* Time range queries */
-            if (comp_op & START_INCLUSIVE || comp_op & END_EXCLUSIVE) {
-                if ((comp_op & START_INCLUSIVE && filter_item <= timestamp)
-                    || (comp_op & END_EXCLUSIVE && timestamp < filter_item)) {
+            if (comp_op & TIME_RANGE) {
+                uint64_t end_filter = filter[i++];
+                if (filter_item <= timestamp && timestamp < end_filter) {
                     match = 1;
                     break;
                 }
