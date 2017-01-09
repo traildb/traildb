@@ -650,6 +650,8 @@ TDB_EXPORT const char *tdb_error_str(tdb_error errcode)
             return "TDB_ERR_TRAIL_TOO_LONG";
         case        TDB_ERR_ONLY_DIFF_FILTER:
             return "TDB_ERR_ONLY_DIFF_FILTER";
+        case        TDB_ERR_INVALID_RANGE:
+            return "TDB_ERR_INVALID_RANGE";
         default:
             return "Unknown error";
     }
@@ -780,6 +782,9 @@ TDB_EXPORT tdb_error tdb_event_filter_add_time_range(struct tdb_event_filter *fi
                                                      uint64_t start_time,
                                                      uint64_t end_time)
 {
+    if (end_time <= start_time)
+        return TDB_ERR_INVALID_RANGE;
+    
     tdb_error ret;
     if ((ret = ensure_filter_size(filter)))
         return ret;

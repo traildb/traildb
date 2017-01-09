@@ -53,13 +53,6 @@ int main(int argc, char **argv)
     tdb_event_filter_free(f);
     f = tdb_event_filter_new();
 
-    /* time range with single timestep */
-    assert(tdb_event_filter_add_time_range(f, start_time, start_time) == 0);
-    assert_num_events(cursor, f, 0);
-
-    tdb_event_filter_free(f);
-    f = tdb_event_filter_new();
-
     /* test all events in range */
     assert(tdb_event_filter_add_time_range(f, start_time - 1, end_time + 1) == 0);
     assert_num_events(cursor, f, 4);
@@ -154,6 +147,21 @@ int main(int argc, char **argv)
     assert(tdb_event_filter_add_time_range(f, end_time, end_time + 1) == 0);
     assert_num_events(cursor, f, 0);
    
+    tdb_event_filter_free(f);
+
+    /* ERROR HANDLING */
+    f = tdb_event_filter_new();
+
+    /* time range with single timestep */
+    assert(tdb_event_filter_add_time_range(f, start_time, start_time) == TDB_ERR_INVALID_RANGE);
+
+    tdb_event_filter_free(f);
+    f = tdb_event_filter_new();
+
+    /* end less than start */
+    f = tdb_event_filter_new();
+    assert(tdb_event_filter_add_time_range(f, end_time, start_time) == TDB_ERR_INVALID_RANGE);
+
     tdb_event_filter_free(f);
 
     tdb_close(t);
