@@ -27,13 +27,15 @@ static int event_satisfies_filter(const tdb_item *event,
             uint64_t filter_item = filter[i++];
 
             /* Time range queries */
-            if (comp_op & START_INCLUSIVE && filter_item <= timestamp) {
-                match = 1;
-                break;
-            } else if(comp_op & END_EXCLUSIVE && timestamp < filter_item) {
-                match = 1;
-                break;
-            } else {
+            if (comp_op & START_INCLUSIVE || comp_op & END_EXCLUSIVE) {
+                if (comp_op & START_INCLUSIVE && filter_item <= timestamp) {
+                    match = 1;
+                    break;
+                } else if(comp_op & END_EXCLUSIVE && timestamp < filter_item) {
+                    match = 1;
+                    break;
+                }
+                
                 continue;
             }
 
