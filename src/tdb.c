@@ -768,11 +768,35 @@ TDB_EXPORT tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
     if ((ret = ensure_filter_size(filter)))
         return ret;
     else{
-        filter->items[filter->count++] = (is_negative ? 1: 0);
+        filter->items[filter->count++] = (is_negative ? NEGATED: 0);
         filter->items[filter->count++] = term;
         filter->items[filter->clause_len_idx] += 2;
         return TDB_ERR_OK;
     }
+}
+
+TDB_EXPORT tdb_error tdb_event_filter_add_time_range(struct tdb_event_filter *filter,
+                                                     uint64_t start_time,
+                                                     uint64_t end_time)
+{
+    tdb_error ret;
+    if ((ret = ensure_filter_size(filter)))
+        return ret;
+
+    uint64_t query_flags = START_INCLUSIVE;
+    filter->items[filter->count++] = query_flags;
+    filter->items[filter->count++] = start_time;
+    filter->items[filter->clause_len_idx] += 2;
+
+    if ((ret = ensure_filter_size(filter)))
+        return ret;
+
+    query_flags = END_EXCLUSIVE;
+    filter->items[filter->count++] = query_flags;
+    filter->items[filter->count++] = end_time;
+    filter->items[filter->clause_len_idx] += 2;
+        
+    return TDB_ERR_OK;
 }
 
 TDB_EXPORT tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter)
@@ -809,7 +833,7 @@ TDB_EXPORT tdb_error tdb_event_filter_get_item(const struct tdb_event_filter *fi
     }
     if (item_index * 2 < filter->items[i]){
         i += item_index * 2 + 1;
-        *is_negative = filter->items[i] ? 1: 0;
+        *is_negative = filter->items[i] & NEGATED ? 1 : 0;
         *item = filter->items[i + 1];
         return TDB_ERR_OK;
     }

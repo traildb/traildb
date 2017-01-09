@@ -170,6 +170,11 @@ tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
                                     tdb_item term,
                                     int is_negative);
 
+/* Add a timestamp range query (start_time <= timestamp < end_time) in an OR-clause */
+tdb_error tdb_event_filter_add_time_range(struct tdb_event_filter *filter,
+                                          uint64_t start_time,
+                                          uint64_t end_time);
+
 /* Add a new clause, connected by AND to the previous clauses */
 tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter);
 
