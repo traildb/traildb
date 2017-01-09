@@ -681,6 +681,21 @@ tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
 
 Return 0 on success, an error code otherwise (out of memory).
 
+### tdb_event_filter_add_time_range
+Add a time-range term to the query. This item is attached to the
+current clause with OR. Finds events with timestamp `t` such that
+`start_time <= t < end_time`.
+```c
+tdb_error tdb_event_filter_add_time_range(struct tdb_event_filter *filter,
+                                          uint64_t start_time,
+                                          uint64_t end_time)
+```
+* `filter` filter handle.
+* `start_time` (inclusive) start of time range
+* `end_time` (exclusive) end of time range
+
+Return 0 on success, an error code otherwise (out of memory or invalid time range).
+
 
 ### tdb_event_filter_new_clause
 Add a new clause in the query. The new clause is attached to the
