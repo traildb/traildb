@@ -35,7 +35,9 @@ struct tdb_event_filter{
     uint64_t size; /* amount of allocated space for items = sizeof(tdb_item) * size */
     uint64_t clause_len_idx; /* idx for storing number of terms in current clause */
     tdb_item *items; /* array of filters for CNF expression. Each clause in the list
-                        starts with a number indicating the number of preceding entries.
+                        starts with a number indicating the number of terms in the clause,
+                        following by the terms.
+
                         Each term starts with a term type flag. For a matching term, a
                         tdb_item containing the field and value to match follows. For
                         time-range filters, the term type flag is followed by two entries,
