@@ -652,6 +652,8 @@ TDB_EXPORT const char *tdb_error_str(tdb_error errcode)
             return "TDB_ERR_ONLY_DIFF_FILTER";
         case        TDB_ERR_INVALID_RANGE:
             return "TDB_ERR_INVALID_RANGE";
+        case        TDB_ERR_INCORRECT_TERM_TYPE:
+            return "TDB_ERR_INCORRECT_TERM_TYPE";
         default:
             return "Unknown error";
     }
@@ -784,7 +786,7 @@ TDB_EXPORT tdb_error tdb_event_filter_add_time_range(struct tdb_event_filter *fi
 {
     if (end_time <= start_time)
         return TDB_ERR_INVALID_RANGE;
-    
+
     tdb_error ret;
     if ((ret = ensure_filter_size(filter)))
         return ret;
@@ -818,27 +820,116 @@ TDB_EXPORT void tdb_event_filter_free(struct tdb_event_filter *filter)
     }
 }
 
+TDB_EXPORT tdb_error tdb_event_filter_get_term_type(const struct tdb_event_filter *filter,
+                                                    uint64_t clause_index,
+                                                    uint64_t term_index,
+                                                    tdb_event_filter_term_type *term_type)
+{
+    *term_type = TDB_EVENT_FILTER_UNKNOWN_TERM;
+
+    uint64_t clause, i;
+    for (clause = 0, i = 0; clause < clause_index; clause++){
+        i += filter->items[i] + 1;
+        if (i == filter->count) {
+            return TDB_ERR_NO_SUCH_ITEM;
+        }
+    }
+
+    uint64_t clause_len = filter->items[i++];
+    uint64_t next_clause_idx = i + clause_len;
+    uint64_t current_item_idx = 0;
+    while (i < next_clause_idx) {
+        if (current_item_idx == term_index) {
+
+            *term_type = (filter->items[i] & TIME_RANGE) ?
+                TDB_EVENT_FILTER_TIME_RANGE_TERM : TDB_EVENT_FILTER_MATCH_TERM;
+
+            return TDB_ERR_OK;
+        }
+
+        i += filter->items[i] & TIME_RANGE ? 3 : 2;
+        current_item_idx++;
+    }
+
+    return TDB_ERR_NO_SUCH_ITEM;
+}
+
+
 TDB_EXPORT tdb_error tdb_event_filter_get_item(const struct tdb_event_filter *filter,
                                                uint64_t clause_index,
                                                uint64_t item_index,
                                                tdb_item *item,
                                                int *is_negative)
 {
+    tdb_error ret = TDB_ERR_NO_SUCH_ITEM;
+
     uint64_t clause, i;
     for (clause = 0, i = 0; clause < clause_index; clause++){
         i += filter->items[i] + 1;
-        if (i == filter->count)
+        if (i == filter->count) {
             goto invalid;
+        }
     }
-    if (item_index * 2 < filter->items[i]){
-        i += item_index * 2 + 1;
-        *is_negative = filter->items[i] & NEGATED ? 1 : 0;
-        *item = filter->items[i + 1];
-        return TDB_ERR_OK;
+
+    uint64_t clause_len = filter->items[i++];
+    uint64_t next_clause_idx = i + clause_len;
+    uint64_t current_item_idx = 0;
+    while (i < next_clause_idx) {
+        if (current_item_idx == item_index) {
+            if (filter->items[i] & TIME_RANGE) {
+                ret = TDB_ERR_INCORRECT_TERM_TYPE;
+                goto invalid;
+            }
+
+            *is_negative = filter->items[i] & NEGATED ? 1 : 0;
+            *item = filter->items[i + 1];
+            return TDB_ERR_OK;
+        }
+
+        i += filter->items[i] & TIME_RANGE ? 3 : 2;
+        current_item_idx++;
     }
 invalid:
     *item = 0;
     *is_negative = 0;
+    return ret;
+}
+
+TDB_EXPORT tdb_error tdb_event_filter_get_time_range(const struct tdb_event_filter *filter,
+                                                     uint64_t clause_index,
+                                                     uint64_t item_index,
+                                                     uint64_t *start_time,
+                                                     uint64_t *end_time)
+{
+    *start_time = 0;
+    *end_time = 0;
+
+    uint64_t clause, i;
+    for (clause = 0, i = 0; clause < clause_index; clause++){
+        i += filter->items[i] + 1;
+        if (i == filter->count) {
+            return TDB_ERR_NO_SUCH_ITEM;
+        }
+    }
+
+    uint64_t clause_len = filter->items[i++];
+    uint64_t next_clause_idx = i + clause_len;
+    uint64_t current_item_idx = 0;
+    while (i < next_clause_idx) {
+        if (current_item_idx == item_index) {
+            if (!(filter->items[i] & TIME_RANGE)) {
+                return TDB_ERR_INCORRECT_TERM_TYPE;
+            }
+
+            *start_time = filter->items[i + 1];
+            *end_time = filter->items[i + 2];
+            return TDB_ERR_OK;
+        }
+
+        i += filter->items[i] & TIME_RANGE ? 3 : 2;
+        current_item_idx++;
+    }
+
     return TDB_ERR_NO_SUCH_ITEM;
 }
 
@@ -849,4 +940,27 @@ TDB_EXPORT uint64_t tdb_event_filter_num_clauses(
     for (num_clauses = 0, i = 0; i < filter->count; num_clauses++)
         i += filter->items[i] + 1;
     return num_clauses;
+}
+
+TDB_EXPORT tdb_error tdb_event_filter_num_terms(const struct tdb_event_filter *filter,
+                                                uint64_t clause_index,
+                                                uint64_t *num_terms)
+{
+    uint64_t clause, i;
+    for (clause = 0, i = 0; clause < clause_index; clause++){
+        i += filter->items[i] + 1;
+        if (i == filter->count) {
+            return TDB_ERR_NO_SUCH_ITEM;
+        }
+    }
+
+    *num_terms = 0;
+    uint64_t clause_len = filter->items[i++];
+    uint64_t next_clause_idx = i + clause_len;
+    while (i < next_clause_idx) {
+        i += filter->items[i] & TIME_RANGE ? 3 : 2;
+        num_terms++;
+    }
+
+    return TDB_ERR_OK;
 }

@@ -122,5 +122,11 @@ static const tdb_opt_value TDB_FALSE __attribute__((unused)) = {.value = 0};
 #define TDB_OPT_CONS_OUTPUT_FORMAT_DIR 0
 #define TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE 1
 
+typedef enum {
+    TDB_EVENT_FILTER_UNKNOWN_TERM = 0,
+    TDB_EVENT_FILTER_MATCH_TERM = 1,
+    TDB_EVENT_FILTER_TIME_RANGE_TERM = 2
+} tdb_event_filter_term_type;
+
 #endif /* __TDB_TYPES_H__ */
 

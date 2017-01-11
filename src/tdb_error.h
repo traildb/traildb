@@ -55,7 +55,8 @@ typedef enum{
     /* querying */
     TDB_ERR_ONLY_DIFF_FILTER = -513,
     TDB_ERR_NO_SUCH_ITEM = -514,
-    TDB_ERR_INVALID_RANGE = -515
+    TDB_ERR_INVALID_RANGE = -515,
+    TDB_ERR_INCORRECT_TERM_TYPE = -516
 
 } tdb_error;
 
