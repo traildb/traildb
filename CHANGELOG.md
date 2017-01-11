@@ -3,7 +3,7 @@
 
 ### New features
 
-  - Time-range term: [query events within a given time-range](http://traildb.io/docs/api/#tdb_event_filter_add_time_range). This simplifies time-series type analyses of trails.
+  - Time-range term: [query events within a given time-range](http://traildb.io/docs/api/#tdb_event_filter_add_time_range). This simplifies time-series type analyses of trails. Also expanded the filter inspection API to add functions for [counting the number of terms in a clause](http://traildb.io/docs/api/#tdb_event_filter_num_terms), [inspecting the type of a term](http://traildb.io/docs/api/#tdb_event_filter_get_term_type), and [returning the start and end times of a time-range term](http://traildb.io/docs/api/#tdb_event_filter_get_time_range).
 
   - Multi-cursors: [join trails over multiple TrailDBs efficiently](http://traildb.io/docs/api/#join-trails-with-multi-cursors). This is a convenient way to stich together e.g. time-sharded TrailDBs or merge together user profiles stored under separate UUIDs.
 
