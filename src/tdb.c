@@ -959,7 +959,7 @@ TDB_EXPORT tdb_error tdb_event_filter_num_terms(const struct tdb_event_filter *f
     uint64_t next_clause_idx = i + clause_len;
     while (i < next_clause_idx) {
         i += filter->items[i] & TIME_RANGE ? 3 : 2;
-        num_terms++;
+        (*num_terms)++;
     }
 
     return TDB_ERR_OK;
