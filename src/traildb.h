@@ -188,11 +188,22 @@ tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
                                     tdb_item term,
                                     int is_negative);
 
+/* Add a timestamp range query (start_time <= timestamp < end_time) in an OR-clause */
+tdb_error tdb_event_filter_add_time_range(struct tdb_event_filter *filter,
+                                          uint64_t start_time,
+                                          uint64_t end_time);
+
 /* Add a new clause, connected by AND to the previous clauses */
 tdb_error tdb_event_filter_new_clause(struct tdb_event_filter *filter);
 
 /* Free an event filter */
 void tdb_event_filter_free(struct tdb_event_filter *filter);
+
+/* Get term type for a term in a clause */
+tdb_error tdb_event_filter_get_term_type(const struct tdb_event_filter *filter,
+                                         uint64_t clause_index,
+                                         uint64_t term_index,
+                                         tdb_event_filter_term_type *term_type);
 
 /* Get an item in a clause */
 tdb_error tdb_event_filter_get_item(const struct tdb_event_filter *filter,
@@ -201,8 +212,20 @@ tdb_error tdb_event_filter_get_item(const struct tdb_event_filter *filter,
                                     tdb_item *item,
                                     int *is_negative);
 
+/* Get time-range term in a clause */
+tdb_error tdb_event_filter_get_time_range(const struct tdb_event_filter *filter,
+                                          uint64_t clause_index,
+                                          uint64_t term_index,
+                                          uint64_t *start_time,
+                                          uint64_t *end_time);
+
 /* Get the number of clauses in this filter */
 uint64_t tdb_event_filter_num_clauses(const struct tdb_event_filter *filter);
+
+/* Get the number of terms in a clause */
+tdb_error tdb_event_filter_num_terms(const struct tdb_event_filter *filter,
+                                     uint64_t clause_index,
+                                     uint64_t *num_terms);
 
 
 /*

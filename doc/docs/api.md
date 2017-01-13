@@ -719,6 +719,21 @@ tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
 
 Return 0 on success, an error code otherwise (out of memory).
 
+### tdb_event_filter_add_time_range
+Add a time-range term to the query. This item is attached to the
+current clause with OR. Finds events with timestamp `t` such that
+`start_time <= t < end_time`.
+```c
+tdb_error tdb_event_filter_add_time_range(struct tdb_event_filter *filter,
+                                          uint64_t start_time,
+                                          uint64_t end_time)
+```
+* `filter` filter handle.
+* `start_time` (inclusive) start of time range
+* `end_time` (exclusive) end of time range
+
+Return 0 on success, an error code otherwise (out of memory or invalid time range).
+
 
 ### tdb_event_filter_new_clause
 Add a new clause in the query. The new clause is attached to the
@@ -742,6 +757,39 @@ Return the number of clauses. Note that a new filter has one clause by
 default, so the return value is always at least one.
 
 
+### tdb_event_filter_num_terms
+Get the number of terms in a clause of this filter.
+```c
+tdb_error tdb_event_filter_num_terms(const struct tdb_event_filter *filter,
+                                     uint64_t clause_index,
+                                     uint64_t *num_terms);
+```
+
+* `filter` filter handle.
+* `clause_index` clause index: `0 <= clause_index < tdb_event_filter_num_clauses()`.
+* `num_terms` returns the number of terms in the clause.
+
+Returns 0 (`TDB_ERR_OK`) if the given clause exists, otherwise `TDB_ERR_NO_SUCH_ITEM`.
+
+### tdb_event_filter_get_term_type
+Get the time of a term in a clause in this filter.
+```c
+tdb_error tdb_event_filter_get_term_type(const struct tdb_event_filter *filter,
+                                         uint64_t clause_index,
+                                         uint64_t terms_index,
+                                         tdb_event_filter_term_type *term_type);
+```
+
+* `filter` filter handle.
+* `clause_index` clause index: `0 <= clause_index < tdb_event_filter_num_clauses()`.
+* `term_index` term index: `0 <= term_index < tdb_event_filter_num_terms()`.
+* `tdb_event_filter_term_type` returns the term type.
+
+If the term was found, then the function returns 0 and `tdb_event_filter_term_type` is either
+`TDB_EVENT_FILTER_MATCH_TERM` or `TDB_EVENT_FILTER_TIME_RANGE_TERM`. Otherwise, if the clause
+or term do not exist, the function returns `TDB_ERR_NO_SUCH_ITEM` and
+`tdb_event_filter_term_type` is `TDB_EVENT_FILTER_UNKNOWN_TERM`.
+
 ### tdb_event_filter_get_item
 Get an item added to this filter.
 ```c
@@ -752,23 +800,59 @@ tdb_error tdb_event_filter_get_item(const struct tdb_event_filter *filter,
                                     int *is_negative)
 ```
 * `filter` filter handle.
-* `clause_index` clause index: `0 < clause_index < tdb_event_filter_num_clauses()`.
-* `item_index` item index in the clause.
+* `clause_index` clause index: `0 <= clause_index < tdb_event_filter_num_clauses()`.
+* `item_index` item index in the clause: `0 <= term_index < tdb_event_filter_num_terms()`.
 * `item` returned item.
 * `is_negative` return 1 if the item negative, 0 otherwise, as set in [tdb_event_filter_add_term](#tdb_event_filter_add_term).
 
-Returns 0 if an item was found at this location, `TDB_ERR_NO_SUCH_ITEM` otherwise. Note
-that empty clauses always return `TDB_ERR_NO_SUCH_ITEM` although the clauses themselves
-are valid.
+Returns 0 if an item was found at this location and is a match term. If the clause or term
+do no exist, `TDB_ERR_NO_SUCH_ITEM` is returned.  Note that empty clauses always return
+`TDB_ERR_NO_SUCH_ITEM` although the clauses themselves are valid. Lastly, if you try to call
+`tdb_event_filter_get_item` on a time-range term, then `TDB_ERR_INCORRECT_TERM_TYPE` is
+returned.
+
+### tdb_event_filter_get_time_range
+Get a time-range term from a clause in this filter.
+```c
+tdb_error tdb_event_filter_get_time_range(const struct tdb_event_filter *filter,
+                                          uint64_t clause_index,
+                                          uint64_t term_index,
+                                          uint64_t *start_time,
+                                          uint64_t *end_time)
+```
+* `filter` filter handle.
+* `clause_index` clause index: `0 <= clause_index < tdb_event_filter_num_clauses()`.
+* `term_index` term index in the clause: `0 <= term_index < tdb_event_filter_num_terms()`.
+* `start_time` start time (inclusive) of the time range.
+* `end_time` end_time (exclusive) of the time range.
+
+Returns 0 if a time-range term was found at this location. If the clause or term do no exist,
+`TDB_ERR_NO_SUCH_ITEM` is returned.  Note that empty clauses always return
+`TDB_ERR_NO_SUCH_ITEM` although the clauses themselves are valid. Lastly, if you try to call
+`tdb_event_filter_get_time_range` on a match term, then `TDB_ERR_INCORRECT_TERM_TYPE` is
+returned.
+
 
 Here is an example how to deconstruct a filter back to clauses and items:
 ```c
 for (clause = 0; clause < tdb_event_filter_num_clauses(filter); clause++){
-    uint64_t item, idx = 0;
+    uint64_t item, start_time, end_time, idx = 0;
+    tdb_event_filter_term_type term_type;
     int is_negative;
-    while (!tdb_event_filter_get_item(filter, clause, idx, &item, &is_negative)){
-        /* do something with 'item' in 'clause' */
-        ++idx;
+    tdb_error ret;
+    for (term = 0; term < tdb_event_filter_num_terms(filter, clause); term++){
+        tdb_event_filter_get_term_type(filter, clause, term, term_type);
+        if (type == TDB_EVENT_FILTER_MATCH_TERM){
+            ret = tdb_event_filter_get_item(f, clause, term, &item, &is_negative);
+            if (ret == TDB_ERR_OK){
+                /* do something with 'item' at 'term' in 'clause' */
+            }
+        } else if(type == TDB_EVENT_FILTER_TIME_RANGE_TERM){
+            ret = tdb_event_filter_get_time_range(f, clause, term, &start_time, &end_time);
+            if (ret == TDB_ERR_OK){
+                /* do something with 'start_time' and 'end_time' at 'term' in 'clause' */
+            }
+        }
     }
 }
 ```
