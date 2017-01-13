@@ -650,6 +650,8 @@ TDB_EXPORT const char *tdb_error_str(tdb_error errcode)
             return "TDB_ERR_TRAIL_TOO_LONG";
         case        TDB_ERR_ONLY_DIFF_FILTER:
             return "TDB_ERR_ONLY_DIFF_FILTER";
+        case        TDB_ERR_NO_SUCH_ITEM:
+            return "TDB_ERR_NO_SUCH_ITEM";
         case        TDB_ERR_INVALID_RANGE:
             return "TDB_ERR_INVALID_RANGE";
         case        TDB_ERR_INCORRECT_TERM_TYPE:
