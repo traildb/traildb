@@ -1,6 +1,9 @@
 #include "tdb_internal.h"
 #include "tdb_huffman.h"
 
+#define CURSOR_FILTER 1
+#define TRAIL_FILTER 2
+
 static inline uint64_t tdb_get_trail_offs(const tdb *db, uint64_t trail_id)
 {
     if (db->trails.size < UINT32_MAX)
@@ -72,16 +75,17 @@ TDB_EXPORT tdb_cursor *tdb_cursor_new(const tdb *db)
     c->state->db = db;
     c->state->edge_encoded = db->opt_edge_encoded;
     c->state->events_buffer_len = db->opt_cursor_event_buffer_size;
+    /*
+    set the filter type to TRAIL_FILTER initially so it can be
+    overriden with the right value in tdb_get_trail()
+    */
+    c->state->filter_type = TRAIL_FILTER;
 
     if (!(c->state->events_buffer = calloc(c->state->events_buffer_len,
                                            (db->num_fields + 1) *
                                            sizeof(tdb_item))))
         goto err;
 
-    if (db->opt_event_filter){
-        if (tdb_cursor_set_event_filter(c, db->opt_event_filter))
-            goto err;
-    }
     return c;
 err:
     tdb_cursor_free(c);
@@ -101,6 +105,7 @@ TDB_EXPORT void tdb_cursor_unset_event_filter(tdb_cursor *cursor)
 {
     cursor->state->filter = NULL;
     cursor->state->filter_len = 0;
+    cursor->state->filter_type = TRAIL_FILTER;
 }
 
 TDB_EXPORT tdb_error tdb_cursor_set_event_filter(tdb_cursor *cursor,
@@ -111,6 +116,7 @@ TDB_EXPORT tdb_error tdb_cursor_set_event_filter(tdb_cursor *cursor,
     else{
         cursor->state->filter = filter->items;
         cursor->state->filter_len = filter->count;
+        cursor->state->filter_type = CURSOR_FILTER;
         return TDB_ERR_OK;
     }
 }
@@ -126,6 +132,63 @@ TDB_EXPORT tdb_error tdb_get_trail(tdb_cursor *cursor,
 
         uint64_t trail_size;
         tdb_field field;
+
+        /*
+        db->opt_event_filter may have changed since the last
+        tdb_get_trail call, so we will always reset it. Also
+        we need to reset any trail-level filter that may have
+        been set previously.
+        */
+        if (s->filter_type == TRAIL_FILTER){
+            if (db->opt_event_filter){
+                /*
+                apply a db-level filter,
+                may be overriden by a trail-level below
+                */
+                s->filter = db->opt_event_filter->items;
+                s->filter_len = db->opt_event_filter->count;
+                if (s->edge_encoded){
+                    /*
+                    setting a filter in the edge-encoded mode fails as in
+                    tdb_cursor_set_event_filter above
+                    */
+                    cursor->num_events_left = 0;
+                    cursor->next_event = NULL;
+                    return TDB_ERR_ONLY_DIFF_FILTER;
+                }
+            }else{
+                s->filter = NULL;
+                s->filter_len = 0;
+            }
+        }
+
+        /*
+        we can apply a trail-level filter only if
+        trail-level filters exist AND a cursor-level filter wasn't set
+        */
+        if (db->opt_trail_event_filters && s->filter_type != CURSOR_FILTER){
+            Word_t *ptr;
+
+            JLG(ptr, db->opt_trail_event_filters, trail_id);
+            if (ptr){
+                const struct tdb_event_filter *filter =
+                    (const struct tdb_event_filter*)*ptr;
+
+                if (s->edge_encoded){
+                    /*
+                    setting a filter in the edge-encoded mode fails as in
+                    tdb_cursor_set_event_filter above
+                    */
+                    cursor->num_events_left = 0;
+                    cursor->next_event = NULL;
+                    return TDB_ERR_ONLY_DIFF_FILTER;
+                }
+
+                s->filter = filter->items;
+                s->filter_len = filter->count;
+                s->filter_type = TRAIL_FILTER;
+            }
+        }
 
         /*
         edge encoding: some fields may be inherited from previous events.

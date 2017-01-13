@@ -96,11 +96,23 @@ uint64_t tdb_version(const tdb *db);
 /* Translate an error code to a string */
 const char *tdb_error_str(tdb_error errcode);
 
-/* Set a TrailDB option */
+/* Set a top-level option */
 tdb_error tdb_set_opt(tdb *db, tdb_opt_key key, tdb_opt_value value);
 
-/* Get a TrailDB option */
+/* Get a top-level option */
 tdb_error tdb_get_opt(tdb *db, tdb_opt_key key, tdb_opt_value *value);
+
+/* Set a trail-level option */
+tdb_error tdb_set_trail_opt(tdb *db,
+                            uint64_t trail_id,
+                            tdb_opt_key key,
+                            tdb_opt_value value);
+
+/* Get a trail-level option */
+tdb_error tdb_get_trail_opt(tdb *db,
+                            uint64_t trail_id,
+                            tdb_opt_key key,
+                            tdb_opt_value *value);
 
 /*
 ----------------------------------

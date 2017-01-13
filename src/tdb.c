@@ -11,6 +11,14 @@
 #include <string.h>
 #include <unistd.h>
 
+#undef JUDYERROR
+#define JUDYERROR(CallerFile, CallerLine, JudyFunc, JudyErrno, JudyErrID) \
+{                                                                         \
+   if ((JudyErrno) == JU_ERRNO_NOMEM)                                     \
+       goto out_of_memory;                                                \
+}
+#include <Judy.h>
+
 #include "tdb_internal.h"
 #include "tdb_error.h"
 #include "tdb_io.h"
@@ -414,6 +422,7 @@ TDB_EXPORT void tdb_close(tdb *db)
 {
     if (db){
         tdb_field i;
+        Word_t tmp;
 
         if (db->num_fields > 0){
             for (i = 0; i < db->num_fields - 1; i++){
@@ -432,11 +441,15 @@ TDB_EXPORT void tdb_close(tdb *db)
         if (db->trails.ptr)
             munmap(db->trails.ptr, db->trails.mmap_size);
 
+        JLFA(tmp, db->opt_trail_event_filters);
+
         free(db->lexicons);
         free(db->field_names);
         free(db->field_stats);
         free(db);
     }
+out_of_memory:
+    return;
 }
 
 TDB_EXPORT uint64_t tdb_lexicon_size(const tdb *db, tdb_field field)
@@ -737,6 +750,55 @@ TDB_EXPORT tdb_error tdb_get_opt(tdb *db,
     }
 }
 
+TDB_EXPORT tdb_error tdb_set_trail_opt(tdb *db,
+                                       uint64_t trail_id,
+                                       tdb_opt_key key,
+                                       tdb_opt_value value)
+{
+    Word_t *ptr;
+    int tmp;
+
+    if (trail_id >= db->num_trails)
+        return TDB_ERR_INVALID_TRAIL_ID;
+
+    switch (key){
+        case TDB_OPT_EVENT_FILTER:
+            if (value.ptr){
+                JLI(ptr, db->opt_trail_event_filters, trail_id);
+                *ptr = (Word_t)value.ptr;
+            }else{
+                JLD(tmp, db->opt_trail_event_filters, trail_id);
+            }
+            return 0;
+        default:
+            return TDB_ERR_UNKNOWN_OPTION;
+    }
+out_of_memory:
+    return TDB_ERR_NOMEM;
+}
+
+tdb_error tdb_get_trail_opt(tdb *db,
+                            uint64_t trail_id,
+                            tdb_opt_key key,
+                            tdb_opt_value *value)
+{
+    Word_t *ptr;
+
+    if (trail_id >= db->num_trails)
+        return TDB_ERR_INVALID_TRAIL_ID;
+
+    switch (key){
+        case TDB_OPT_EVENT_FILTER:
+            JLG(ptr, db->opt_trail_event_filters, trail_id);
+            if (ptr)
+                value->ptr = (const void*)*ptr;
+            else
+                value->ptr = NULL;
+            return 0;
+        default:
+            return TDB_ERR_UNKNOWN_OPTION;
+    }
+}
 
 TDB_EXPORT struct tdb_event_filter *tdb_event_filter_new(void)
 {

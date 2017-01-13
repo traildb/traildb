@@ -3,6 +3,8 @@
 
 ### New features
 
+  - Trail-level options: [tdb_set_trail_opt](http://traildb.io/docs/api/#tdb_set_trail_opt). This is especially useful for creating granular views using `TDB_OPT_EVENT_FILTER`. See [Setting Options](http://traildb.io/docs/api/#setting-options).
+
   - Time-range term: [query events within a given time-range](http://traildb.io/docs/api/#tdb_event_filter_add_time_range). This simplifies time-series type analyses of trails. Also expanded the filter inspection API to add functions for [counting the number of terms in a clause](http://traildb.io/docs/api/#tdb_event_filter_num_terms), [inspecting the type of a term](http://traildb.io/docs/api/#tdb_event_filter_get_term_type), and [returning the start and end times of a time-range term](http://traildb.io/docs/api/#tdb_event_filter_get_time_range).
 
   - Multi-cursors: [join trails over multiple TrailDBs efficiently](http://traildb.io/docs/api/#join-trails-with-multi-cursors). This is a convenient way to stich together e.g. time-sharded TrailDBs or merge together user profiles stored under separate UUIDs.
@@ -35,6 +37,10 @@
   - Fix handling of empty values in `tdb_cons_append`.
 
   - Fix handling of disk full situations in `tdb_cons_append`.
+
+  - Fix semantics of how `TDB_OPT_EVENT_FILTER` filters are applied to cursors.
+    Now the changes are applied at every call to `tdb_get_trail`, not at the
+    creation of the cursor.
 
 ## 0.5 (2016-05-24)
 

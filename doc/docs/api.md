@@ -209,9 +209,16 @@ const char *tdb_error_str(tdb_error errcode)
 Return a string description corresponding to the error code.
 The string is owned by TrailDB so the caller does not need to free it.
 
+# Setting Options
+TrailDB supports cascading options. You can set top-level options
+with [tdb_set_opt()](#tdb_set_opt) which are inherited by all operations
+performed with the handle. You can override top-level options for
+individual trails using [tdb_set_trail_opt()](#tdb_set_trail_opt).
+Finally you can override top-level and trail-level event filters
+with [tdb_cursor_set_event_filter()](#tdb_cursor_set_event_filter).
 
 ### tdb_set_opt
-Set a TrailDB option.
+Set a top-level option.
 ```c
 tdb_error tdb_set_opt(tdb *db,
                       tdb_opt_key key,
@@ -226,17 +233,16 @@ Currently the supported options are:
     - value: `number of events` - Set the size of the cursor readahead buffer.
 * key `TDB_OPT_EVENT_FILTER`
     - value: pointer to `const struct tdb_event_filter*` as returned
-      by [tdb_event_filter_new()](#tdb_event_filter_new). This filter is
-      applied to all new cursors created with the `db` handle, that is,
-      [tdb_cursor_set_event_filter()](#tdb_cursor_set_event_filter) is
-      called automatically. In effect, this defines a view (a subset of
-      events) of `db`. The event filter must stay alive for the lifetime
-      of the `db` handle.
+      by [tdb_event_filter_new()](#tdb_event_filter_new). The filter is
+      applied to all cursors that use this `db` handle at the next call
+      to [tdb_get_trail()](#tdb_get_trail). The event filter must stay alive
+      for the lifetime of the `db` handle or until the filter is disabled
+      by calling this function with `value.ptr = NULL`.
 
 Return 0 on success, an error code otherwise.
 
 ### tdb_get_opt
-Get a TrailDB option.
+Get a top-level option.
 ```c
 tdb_error tdb_get_opt(tdb *db,
                       tdb_opt_key key,
@@ -244,6 +250,38 @@ tdb_error tdb_get_opt(tdb *db,
 ```
 
 See [tdb_set_opt()](#tdb_set_opt) for valid keys. Sets the `value`
+to the current value of the key. Return 0 on success, an error code otherwise.
+
+### tdb_set_trail_opt
+Set a trail-level option. These options override top-level options set with
+[tdb_set_opt()](#tdb_set_opt) for an individual trail at `trail_id`.
+```c
+tdb_error tdb_set_trail_opt(tdb *db,
+                            uint64_t trail_id,
+                            tdb_opt_key key,
+                            tdb_opt_value value);
+```
+Currently the supported options are:
+
+* key `TDB_OPT_EVENT_FILTER`
+    - value: pointer to `const struct tdb_event_filter*` as returned
+      by [tdb_event_filter_new()](#tdb_event_filter_new). The filter is
+      applied to all cursors that use this `db` handle at the next call
+      to [tdb_get_trail()](#tdb_get_trail). The event filter must stay alive
+      for the lifetime of the `db` handle or until the filter is disabled
+      by calling this function with `value.ptr = NULL`.
+
+Return 0 on success, an error code otherwise.
+
+### tdb_get_trail_opt
+Get a trail-level option
+```c
+tdb_error tdb_get_trail_opt(tdb *db,
+                            uint64_t trail_id,
+                            tdb_opt_key key,
+                            tdb_opt_value *value);
+```
+See [tdb_set_trail_opt()](#tdb_set_trail_opt) for valid keys. Sets the `value`
 to the current value of the key. Return 0 on success, an error code otherwise.
 
 
