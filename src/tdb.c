@@ -775,7 +775,7 @@ TDB_EXPORT tdb_error tdb_event_filter_add_term(struct tdb_event_filter *filter,
     if ((ret = ensure_filter_size(filter)))
         return ret;
     else{
-        filter->items[filter->count++] = (is_negative ? NEGATED: 0);
+        filter->items[filter->count++] = (is_negative ? TDB_EVENT_NEGATED: 0);
         filter->items[filter->count++] = term;
         filter->items[filter->clause_len_idx] += 2;
         return TDB_ERR_OK;
@@ -793,7 +793,7 @@ TDB_EXPORT tdb_error tdb_event_filter_add_time_range(struct tdb_event_filter *fi
     if ((ret = ensure_filter_size(filter)))
         return ret;
 
-    uint64_t query_flags = TIME_RANGE;
+    uint64_t query_flags = TDB_EVENT_TIME_RANGE;
     filter->items[filter->count++] = query_flags;
     filter->items[filter->count++] = start_time;
     filter->items[filter->count++] = end_time;
@@ -843,13 +843,13 @@ TDB_EXPORT tdb_error tdb_event_filter_get_term_type(const struct tdb_event_filte
     while (i < next_clause_idx) {
         if (current_item_idx == term_index) {
 
-            *term_type = (filter->items[i] & TIME_RANGE) ?
+            *term_type = (filter->items[i] & TDB_EVENT_TIME_RANGE) ?
                 TDB_EVENT_FILTER_TIME_RANGE_TERM : TDB_EVENT_FILTER_MATCH_TERM;
 
             return TDB_ERR_OK;
         }
 
-        i += filter->items[i] & TIME_RANGE ? 3 : 2;
+        i += filter->items[i] & TDB_EVENT_TIME_RANGE ? 3 : 2;
         current_item_idx++;
     }
 
@@ -878,17 +878,17 @@ TDB_EXPORT tdb_error tdb_event_filter_get_item(const struct tdb_event_filter *fi
     uint64_t current_item_idx = 0;
     while (i < next_clause_idx) {
         if (current_item_idx == item_index) {
-            if (filter->items[i] & TIME_RANGE) {
+            if (filter->items[i] & TDB_EVENT_TIME_RANGE) {
                 ret = TDB_ERR_INCORRECT_TERM_TYPE;
                 goto invalid;
             }
 
-            *is_negative = filter->items[i] & NEGATED ? 1 : 0;
+            *is_negative = filter->items[i] & TDB_EVENT_NEGATED ? 1 : 0;
             *item = filter->items[i + 1];
             return TDB_ERR_OK;
         }
 
-        i += filter->items[i] & TIME_RANGE ? 3 : 2;
+        i += filter->items[i] & TDB_EVENT_TIME_RANGE ? 3 : 2;
         current_item_idx++;
     }
 invalid:
@@ -919,7 +919,7 @@ TDB_EXPORT tdb_error tdb_event_filter_get_time_range(const struct tdb_event_filt
     uint64_t current_item_idx = 0;
     while (i < next_clause_idx) {
         if (current_item_idx == item_index) {
-            if (!(filter->items[i] & TIME_RANGE)) {
+            if (!(filter->items[i] & TDB_EVENT_TIME_RANGE)) {
                 return TDB_ERR_INCORRECT_TERM_TYPE;
             }
 
@@ -928,7 +928,7 @@ TDB_EXPORT tdb_error tdb_event_filter_get_time_range(const struct tdb_event_filt
             return TDB_ERR_OK;
         }
 
-        i += filter->items[i] & TIME_RANGE ? 3 : 2;
+        i += filter->items[i] & TDB_EVENT_TIME_RANGE ? 3 : 2;
         current_item_idx++;
     }
 
@@ -960,7 +960,7 @@ TDB_EXPORT tdb_error tdb_event_filter_num_terms(const struct tdb_event_filter *f
     uint64_t clause_len = filter->items[i++];
     uint64_t next_clause_idx = i + clause_len;
     while (i < next_clause_idx) {
-        i += filter->items[i] & TIME_RANGE ? 3 : 2;
+        i += filter->items[i] & TDB_EVENT_TIME_RANGE ? 3 : 2;
         (*num_terms)++;
     }
 

@@ -54,9 +54,9 @@ struct tdb_event_filter{
  timestamp and NEGATED is ignored.
 */
 typedef enum {
-    NEGATED = 1,
-    TIME_RANGE = 2
-} tdb_op_flags;
+    TDB_EVENT_NEGATED = 1,
+    TDB_EVENT_TIME_RANGE = 2
+} tdb_event_op_flags;
 
 struct tdb_decode_state{
     const tdb *db;

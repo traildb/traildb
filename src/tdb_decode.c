@@ -27,7 +27,7 @@ static int event_satisfies_filter(const tdb_item *event,
             uint64_t filter_item = filter[i++];
 
             /* Time range queries */
-            if (comp_op & TIME_RANGE) {
+            if (comp_op & TDB_EVENT_TIME_RANGE) {
                 uint64_t end_filter = filter[i++];
                 if (filter_item <= timestamp && timestamp < end_filter) {
                     match = 1;
@@ -38,7 +38,7 @@ static int event_satisfies_filter(const tdb_item *event,
             }
 
             /* Item-matching queries */
-            uint64_t is_negative = comp_op & NEGATED;
+            uint64_t is_negative = comp_op & TDB_EVENT_NEGATED;
             tdb_field field = tdb_item_field(filter_item);
             if (field){
                 if ((event[field] == filter_item) != is_negative){
