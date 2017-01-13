@@ -801,12 +801,19 @@ for (clause = 0; clause < tdb_event_filter_num_clauses(filter); clause++){
     uint64_t item, start_time, end_time, idx = 0;
     tdb_event_filter_term_type term_type;
     int is_negative;
+    tdb_error ret;
     for (term = 0; term < tdb_event_filter_num_terms(filter, clause); term++){
         tdb_event_filter_get_term_type(filter, clause, term, term_type);
         if (type == TDB_EVENT_FILTER_MATCH_TERM){
-            /* do something with 'item' at 'term' in 'clause' */
+            ret = tdb_event_filter_get_item(f, clause, term, &item, &is_negative);
+            if (ret == TDB_ERR_OK){
+                /* do something with 'item' at 'term' in 'clause' */
+            }
         } else if(type == TDB_EVENT_FILTER_TIME_RANGE_TERM){
-            /* do something with 'start_time' and 'end_time' at 'term' in 'clause' */
+            ret = tdb_event_filter_get_time_range(f, clause, term, &start_time, &end_time);
+            if (ret == TDB_ERR_OK){
+                /* do something with 'start_time' and 'end_time' at 'term' in 'clause' */
+            }
         }
     }
 }
