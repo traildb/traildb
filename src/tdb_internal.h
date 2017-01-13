@@ -27,12 +27,36 @@ struct tdb_cons_event{
     uint64_t prev_event_idx;
 };
 
+/*
+ Used to build up a CNF expression for filtering events
+ */
 struct tdb_event_filter{
-    uint64_t count;
-    uint64_t size;
-    uint64_t clause_len_idx;
-    tdb_item *items;
+    uint64_t count; /* number of terms in current clause */
+    uint64_t size; /* amount of allocated space for items = sizeof(tdb_item) * size */
+    uint64_t clause_len_idx; /* idx for storing number of terms in current clause */
+    tdb_item *items; /* array of filters for CNF expression. Each clause in the list
+                        starts with a number indicating the number of terms in the clause,
+                        following by the terms.
+
+                        Each term starts with a term type flag. For a matching term, a
+                        tdb_item containing the field and value to match follows. For
+                        time-range filters, the term type flag is followed by two entries,
+                        the start and end timestamps. */
+                        
 };
+
+/* 
+ Flags for types of term comparisons.  We currently support two types of terms: 
+ matching terms and time-range filters.  Terms fall into two types: items
+ and timestamps.  If the TIME_RANGE flag is not set, then the item is
+ interpreted as a tdb_item and matched for equality (based on the NEGATED) flag.
+ If the TIME_RANGE flag is set, then the item is interpreted as an uint64_t
+ timestamp and NEGATED is ignored.
+*/
+typedef enum {
+    TDB_EVENT_NEGATED = 1,
+    TDB_EVENT_TIME_RANGE = 2
+} tdb_event_op_flags;
 
 struct tdb_decode_state{
     const tdb *db;

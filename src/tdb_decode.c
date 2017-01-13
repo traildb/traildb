@@ -10,6 +10,7 @@ static inline uint64_t tdb_get_trail_offs(const tdb *db, uint64_t trail_id)
 }
 
 static int event_satisfies_filter(const tdb_item *event,
+                                  uint64_t timestamp,
                                   const tdb_item *filter,
                                   uint64_t filter_len)
 {
@@ -22,18 +23,29 @@ static int event_satisfies_filter(const tdb_item *event,
             return 0;
 
         while (i < next_clause){
-            uint64_t is_negative = filter[i++];
+            uint64_t op_flags = filter[i++];
             uint64_t filter_item = filter[i++];
-            tdb_field field = tdb_item_field(filter_item);
-            if (field){
-                if ((event[field] == filter_item) != is_negative){
+
+            /* Time range queries */
+            if (op_flags & TDB_EVENT_TIME_RANGE) {
+                uint64_t end_filter = filter[i++];
+                if (filter_item <= timestamp && timestamp < end_filter) {
                     match = 1;
                     break;
                 }
-            } else {
-                if (is_negative) {
-                    match = 1;
-                    break;
+            } else { /* Item-matching queries */
+                uint64_t is_negative = op_flags & TDB_EVENT_NEGATED;
+                tdb_field field = tdb_item_field(filter_item);
+                if (field){
+                    if ((event[field] == filter_item) != is_negative){
+                        match = 1;
+                        break;
+                    }
+                } else {
+                    if (is_negative) {
+                        match = 1;
+                        break;
+                    }
                 }
             }
         }
@@ -226,6 +238,7 @@ TDB_EXPORT int _tdb_cursor_next_batch(tdb_cursor *cursor)
         }
 
         if (!s->filter || event_satisfies_filter(s->previous_items,
+                                                 s->tstamp,
                                                  s->filter,
                                                  s->filter_len)){
 
