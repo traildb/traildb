@@ -25,6 +25,9 @@ struct tdbcli_options{
 
     char *fields_arg;
 
+    /* compression */
+    int no_bigrams;
+
     /* fields */
     Pvoid_t csv_input_fields;
     uint64_t output_fields[TDB_MAX_NUM_FIELDS + 2];

@@ -388,6 +388,14 @@ int op_make(struct tdbcli_options *opt)
             DIE("Invalid --tdb-format. "
                 "Maybe TrailDB was compiled without libarchive");
 
+    if (opt->no_bigrams)
+        if (tdb_cons_set_opt(cons,
+                             TDB_OPT_CONS_NO_BIGRAMS,
+                             opt_val(1)))
+            DIE("Invalid --no-bigrams. "
+                "TrailDB library doesn't understand TDB_OPT_CONS_NO_BIGRAMS; "
+                "library not up-to-date?");
+
     if (strcmp(opt->input, "-")){
         if (!(input = fopen(opt->input, "r")))
             DIE("Could not open input file %s", opt->input);
