@@ -420,6 +420,8 @@ tdb_error make_grams(FILE *grouped,
         TDB_TIMER_END("encode_model/all_bigrams")
     }
 
+    /* TODO: choose_grams below could also be optimized when !no_bigrams is true. */
+
     /* collect frequencies of non-overlapping bigrams and unigrams
        (exact covering set for each event), store in final_freqs */
     TDB_TIMER_START
