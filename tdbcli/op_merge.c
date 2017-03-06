@@ -98,7 +98,7 @@ static tdb **open_tdbs(const char **inputs,
     tdb **dbs;
     uint64_t i, j, n;
     const char **fields;
-    Pvoid_t dedup_fields;
+    Pvoid_t dedup_fields = NULL;
     char fieldname[TDB_MAX_FIELDNAME_LENGTH + 1];
     Word_t *ptr;
     Word_t tmp;
