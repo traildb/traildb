@@ -82,6 +82,10 @@ Currently the supported options are:
     - value `TDB_OPT_CONS_OUTPUT_PACKAGE` create a one-file TrailDB (default).
     - value `TDB_OPT_CONS_OUTPUT_DIR` do not package TrailDB, keep a directory.
 
+* key `TDB_OPT_CONS_NO_BIGRAMS`
+    - value `0` to enable bigram-based size optimization at TrailDB finalization (default). This decreases the size of resulting TrailDB at the cost of increased compression time.
+    - value `1` to disable bigram-based size optimization at TrailDB finalization.
+
 Return 0 on success, an error code otherwise.
 
 ### tdb_cons_get_opt

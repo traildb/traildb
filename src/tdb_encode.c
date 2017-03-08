@@ -487,13 +487,17 @@ tdb_error tdb_encode(tdb_cons *cons, const tdb_item *items)
     TDB_TIMER_END("trail/collect_unigrams");
 
     /* 4. construct uni/bi-grams */
+    tdb_opt_value dont_build_bigrams;
+    tdb_cons_get_opt(cons, TDB_OPT_CONS_NO_BIGRAMS, &dont_build_bigrams);
+
     TDB_TIMER_START
     if ((ret = make_grams(grouped_r,
                           num_events,
                           items,
                           num_fields,
                           unigram_freqs,
-                          &gram_freqs)))
+                          &gram_freqs,
+                          dont_build_bigrams.value)))
         goto done;
     TDB_TIMER_END("trail/gram_freqs");
 

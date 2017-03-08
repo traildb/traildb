@@ -36,7 +36,8 @@ int make_grams(FILE *grouped,
                const tdb_item *items,
                uint64_t num_fields,
                const Pvoid_t unigram_freqs,
-               struct judy_128_map *final_freqs);
+               struct judy_128_map *final_freqs,
+               uint64_t no_bigrams);
 
 Pvoid_t collect_unigrams(FILE *grouped,
                          uint64_t num_events,
