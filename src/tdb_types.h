@@ -106,7 +106,8 @@ typedef enum{
     TDB_OPT_CURSOR_EVENT_BUFFER_SIZE = 102,
 
     /* writing */
-    TDB_OPT_CONS_OUTPUT_FORMAT = 1001
+    TDB_OPT_CONS_OUTPUT_FORMAT = 1001,
+    TDB_OPT_CONS_NO_BIGRAMS = 1002,
 
 } tdb_opt_key;
 
