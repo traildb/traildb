@@ -21,6 +21,7 @@ script:
   - ./waf configure
   - ./waf build
   - ./waf test
+  - ./waf test_cli
 
 after_success:
   - COV=$(python -c 'import site; print "%s/bin/" % site.USER_BASE'); $COV/coveralls --include src --build-root build/test/

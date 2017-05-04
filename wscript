@@ -157,6 +157,13 @@ def build(bld, test_build=False):
         vnum            = "0",  # .so versioning
     )
 
+    if bld.variant == "test_cli":
+        import waflib
+        bld.add_post_fun(lambda b: b.cmd_and_log('python tests/tdbcli/test_tdbcli.py',
+                                                 output=waflib.Context.BOTH,
+                                                 env={'TDBCLI_ROOT': 'build/test_cli'}))
+        return
+
     # Mark header files that must be installed
     bld.install_files("${PREFIX}/include", [
         "src/traildb.h",
@@ -177,6 +184,11 @@ from waflib.Build import BuildContext
 class test(BuildContext):
         cmd = 'test'
         variant = 'test'
+
+from waflib.Build import BuildContext
+class test_cli(BuildContext):
+        cmd = 'test_cli'
+        variant = 'test_cli'
 
 
 JUDY_TEST="""

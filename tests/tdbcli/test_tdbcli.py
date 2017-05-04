@@ -3,10 +3,12 @@ import subprocess
 import unittest
 import json
 import struct
+import shutil
 from itertools import imap
 
 TEST_DB = 'test_tdbcli_db'
-ROOT = os.path.join(os.path.dirname(__file__), '../../build')
+ROOT = os.environ.get('TDBCLI_ROOT',
+                      os.path.join(os.path.dirname(__file__), '../../build'))
 TDB = os.path.join(ROOT, 'tdb')
 
 class TdbCliTest(unittest.TestCase):
@@ -17,16 +19,17 @@ class TdbCliTest(unittest.TestCase):
                                 stdout=subprocess.PIPE,
                                 env={'LD_LIBRARY_PATH': ROOT},
                                 bufsize=1024 * 1024)
-        stdout, _stderr = proc.communicate(data)
+        stdout, stderr = proc.communicate(data)
         if proc.returncode:
-            raise Exception("tdb command '%s' failed: %d" %\
-                            (' '.join(cmd), proc.returncode))
+            raise Exception("tdb command '%s' failed (%d): %s" %\
+                            (' '.join(cmd), proc.returncode, stderr))
         return stdout
 
     def _remove(self):
         try:
             os.remove('%s.tdb' % TEST_DB)
             os.remove('%s.tdb.index' % TEST_DB)
+            shutil.rmtree(TEST_DB)
         except:
             pass
 
