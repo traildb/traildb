@@ -728,6 +728,9 @@ TDB_EXPORT tdb_error tdb_cons_set_opt(tdb_cons *cons,
                 default:
                     return TDB_ERR_INVALID_OPTION_VALUE;
             }
+        case TDB_OPT_CONS_NO_BIGRAMS:
+            cons->no_bigrams = !(!(value.value));
+            return 0;
         default:
             return TDB_ERR_UNKNOWN_OPTION;
     }
@@ -740,6 +743,9 @@ TDB_EXPORT tdb_error tdb_cons_get_opt(tdb_cons *cons,
     switch (key){
         case TDB_OPT_CONS_OUTPUT_FORMAT:
             value->value = cons->output_format;
+            return 0;
+        case TDB_OPT_CONS_NO_BIGRAMS:
+            value->value = cons->no_bigrams;
             return 0;
         default:
             return TDB_ERR_UNKNOWN_OPTION;

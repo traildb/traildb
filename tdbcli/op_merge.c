@@ -180,6 +180,14 @@ int op_merge(struct tdbcli_options *opt,
             DIE("Invalid --tdb-format. "
                 "Maybe TrailDB was compiled without libarchive");
 
+    if (opt->no_bigrams)
+        if (tdb_cons_set_opt(cons,
+                             TDB_OPT_CONS_NO_BIGRAMS,
+                             opt_val(1)))
+            DIE("Invalid --no-bigrams. "
+                "TrailDB library doesn't understand TDB_OPT_CONS_NO_BIGRAMS; "
+                "library not up-to-date?");
+
     /* set the filter if set */
     if (opt->filter_arg){
         for (i = 0; i < num_inputs; i++){
