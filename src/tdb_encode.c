@@ -24,6 +24,7 @@
 #define EDGE_INCREMENT     1000000
 #define GROUPBUF_INCREMENT 1000000
 #define READ_BUFFER_SIZE  (1000000 * sizeof(struct tdb_grouped_event))
+#define WRITE_BUFFER_SIZE (8 * 1024 * 1024)
 
 #define INITIAL_ENCODING_BUF_BITS 8 * 1024 * 1024
 
@@ -238,11 +239,18 @@ static tdb_error encode_trails(const tdb_item *items,
     struct gram_bufs gbufs;
     struct tdb_grouped_event ev;
     int ret = 0;
+    char *write_buf = NULL;
 
     if ((ret = init_gram_bufs(&gbufs, num_fields)))
         goto done;
 
+    if (!(write_buf = malloc(WRITE_BUFFER_SIZE))){
+        ret = TDB_ERR_NOMEM;
+        goto done;
+    }
+
     TDB_OPEN(out, path, "w");
+    setvbuf(out, write_buf, _IOFBF, WRITE_BUFFER_SIZE);
 
     if (!(buf = calloc(1, buf_size / 8 + 8))){
         ret = TDB_ERR_NOMEM;
@@ -360,6 +368,7 @@ static tdb_error encode_trails(const tdb_item *items,
 done:
     TDB_CLOSE_FINAL(out);
 
+    free(write_buf);
     free_gram_bufs(&gbufs);
     free(grams);
     free(encoded);
@@ -487,13 +496,17 @@ tdb_error tdb_encode(tdb_cons *cons, const tdb_item *items)
     TDB_TIMER_END("trail/collect_unigrams");
 
     /* 4. construct uni/bi-grams */
+    tdb_opt_value dont_build_bigrams;
+    tdb_cons_get_opt(cons, TDB_OPT_CONS_NO_BIGRAMS, &dont_build_bigrams);
+
     TDB_TIMER_START
     if ((ret = make_grams(grouped_r,
                           num_events,
                           items,
                           num_fields,
                           unigram_freqs,
-                          &gram_freqs)))
+                          &gram_freqs,
+                          dont_build_bigrams.value)))
         goto done;
     TDB_TIMER_END("trail/gram_freqs");
 

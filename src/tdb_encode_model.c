@@ -385,7 +385,8 @@ tdb_error make_grams(FILE *grouped,
                      const tdb_item *items,
                      uint64_t num_fields,
                      const Pvoid_t unigram_freqs,
-                     struct judy_128_map *final_freqs)
+                     struct judy_128_map *final_freqs,
+                     uint64_t no_bigrams)
 {
     struct ngram_state g = {.final_freqs = final_freqs};
     Word_t tmp;
@@ -411,11 +412,15 @@ tdb_error make_grams(FILE *grouped,
     TDB_TIMER_END("encode_model/find_candidates")
 
     /* collect frequencies of *all* occurring bigrams of candidate unigrams */
-    TDB_TIMER_START
-    ret = event_fold(all_bigrams, grouped, num_events, items, num_fields, &g);
-    if (ret)
-        goto done;
-    TDB_TIMER_END("encode_model/all_bigrams")
+    if (!no_bigrams) {
+        TDB_TIMER_START
+        ret = event_fold(all_bigrams, grouped, num_events, items, num_fields, &g);
+        if (ret)
+            goto done;
+        TDB_TIMER_END("encode_model/all_bigrams")
+    }
+
+    /* TODO: choose_grams below could also be optimized when !no_bigrams is true. */
 
     /* collect frequencies of non-overlapping bigrams and unigrams
        (exact covering set for each event), store in final_freqs */
