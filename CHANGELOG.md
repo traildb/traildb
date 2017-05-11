@@ -3,6 +3,10 @@
 
 ### New features
 
+  - `tdb merge` supports merging of TrailDBs with mismatching sets of fields. The result is a union of all fields in the source TrailDBs.
+
+  - `TDB_OPT_CONS_NO_BIGRAMS` option for [tdb_cons_set_opt](http://traildb.io/docs/api/#tdb_cons_set_opt) to disable bigram-based size optimization. This option can sometimes greatly speed up TrailDB creation at the cost of increased filesize. The flag can also be passed to `tdb` CLI as `--no-bigrams`.
+
   - Trail-level options: [tdb_set_trail_opt](http://traildb.io/docs/api/#tdb_set_trail_opt). This is especially useful for creating granular views using `TDB_OPT_EVENT_FILTER`. See [Setting Options](http://traildb.io/docs/api/#setting-options).
 
   - Time-range term: [query events within a given time-range](http://traildb.io/docs/api/#tdb_event_filter_add_time_range). This simplifies time-series type analyses of trails. Also expanded the filter inspection API to add functions for [counting the number of terms in a clause](http://traildb.io/docs/api/#tdb_event_filter_num_terms), [inspecting the type of a term](http://traildb.io/docs/api/#tdb_event_filter_get_term_type), and [returning the start and end times of a time-range term](http://traildb.io/docs/api/#tdb_event_filter_get_time_range).

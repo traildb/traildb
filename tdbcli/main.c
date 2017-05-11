@@ -77,6 +77,7 @@ static void print_usage_and_exit()
 "--tdb-format      TrailDB output format:\n"
 "                   'pkg' for the default one-file format,\n"
 "                   'dir' for a directory\n"
+"--no-bigrams      when building TrailDBS, do not build and compress with bigrams\n"
 "-v --verbose      print diagnostic output to stderr\n"
 "\n"
 "UUIDS SPECIFICATION:\n"
@@ -165,6 +166,7 @@ static int initialize(int argc, char **argv, int op)
         {"skip-bad-input", no_argument, 0, -5},
         {"index-path", required_argument, 0, -6},
         {"no-index", no_argument, 0, -7},
+        {"no-bigrams", no_argument, 0, -8},
         {0, 0, 0, 0}
     };
 
@@ -256,6 +258,9 @@ static int initialize(int argc, char **argv, int op)
                 break;
             case -7:
                 options.no_index = 1;
+                break;
+            case -8:
+                options.no_bigrams = 1;
                 break;
             default:
                 print_usage_and_exit();

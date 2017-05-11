@@ -111,6 +111,7 @@ struct _tdb_cons {
     /* options */
 
     uint64_t output_format;
+    uint64_t no_bigrams;
 };
 
 struct tdb_file {

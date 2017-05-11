@@ -1,48 +1,65 @@
+import glob
 import os
 import subprocess
 import unittest
 import json
 import struct
+import shutil
 from itertools import imap
+from collections import Counter
 
 TEST_DB = 'test_tdbcli_db'
-ROOT = os.path.join(os.path.dirname(__file__), '../../build')
+ROOT = os.environ.get('TDBCLI_ROOT',
+                      os.path.join(os.path.dirname(__file__), '../../build'))
 TDB = os.path.join(ROOT, 'tdb')
 
 class TdbCliTest(unittest.TestCase):
 
-    def _run(self, cmd, data=''):
+    def tdb_cmd(self, cmd, data=''):
         proc = subprocess.Popen(cmd,
                                 stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE,
                                 env={'LD_LIBRARY_PATH': ROOT},
                                 bufsize=1024 * 1024)
-        stdout, _stderr = proc.communicate(data)
+        stdout, stderr = proc.communicate(data)
         if proc.returncode:
-            raise Exception("tdb command '%s' failed: %d" %\
-                            (' '.join(cmd), proc.returncode))
+            raise Exception("tdb command '%s' failed (%d): %s" %\
+                            (' '.join(cmd), proc.returncode, stderr))
         return stdout
 
     def _remove(self):
-        try:
-            os.remove('%s.tdb' % TEST_DB)
-            os.remove('%s.tdb.index' % TEST_DB)
-        except:
-            pass
+        for path in glob.glob('%s*' % TEST_DB):
+            try:
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+            except:
+                pass
 
     def setUp(self):
         self._remove()
-        events = list(self.events())
-        fields = list(events[0])
-        cmd = [TDB, 'make', '-j', '-o', TEST_DB, '-f', ','.join(fields)]
-        data = '\n'.join(imap(json.dumps, events)) + '\n'
-        self._run(cmd, data)
-        cmd = [TDB, 'index', '-i', TEST_DB]
-        self._run(cmd)
+        return self.make_tdb()
 
-    def dump(self, args=[]):
-        cmd = [TDB, 'dump', '-j', '-i', TEST_DB] + args
-        return imap(json.loads, self._run(cmd).splitlines())
+    def make_tdb(self, events=None, suffix='', index=True):
+        if events is None:
+            events = list(self.events())
+
+        fields = list(events[0])
+        name = TEST_DB + suffix
+        cmd = [TDB, 'make', '-j', '-o', name, '-f', ','.join(fields)]
+        data = '\n'.join(imap(json.dumps, events)) + '\n'
+        self.tdb_cmd(cmd, data)
+
+        if index:
+            cmd = [TDB, 'index', '-i', name]
+            self.tdb_cmd(cmd)
+
+        return name
+
+    def dump(self, args=[], suffix=''):
+        cmd = [TDB, 'dump', '-j', '-i', TEST_DB + suffix] + args
+        return imap(json.loads, self.tdb_cmd(cmd).splitlines())
 
     def tearDown(self):
         self._remove()
@@ -150,6 +167,49 @@ class TestLargeFilter(TdbCliTest):
                   if x['second'] == '0' and x['first'] == '500']
         self.assertFilter('second=0 & first=500', events)
 
+class TestMerge(TdbCliTest):
+    def events(self):
+        for i in range(10):
+            yield {'uuid': self.hexuuid(i),
+                   'time': str(i + 100),
+                   'alpha': chr(i + 65),
+                   'number': str(i)}
+
+    def other_events(self):
+        for i in range(10):
+            yield {'uuid': self.hexuuid(i),
+                   'time': str(i + 100),
+                   'number': str(i),
+                   'foobar': str(i + 200)}
+
+    def setUp(self):
+        self._remove()
+
+    def test_matching_fields(self):
+        tdb_a = self.make_tdb(suffix='_a', index=False)
+        tdb_b = self.make_tdb(suffix='_b', index=False)
+        cmd = [TDB, 'merge', '-o', TEST_DB + '_merged', tdb_a, tdb_b]
+        self.tdb_cmd(cmd)
+        stats = Counter(''.join(imap(str, sorted(e.items())))
+                        for e in self.dump(suffix='_merged'))
+        self.assertEquals(stats.values(), [2] * 10)
+
+    def test_mismatching_fields(self):
+        tdb_a = self.make_tdb(suffix='_a', index=False)
+        tdb_b = self.make_tdb(suffix='_b',
+                              index=False,
+                              events=list(self.other_events()))
+        cmd = [TDB, 'merge', '-o', TEST_DB + '_merged', tdb_a, tdb_b]
+        self.tdb_cmd(cmd)
+        numbersum = 0
+        for ev in self.dump(suffix='_merged'):
+            self.assertEquals(len(ev), 5)
+            if ev['alpha']:
+                self.assertEquals(ev['foobar'], '')
+            if ev['foobar']:
+                self.assertEquals(ev['alpha'], '')
+            numbersum += int(ev['number'])
+        self.assertEquals(numbersum, 90)
 
 if __name__ == '__main__':
     unittest.main()
