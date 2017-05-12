@@ -71,7 +71,7 @@ brew install traildb
 Install the dependencies:
 
 ```sh
-brew install judy libarchive pkg-config
+brew install traildb/judy/judy libarchive pkg-config
 ```
 
 Build TrailDB using `waf`
