@@ -135,19 +135,21 @@ static void dump_trails(const tdb *db,
                 trail_id,
                 tdb_error_str(err));
 
-        tdb_uuid_hex(tdb_get_uuid(db, trail_id), hexuuid);
+        if (tdb_cursor_peek(cursor)){
+            tdb_uuid_hex(tdb_get_uuid(db, trail_id), hexuuid);
 
-        while ((event = tdb_cursor_next(cursor))){
-            populate_fields(event,
-                            (const char*)hexuuid,
-                            db,
-                            opt,
-                            out_values,
-                            out_lengths);
-            if (opt->format == FORMAT_CSV)
-                dump_csv_event(output, opt, out_values, out_lengths);
-            else
-                dump_json_event(output, opt, out_values, out_lengths);
+            while ((event = tdb_cursor_next(cursor))){
+                populate_fields(event,
+                                (const char*)hexuuid,
+                                db,
+                                opt,
+                                out_values,
+                                out_lengths);
+                if (opt->format == FORMAT_CSV)
+                    dump_csv_event(output, opt, out_values, out_lengths);
+                else
+                    dump_json_event(output, opt, out_values, out_lengths);
+            }
         }
     }
 
@@ -221,14 +223,10 @@ int op_dump(struct tdbcli_options *opt)
             opt->input,
             tdb_error_str(err));
 
-    if (opt->filter_arg){
+    filter = apply_filter(db, opt);
+    if (filter){
         const char *index_path = NULL;
         char *free_path = NULL;
-        tdb_opt_value value;
-
-        value.ptr = filter = parse_filter(db, opt->filter_arg, opt->verbose);
-        if (tdb_set_opt(db, TDB_OPT_EVENT_FILTER, value))
-            DIE("Could not set event filter");
 
         if (!opt->no_index &&
             ((index_path = opt->index_path) ||

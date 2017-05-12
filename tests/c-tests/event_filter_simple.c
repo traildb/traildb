@@ -148,6 +148,15 @@ int main(int argc, char **argv)
     assert(tdb_event_filter_add_term(f, 0, 1) == 0);
     assert_num_events(cursor, f, 4);
 
+    /* CONVENIENCE FUNCTIONS */
+    tdb_event_filter_free(f);
+    f = tdb_event_filter_new_match_all();
+    assert_num_events(cursor, f, 4);
+
+    tdb_event_filter_free(f);
+    f = tdb_event_filter_new_match_none();
+    assert_num_events(cursor, f, 0);
+
     /* UNSETTING */
 
     tdb_event_filter_free(f);

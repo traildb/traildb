@@ -29,6 +29,9 @@ struct tdb_cons_event{
     uint64_t prev_event_idx;
 };
 
+#define TDB_FILTER_MATCH_ALL 1
+#define TDB_FILTER_MATCH_NONE 2
+
 /*
  Used to build up a CNF expression for filtering events
  */
@@ -44,11 +47,11 @@ struct tdb_event_filter{
                         tdb_item containing the field and value to match follows. For
                         time-range filters, the term type flag is followed by two entries,
                         the start and end timestamps. */
-                        
+    uint64_t options; /* MATCH_ALL or MATCH_NONE */
 };
 
-/* 
- Flags for types of term comparisons.  We currently support two types of terms: 
+/*
+ Flags for types of term comparisons.  We currently support two types of terms:
  matching terms and time-range filters.  Terms fall into two types: items
  and timestamps.  If the TIME_RANGE flag is not set, then the item is
  interpreted as a tdb_item and matched for equality (based on the NEGATED) flag.
@@ -75,8 +78,7 @@ struct tdb_decode_state{
     uint64_t tstamp;
 
     /* options */
-    const tdb_item *filter;
-    uint64_t filter_len;
+    const struct tdb_event_filter *filter;
     int filter_type;
 
     int edge_encoded;

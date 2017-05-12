@@ -802,19 +802,33 @@ tdb_error tdb_get_trail_opt(tdb *db,
 
 TDB_EXPORT struct tdb_event_filter *tdb_event_filter_new(void)
 {
-    static const long unsigned INITIAL_SIZE = 33;
-    struct tdb_event_filter *f = malloc(sizeof(struct tdb_event_filter));
+    struct tdb_event_filter *f = calloc(1, sizeof(struct tdb_event_filter));
     if (f){
-        if (!(f->items = calloc(1, INITIAL_SIZE * sizeof(tdb_item)))){
+        f->size = 5;
+        if (!(f->items = calloc(1, f->size * sizeof(tdb_item)))){
             free(f);
             return NULL;
         }
         f->count = 1;
-        f->size = INITIAL_SIZE;
         f->clause_len_idx = 0;
-        return f;
-    }else
-        return NULL;
+    }
+    return f;
+}
+
+TDB_EXPORT struct tdb_event_filter *tdb_event_filter_new_match_all(void)
+{
+    struct tdb_event_filter *f = tdb_event_filter_new();
+    if (f)
+        f->options = TDB_FILTER_MATCH_ALL;
+    return f;
+}
+
+TDB_EXPORT struct tdb_event_filter *tdb_event_filter_new_match_none(void)
+{
+    struct tdb_event_filter *f = tdb_event_filter_new();
+    if (f)
+        f->options = TDB_FILTER_MATCH_NONE;
+    return f;
 }
 
 static tdb_error ensure_filter_size(struct tdb_event_filter *filter)

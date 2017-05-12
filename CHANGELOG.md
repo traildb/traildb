@@ -3,6 +3,10 @@
 
 ### New features
 
+  - Select a subset of trails with `tdb cli` using the `--uuids` flag.
+
+  - Optimized filters that match all events or no events. These can be used to [create a (materialized) view over a subset of trails](http://traildb.io/docs/technical_overview/#whitelist-or-blacklist-trails-a-view-over-a-subset-of-trails).
+
   - `tdb merge` supports merging of TrailDBs with mismatching sets of fields. The result is a union of all fields in the source TrailDBs.
 
   - `TDB_OPT_CONS_NO_BIGRAMS` option for [tdb_cons_set_opt](http://traildb.io/docs/api/#tdb_cons_set_opt) to disable bigram-based size optimization. This option can sometimes greatly speed up TrailDB creation at the cost of increased filesize. The flag can also be passed to `tdb` CLI as `--no-bigrams`.

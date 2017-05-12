@@ -180,6 +180,10 @@ int op_merge(struct tdbcli_options *opt,
             DIE("Invalid --tdb-format. "
                 "Maybe TrailDB was compiled without libarchive");
 
+    /* apply --filter and --uuids */
+    for (i = 0; i < num_inputs; i++)
+        apply_filter(dbs[i], opt);
+
     if (opt->no_bigrams)
         if (tdb_cons_set_opt(cons,
                              TDB_OPT_CONS_NO_BIGRAMS,
@@ -187,16 +191,6 @@ int op_merge(struct tdbcli_options *opt,
             DIE("Invalid --no-bigrams. "
                 "TrailDB library doesn't understand TDB_OPT_CONS_NO_BIGRAMS; "
                 "library not up-to-date?");
-
-    /* set the filter if set */
-    if (opt->filter_arg){
-        for (i = 0; i < num_inputs; i++){
-            tdb_opt_value value;
-            value.ptr = parse_filter(dbs[i], opt->filter_arg, opt->verbose);
-            if (tdb_set_opt(dbs[i], TDB_OPT_EVENT_FILTER, value))
-                DIE("Could not set event filter");
-        }
-    }
 
     for (i = 0; i < num_inputs; i++){
         if (equal_fields){

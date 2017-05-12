@@ -104,7 +104,6 @@ TDB_EXPORT void tdb_cursor_free(tdb_cursor *c)
 TDB_EXPORT void tdb_cursor_unset_event_filter(tdb_cursor *cursor)
 {
     cursor->state->filter = NULL;
-    cursor->state->filter_len = 0;
     cursor->state->filter_type = TRAIL_FILTER;
 }
 
@@ -114,8 +113,7 @@ TDB_EXPORT tdb_error tdb_cursor_set_event_filter(tdb_cursor *cursor,
     if (cursor->state->edge_encoded)
         return TDB_ERR_ONLY_DIFF_FILTER;
     else{
-        cursor->state->filter = filter->items;
-        cursor->state->filter_len = filter->count;
+        cursor->state->filter = filter;
         cursor->state->filter_type = CURSOR_FILTER;
         return TDB_ERR_OK;
     }
@@ -126,6 +124,7 @@ TDB_EXPORT tdb_error tdb_get_trail(tdb_cursor *cursor,
 {
     struct tdb_decode_state *s = cursor->state;
     const tdb *db = s->db;
+    tdb_error err = 0;
 
     if (trail_id < db->num_trails){
         /* initialize cursor for a new trail */
@@ -145,21 +144,17 @@ TDB_EXPORT tdb_error tdb_get_trail(tdb_cursor *cursor,
                 apply a db-level filter,
                 may be overriden by a trail-level below
                 */
-                s->filter = db->opt_event_filter->items;
-                s->filter_len = db->opt_event_filter->count;
                 if (s->edge_encoded){
                     /*
                     setting a filter in the edge-encoded mode fails as in
                     tdb_cursor_set_event_filter above
                     */
-                    cursor->num_events_left = 0;
-                    cursor->next_event = NULL;
-                    return TDB_ERR_ONLY_DIFF_FILTER;
-                }
-            }else{
+                    err = TDB_ERR_ONLY_DIFF_FILTER;
+                    goto done;
+                }else
+                    s->filter = db->opt_event_filter;
+            }else
                 s->filter = NULL;
-                s->filter_len = 0;
-            }
         }
 
         /*
@@ -171,49 +166,54 @@ TDB_EXPORT tdb_error tdb_get_trail(tdb_cursor *cursor,
 
             JLG(ptr, db->opt_trail_event_filters, trail_id);
             if (ptr){
-                const struct tdb_event_filter *filter =
-                    (const struct tdb_event_filter*)*ptr;
-
                 if (s->edge_encoded){
                     /*
                     setting a filter in the edge-encoded mode fails as in
                     tdb_cursor_set_event_filter above
                     */
-                    cursor->num_events_left = 0;
-                    cursor->next_event = NULL;
-                    return TDB_ERR_ONLY_DIFF_FILTER;
+                    err = TDB_ERR_ONLY_DIFF_FILTER;
+                    goto done;
+                }else{
+                    s->filter = (const struct tdb_event_filter*)*ptr;
+                    s->filter_type = TRAIL_FILTER;
                 }
-
-                s->filter = filter->items;
-                s->filter_len = filter->count;
-                s->filter_type = TRAIL_FILTER;
             }
         }
 
-        /*
-        edge encoding: some fields may be inherited from previous events.
-        Keep track what we have seen in the past. Start with NULL values.
-        */
-        for (field = 1; field < db->num_fields; field++)
-            s->previous_items[field] = tdb_make_item(field, 0);
+        if (s->filter && (s->filter->options & TDB_FILTER_MATCH_NONE)){
+            /*
+            no need to evaluate anything if the filter matches nothing
+            */
+            err = 0;
+            goto done;
+        }else{
+            /*
+            edge encoding: some fields may be inherited from previous events.
+            Keep track what we have seen in the past. Start with NULL values.
+            */
+            for (field = 1; field < db->num_fields; field++)
+                s->previous_items[field] = tdb_make_item(field, 0);
 
-        s->data = &db->trails.data[tdb_get_trail_offs(db, trail_id)];
-        trail_size = tdb_get_trail_offs(db, trail_id + 1) -
-                     tdb_get_trail_offs(db, trail_id);
-        s->size = 8 * trail_size - read_bits(s->data, 0, 3);
-        s->offset = 3;
-        s->tstamp = db->min_timestamp;
+            s->data = &db->trails.data[tdb_get_trail_offs(db, trail_id)];
+            trail_size = tdb_get_trail_offs(db, trail_id + 1) -
+                         tdb_get_trail_offs(db, trail_id);
+            s->size = 8 * trail_size - read_bits(s->data, 0, 3);
+            s->offset = 3;
+            s->tstamp = db->min_timestamp;
 
-        s->trail_id = trail_id;
-        cursor->num_events_left = 0;
-        cursor->next_event = s->events_buffer;
-
-        return 0;
-    }else{
-        cursor->num_events_left = 0;
-        cursor->next_event = NULL;
-        return TDB_ERR_INVALID_TRAIL_ID;
-    }
+            s->trail_id = trail_id;
+            cursor->num_events_left = 0;
+            cursor->next_event = s->events_buffer;
+            return 0;
+        }
+    }else
+        err = TDB_ERR_INVALID_TRAIL_ID;
+done:
+    cursor->num_events_left = 0;
+    cursor->next_event = NULL;
+    s->size = 0;
+    s->offset = 0;
+    return err;
 }
 
 TDB_EXPORT uint64_t tdb_get_trail_length(tdb_cursor *cursor)
@@ -300,10 +300,12 @@ TDB_EXPORT int _tdb_cursor_next_batch(tdb_cursor *cursor)
             }
         }
 
-        if (!s->filter || event_satisfies_filter(s->previous_items,
-                                                 s->tstamp,
-                                                 s->filter,
-                                                 s->filter_len)){
+        if (!s->filter ||
+            (s->filter->options & TDB_FILTER_MATCH_ALL) ||
+            event_satisfies_filter(s->previous_items,
+                                   s->tstamp,
+                                   s->filter->items,
+                                   s->filter->count)){
 
             /* no filter or filter matches, finalize the event */
             if (!edge_encoded){
