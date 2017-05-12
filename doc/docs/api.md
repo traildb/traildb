@@ -702,6 +702,24 @@ struct tdb_event_filter *tdb_event_filter_new(void)
 Return NULL if memory allocation fails.
 
 
+### tdb_event_filter_new_match_none
+Create a new event filter handle that is optimized to match no events.
+Commonly used to [create a view over a subset of trails](technical_overview/#whitelist-or-blacklist-trails-a-view-over-a-subset-of-trails).
+```c
+struct tdb_event_filter *tdb_event_filter_new_match_none(void)
+```
+Return NULL if memory allocation fails.
+
+
+### tdb_event_filter_new_match_all
+Create a new event filter handle that is optimized to match all events.
+Commonly used to [create a view over a subset of trails](technical_overview/#whitelist-or-blacklist-trails-a-view-over-a-subset-of-trails).
+```c
+struct tdb_event_filter *tdb_event_filter_new_match_all(void)
+```
+Return NULL if memory allocation fails.
+
+
 ### tdb_event_filter_free
 Free an event filter handle.
 ```c

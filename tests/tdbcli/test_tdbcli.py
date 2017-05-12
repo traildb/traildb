@@ -67,8 +67,9 @@ class TdbCliTest(unittest.TestCase):
     def hexuuid(self, i):
         return (struct.pack('Q', i) + '\x00' * 8).encode('hex')
 
-    def assertFilter(self, filter_expr, expected, index_only=False):
-        args = ['-F', filter_expr]
+    def assertFilter(self, filter_expr, expected, index_only=False, args=[]):
+        if filter_expr:
+            args += ['-F', filter_expr]
         if not index_only:
             self.assertEquals(list(self.dump(args + ['--no-index'])),
                               expected)
@@ -123,6 +124,19 @@ class TestBasicFilter(TdbCliTest):
                   if x['second'] != '0' and x['first'] in ('48', '469', '500')]
         self.assertFilter('second!=0 & first=48 first=469 first=500',
                           events)
+
+    def test_uuid_filter(self):
+        sample = (3, 23, 308, 940, 999)
+        uuids = ','.join(self.hexuuid(i) for i in sample)
+        events = [x for i, x in enumerate(self.events()) if i in sample]
+        self.assertFilter(None, events, args=['--uuids', uuids])
+
+    def test_uuid_and_event_filter(self):
+        sample = (1, 8, 435, 123, 445, 446, 978)
+        uuids = ','.join(self.hexuuid(i) for i in sample)
+        events = [x for i, x in enumerate(self.events())\
+                  if x['second'] != '0' and i in sample]
+        self.assertFilter('second!=0', events, args=['--uuids', uuids])
 
 # Multiple trails per page, num_trails > 2**16
 class TestMediumFilter(TdbCliTest):
@@ -210,6 +224,18 @@ class TestMerge(TdbCliTest):
                 self.assertEquals(ev['alpha'], '')
             numbersum += int(ev['number'])
         self.assertEquals(numbersum, 90)
+
+    def test_merge_with_uuids(self):
+        tdb_a = self.make_tdb(suffix='_a', index=False)
+        tdb_b = self.make_tdb(suffix='_b', index=False)
+        uuids = [e['uuid'] for e in self.events()][:2]
+        cmd = [TDB, 'merge', '-o', TEST_DB + '_merged',
+               '--uuids', ','.join(uuids), tdb_a, tdb_b]
+        self.tdb_cmd(cmd)
+        ev = list(self.dump(suffix='_merged'))
+        stats = Counter(''.join(imap(str, sorted(e.items()))) for e in ev)
+        self.assertEquals(stats.values(), [2] * 2)
+        self.assertEquals({e['uuid'] for e in ev}, set(uuids))
 
 if __name__ == '__main__':
     unittest.main()

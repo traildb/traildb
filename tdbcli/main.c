@@ -66,7 +66,8 @@ static void print_usage_and_exit()
 "                    (default: a.tdb)\n"
 "-T --threads      number of threads in parallel operations\n"
 "                    (default: autodetect the number of cores)\n"
-"-f --fields       field specification - see below for details\n"
+"-u --uuids        uuid specification -- see below for details\n"
+"-f --fields       field specification -- see below for details\n"
 "-F --filter       filter specification -- see below for details\n"
 "--index-path      use a custom index file at this path for filters\n"
 "--no-index        do not use an index for filters\n"
@@ -78,6 +79,16 @@ static void print_usage_and_exit()
 "                   'dir' for a directory\n"
 "--no-bigrams      when building TrailDBS, do not build and compress with bigrams\n"
 "-v --verbose      print diagnostic output to stderr\n"
+"\n"
+"UUIDS SPECIFICATION:\n"
+"The --uuids option selects a subset of trails for 'make' or 'dump'.\n"
+"Two modes for defining UUIDs, which are 32-character hex-encoded strings,\n"
+"are supported:\n"
+"1) comma-separated list of UUIDs:\n"
+"   --uuids 00112233445566778899aabbccddeeff,ffeeddccbbaa99887766554433221100\n"
+"2) read UUIDs from a file, prefixed with '@', containing one UUID per line:\n"
+"   --uuids @uuid_file\n"
+"Invalid or missing UUIDs are ignored.\n"
 "\n"
 "FIELD SPECIFICATION:\n"
 "The --fields option determines how fields from the input are mapped to\n"
@@ -145,6 +156,7 @@ static int initialize(int argc, char **argv, int op)
         {"output", required_argument, 0, 'o'},
         {"delimiter", required_argument, 0, 'd'},
         {"fields", required_argument, 0, 'f'},
+        {"uuids", required_argument, 0, 'u'},
         {"filter", required_argument, 0, 'F'},
         {"threads", required_argument, 0, 'T'},
         {"verbose", no_argument, 0, 'v'},
@@ -197,6 +209,9 @@ static int initialize(int argc, char **argv, int op)
                 break;
             case 'o':
                 options.output = optarg;
+                break;
+            case 'u':
+                options.uuids = optarg;
                 break;
             case 'd':
                 if (strlen(optarg) != 1)

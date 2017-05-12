@@ -158,7 +158,42 @@ at the cursor level with [`tdb_cursor_set_event_filter()`](api/#tdb_cursor_set_e
 
 In effect, this defines [a
 view](https://en.wikipedia.org/wiki/View_(SQL)) to TrailDB. See also
-the next entry about materialized views.
+the entry below about materialized views.
+
+###### Whitelist or blacklist trails (a view over a subset of trails)
+
+A special case of event filters, introduced above, are filters that match
+all events or no events. These filters are most commonly used to make TrailDB
+return only a subset of trails.
+
+To whitelist a subset of trails, do the following: First disable
+all trails using [`tdb_event_filter_new_match_none()`](api/#tdb_event_filter_new_match_none).
+Then enable selected trails with [`tdb_event_filter_new_match_all()`](api/#tdb_event_filter_new_match_all). Here is an example:
+
+```c
+struct tdb_event_filter *empty = tdb_event_filter_new_match_none();
+struct tdb_event_filter *all = tdb_event_filter_new_match_all();
+tdb_opt_value value = {.ptr = empty};
+
+/* first blacklist all */
+tdb_set_opt(db, TDB_OPT_EVENT_FILTER, value);
+
+/* then whitelist selected trails */
+value.ptr = all;
+for (i = 0; i < num_selected; i++)
+    tdb_set_trail_opt(db,
+                      trail_ids[i],
+                      TDB_OPT_EVENT_FILTER,
+                      value);
+```
+
+If you want to blacklist a subset of trails instead, you can just call
+`tdb_set_trail_opt` with an empty filter.
+
+A benefit of this approach that `empty` and `all` are optimized internally so
+that no events will be evaluated for trails that have these filters enabled.
+You can use these filters to extract a new TrailDB that contains only a subset
+of trails from the source TrailDB, as described below.
 
 ###### Create TrailDB extracts (materialized views)
 
