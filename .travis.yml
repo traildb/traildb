@@ -3,8 +3,11 @@ language: c
 matrix:
   include:
     - os: linux
+    - os: osx
 
 before_install:
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install libarchive homebrew/boneyard/judy; fi
   - pip install --user cpp-coveralls
 
 addons:
