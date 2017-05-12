@@ -35,7 +35,7 @@ For RPM-based distros:
 
 For OSX:
 
-	$ brew install homebrew/boneyard/judy libarchive pkg-config
+	$ brew install traildb/judy/judy libarchive pkg-config
 
 For FreeBSD:
 

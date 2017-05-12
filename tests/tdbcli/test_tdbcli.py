@@ -19,7 +19,8 @@ class TdbCliTest(unittest.TestCase):
         proc = subprocess.Popen(cmd,
                                 stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE,
-                                env={'LD_LIBRARY_PATH': ROOT},
+                                env={'LD_LIBRARY_PATH': ROOT,
+                                     'DYLD_LIBRARY_PATH': ROOT},
                                 bufsize=1024 * 1024)
         stdout, stderr = proc.communicate(data)
         if proc.returncode:
