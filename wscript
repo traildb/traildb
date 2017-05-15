@@ -10,7 +10,7 @@ import sys, os
 import tempfile, shutil
 
 APPNAME = "traildb"
-VERSION = "0.5"
+VERSION = "0.6"
 
 SKIP_TESTS = []
 if sys.platform == "darwin":
