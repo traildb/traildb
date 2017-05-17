@@ -258,6 +258,21 @@ int _tdb_cursor_next_batch(tdb_cursor *cursor);
 
 /*
 ------------
+Trails Iter
+------------
+*/
+
+/* Create a new iter */
+tdb_iter *tdb_iter_new(const tdb *db, const struct tdb_event_filter *filter);
+
+/* Load the next cursor / id into the iter */
+tdb_iter *tdb_iter_next(tdb_iter *iter);
+
+/* Free the iter */
+void tdb_iter_free(tdb_iter *iter);
+
+/*
+------------
 Multi cursor
 ------------
 */
