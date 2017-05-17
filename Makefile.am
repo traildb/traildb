@@ -50,9 +50,12 @@ util_traildb_bench_CFLAGS  = ${libtraildb_la_CFLAGS} -Isrc/
 util_traildb_bench_LDADD   = libtraildb.la
 
 tdbcli_tdb_CFLAGS = -Isrc/ \
-                    -DJUDYERROR=judyerror_macro_missing_fix_this \
                     -O3 \
                     -g \
                     -Wall
-tdbcli_tdb_SOURCES = tdbcli/main.c tdbcli/op_dump.c tdbcli/op_make.c tdbcli/jsmn/jsmn.c
+tdbcli_tdb_LDFLAGS = -pthread
+tdbcli_tdb_SOURCES = tdbcli/main.c tdbcli/tdb_index.c tdbcli/op_dump.c \
+		     tdbcli/op_make.c tdbcli/op_merge.c tdbcli/jsmn/jsmn.c \
+		     tdbcli/thread_util.c tdbcli/filter.c src/xxhash/xxhash.c \
+		     tdbcli/op_index.c
 tdbcli_tdb_LDADD = libtraildb.la
