@@ -31,7 +31,7 @@ Linux binaries are not available yet.
 
 For RPM-based distros:
 
-	$ yum install judy-devel libarchive-devel pkg-config
+	$ yum install Judy-devel libarchive-devel pkg-config
 
 For OSX:
 
