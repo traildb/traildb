@@ -200,6 +200,14 @@ class TestMerge(TdbCliTest):
     def setUp(self):
         self._remove()
 
+    def test_single_traildb(self):
+        tdb_a = self.make_tdb(suffix='_a', index=False)
+        cmd = [TDB, 'merge', '-o', TEST_DB + '_merged', tdb_a]
+        self.tdb_cmd(cmd)
+        stats = Counter(''.join(imap(str, sorted(e.items())))
+                        for e in self.dump(suffix='_merged'))
+        self.assertEquals(stats.values(), [1] * 10)
+
     def test_matching_fields(self):
         tdb_a = self.make_tdb(suffix='_a', index=False)
         tdb_b = self.make_tdb(suffix='_b', index=False)

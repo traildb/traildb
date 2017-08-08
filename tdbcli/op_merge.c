@@ -92,7 +92,7 @@ static void map_fields_and_append(tdb_cons *cons,
 static tdb **open_tdbs(const char **inputs,
                        uint32_t num_inputs,
                        const char ***out_fields,
-                       uint64_t *num_fields,
+                       uint64_t *num_user_fields,
                        int *equal_fields)
 {
     tdb **dbs;
@@ -110,34 +110,48 @@ static tdb **open_tdbs(const char **inputs,
     if (!(dbs = malloc(num_inputs * sizeof(tdb*))))
         DIE("Out of memory");
 
-    *num_fields = 0;
+    // count only user-defined fields, not including timestamp
+    *num_user_fields = 0;
     *equal_fields = 1;
     for (i = 0; i < num_inputs; i++){
         dbs[i] = open_tdb(inputs[i]);
-        n = tdb_num_fields(dbs[i]);
-        if (i > 0 && n != *num_fields)
-            *equal_fields = 0;
+        // ignore timestamp
+        n = tdb_num_fields(dbs[i]) - 1;
 
-        for (j = 1; j < n; j++){
-            const char *key = tdb_get_field_name(dbs[i], j);
+        for (j = 0; j < n; j++){
+            // skip over timestamp
+            const char *key = tdb_get_field_name(dbs[i], j + 1);
             JSLI(ptr, dedup_fields, key);
             if (!*ptr){
                 if (i > 0)
                     *equal_fields = 0;
                 *ptr = (Word_t)key;
-                ++*num_fields;
+                ++*num_user_fields;
             }
         }
+
+        if (i > 0 && n != *num_user_fields)
+            *equal_fields = 0;
     }
 
-    if (!(fields = malloc(*num_fields * sizeof(char*))))
+    if (!(fields = malloc(*num_user_fields * sizeof(char*))))
         DIE("Out of memory");
 
-    fieldname[0] = i = 0;
-    JSLF(ptr, dedup_fields, fieldname);
-    while (ptr){
-        fields[i++] = (const char*)*ptr;
-        JSLN(ptr, dedup_fields, fieldname);
+    // need to retain order if fields are the same
+    // so we can directly cons the input traildbs
+    if (*equal_fields) {
+        for (i = 0; i < *num_user_fields; i++) {
+            // skip over timestamp field
+            const char *key = tdb_get_field_name(dbs[0], i + 1);
+            fields[i] = key;
+        }
+    } else {
+        fieldname[0] = i = 0;
+        JSLF(ptr, dedup_fields, fieldname);
+        while (ptr){
+            fields[i++] = (const char*)*ptr;
+            JSLN(ptr, dedup_fields, fieldname);
+        }
     }
 
     JSLFA(tmp, dedup_fields);
