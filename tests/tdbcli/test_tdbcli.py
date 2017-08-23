@@ -7,6 +7,7 @@ import struct
 import shutil
 from itertools import imap
 from collections import Counter
+from collections import OrderedDict
 
 TEST_DB = 'test_tdbcli_db'
 ROOT = os.environ.get('TDBCLI_ROOT',
@@ -183,25 +184,61 @@ class TestLargeFilter(TdbCliTest):
         self.assertFilter('second=0 & first=500', events)
 
 class TestMerge(TdbCliTest):
-    def events(self):
+    def events_a(self):
+        event_list = []
         for i in range(10):
-            yield {'uuid': self.hexuuid(i),
-                   'time': str(i + 100),
-                   'alpha': chr(i + 65),
-                   'number': str(i)}
+            event_list.append(OrderedDict([('uuid', self.hexuuid(i)),
+                                           ('time', str(i + 100)),
+                                           ('alpha', chr(i + 65)),
+                                           ('number', str(i))]))
+        return event_list
 
-    def other_events(self):
+    def events_b(self):
+        """
+        Same number of events and fields as 'a' but
+        replace 'alpha' field with 'foobar' field
+        and keep order of rest of fields.
+        """
+        event_list = []
         for i in range(10):
-            yield {'uuid': self.hexuuid(i),
-                   'time': str(i + 100),
-                   'number': str(i),
-                   'foobar': str(i + 200)}
+            event_list.append(OrderedDict([('uuid', self.hexuuid(i)),
+                                           ('time', str(i + 100)),
+                                           ('number', str(i)),
+                                           ('foobar', str(i + 200))]))
+        return event_list
+
+    def events_c(self):
+        """
+        Same number of events as 'a' but add one more field.
+        """
+        event_list = []
+        for i in range(10):
+            event_list.append(OrderedDict([('uuid', self.hexuuid(i)),
+                                           ('time', str(i + 100)),
+                                           ('alpha', chr(i + 65)),
+                                           ('number', str(i)),
+                                           ('beta', str(75 - i))]))
+        return event_list
+
+    def events_d(self):
+        """
+        Same number of events and fields as 'a' but re-order fields.
+        """
+        event_list = []
+        for i in range(10):
+            event_list.append(OrderedDict([('uuid', self.hexuuid(i)),
+                                           ('time', str(i + 100)),
+                                           ('number', str(i)),
+                                           ('alpha', chr(i + 65))]))
+        return event_list                      
 
     def setUp(self):
         self._remove()
 
     def test_single_traildb(self):
-        tdb_a = self.make_tdb(suffix='_a', index=False)
+        tdb_a = self.make_tdb(suffix='_a',
+                              index=False,
+                              events=self.events_a())
         cmd = [TDB, 'merge', '-o', TEST_DB + '_merged', tdb_a]
         self.tdb_cmd(cmd)
         stats = Counter(''.join(imap(str, sorted(e.items())))
@@ -209,19 +246,63 @@ class TestMerge(TdbCliTest):
         self.assertEquals(stats.values(), [1] * 10)
 
     def test_matching_fields(self):
-        tdb_a = self.make_tdb(suffix='_a', index=False)
-        tdb_b = self.make_tdb(suffix='_b', index=False)
+        tdb_a = self.make_tdb(suffix='_a',
+                              index=False,
+                              events=self.events_a())
+        tdb_b = self.make_tdb(suffix='_b',
+                              index=False,
+                              events=self.events_a())
         cmd = [TDB, 'merge', '-o', TEST_DB + '_merged', tdb_a, tdb_b]
         self.tdb_cmd(cmd)
         stats = Counter(''.join(imap(str, sorted(e.items())))
                         for e in self.dump(suffix='_merged'))
         self.assertEquals(stats.values(), [2] * 10)
 
-    def test_mismatching_fields(self):
-        tdb_a = self.make_tdb(suffix='_a', index=False)
+    def test_reordered_fields(self):
+        """
+        Test case with same fields but re-ordered.
+        """
+        tdb_a = self.make_tdb(suffix='_a',
+                              index=False,
+                              events=self.events_a())
         tdb_b = self.make_tdb(suffix='_b',
                               index=False,
-                              events=list(self.other_events()))
+                              events=self.events_d())
+        cmd = [TDB, 'merge', '-o', TEST_DB + '_merged', tdb_a, tdb_b]
+        self.tdb_cmd(cmd)
+        stats = Counter(''.join(imap(str, sorted(e.items())))
+                        for e in self.dump(suffix='_merged'))
+        self.assertEquals(stats.values(), [2] * 10)
+
+    def test_additional_field(self):
+        """
+        Test case where one TDB has an additional field
+        """
+        tdb_a = self.make_tdb(suffix='_a',
+                              index=False,
+                              events=self.events_a())
+        tdb_b = self.make_tdb(suffix='_b',
+                              index=False,
+                              events=self.events_c())
+        cmd = [TDB, 'merge', '-o', TEST_DB + '_merged', tdb_a, tdb_b]
+        self.tdb_cmd(cmd)
+        all_fields = set()
+        for e in self.dump(suffix='_merged'):
+            all_fields.update(e.iterkeys())
+        self.assertEquals(len(all_fields),
+                          len(self.events_c()[0]))
+
+    def test_mismatched_fields(self):
+        """
+        Test case with same number of fields but different
+        fields and order
+        """
+        tdb_a = self.make_tdb(suffix='_a',
+                              index=False,
+                              events=self.events_a())
+        tdb_b = self.make_tdb(suffix='_b',
+                              index=False,
+                              events=self.events_b())
         cmd = [TDB, 'merge', '-o', TEST_DB + '_merged', tdb_a, tdb_b]
         self.tdb_cmd(cmd)
         numbersum = 0
@@ -235,9 +316,13 @@ class TestMerge(TdbCliTest):
         self.assertEquals(numbersum, 90)
 
     def test_merge_with_uuids(self):
-        tdb_a = self.make_tdb(suffix='_a', index=False)
-        tdb_b = self.make_tdb(suffix='_b', index=False)
-        uuids = [e['uuid'] for e in self.events()][:2]
+        tdb_a = self.make_tdb(suffix='_a',
+                              index=False,
+                              events=self.events_a())
+        tdb_b = self.make_tdb(suffix='_b',
+                              index=False,
+                              events=self.events_a())
+        uuids = [e['uuid'] for e in self.events_a()][:2]
         cmd = [TDB, 'merge', '-o', TEST_DB + '_merged',
                '--uuids', ','.join(uuids), tdb_a, tdb_b]
         self.tdb_cmd(cmd)
