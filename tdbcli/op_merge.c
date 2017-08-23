@@ -123,10 +123,7 @@ static tdb **open_tdbs(const char **inputs,
         // compare number of fields -- skip over timestamp
         n = tdb_num_fields(dbs[i]) - 1;
         if (n != *num_user_fields) {
-            printf("Unequal number of fields: %lu and %lu\n",
-                   *num_user_fields,
-                   n);
-            equal_fields = 0;
+            *equal_fields = 0;
             break;
         }
 
