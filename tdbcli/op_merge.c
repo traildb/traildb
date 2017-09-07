@@ -92,7 +92,7 @@ static void map_fields_and_append(tdb_cons *cons,
 static tdb **open_tdbs(const char **inputs,
                        uint32_t num_inputs,
                        const char ***out_fields,
-                       uint64_t *num_fields,
+                       uint64_t *num_user_fields,
                        int *equal_fields)
 {
     tdb **dbs;
@@ -110,37 +110,77 @@ static tdb **open_tdbs(const char **inputs,
     if (!(dbs = malloc(num_inputs * sizeof(tdb*))))
         DIE("Out of memory");
 
-    *num_fields = 0;
-    *equal_fields = 1;
-    for (i = 0; i < num_inputs; i++){
-        dbs[i] = open_tdb(inputs[i]);
-        n = tdb_num_fields(dbs[i]);
-        if (i > 0 && n != *num_fields)
-            *equal_fields = 0;
+     for(i = 0; i < num_inputs; i++) {
+         dbs[i] = open_tdb(inputs[i]);
+     }
 
-        for (j = 1; j < n; j++){
-            const char *key = tdb_get_field_name(dbs[i], j);
-            JSLI(ptr, dedup_fields, key);
-            if (!*ptr){
-                if (i > 0)
-                    *equal_fields = 0;
-                *ptr = (Word_t)key;
-                ++*num_fields;
+    // count only user-defined fields, not including timestamp
+    *num_user_fields = tdb_num_fields(dbs[0]) - 1;
+    *equal_fields = 1;
+
+    // check for special case of all equal fields
+    for(i = 1; i < num_inputs; i++) {
+        // compare number of fields -- skip over timestamp
+        n = tdb_num_fields(dbs[i]) - 1;
+        if (n != *num_user_fields) {
+            *equal_fields = 0;
+            break;
+        }
+
+        // compare field names and ordering -- skip over timestamp
+        for (j = 0; j < *num_user_fields; j++) {
+            const char *key_0 = tdb_get_field_name(dbs[0], j + 1);
+            const char *key_j = tdb_get_field_name(dbs[i], j + 1);
+
+            if (strcmp(key_0, key_j) != 0) {
+                *equal_fields = 0;
+                break;
+            }
+        }
+
+        if (!*equal_fields)
+            break;
+    }
+
+    // if fields are not equal, build a mapping
+    if (!*equal_fields) {
+        *num_user_fields = 0;
+        for (i = 0; i < num_inputs; i++){
+            // skip over timestamp
+            n = tdb_num_fields(dbs[i]) - 1;
+
+            for (j = 0; j < n; j++){
+                // skip over timestamp
+                const char *key = tdb_get_field_name(dbs[i], j + 1);
+                JSLI(ptr, dedup_fields, key);
+                if (!*ptr){
+                    *ptr = (Word_t)key;
+                    ++*num_user_fields;
+                }
             }
         }
     }
 
-    if (!(fields = malloc(*num_fields * sizeof(char*))))
-        DIE("Out of memory");
+    if (!(fields = malloc(*num_user_fields * sizeof(char*))))
+            DIE("Out of memory");
 
-    fieldname[0] = i = 0;
-    JSLF(ptr, dedup_fields, fieldname);
-    while (ptr){
-        fields[i++] = (const char*)*ptr;
-        JSLN(ptr, dedup_fields, fieldname);
+    // handle special case of all equal fields
+    if (*equal_fields) { 
+        for (i = 0; i < *num_user_fields; i++) {
+            // skip over timestamp field
+            const char *key = tdb_get_field_name(dbs[0], i + 1);
+            fields[i] = key;
+        }
+    } else { // otherwise return fields from mapping
+        fieldname[0] = i = 0;
+        JSLF(ptr, dedup_fields, fieldname);
+        while (ptr){
+            fields[i++] = (const char*)*ptr;
+            JSLN(ptr, dedup_fields, fieldname);
+        }
+        JSLFA(tmp, dedup_fields);
     }
 
-    JSLFA(tmp, dedup_fields);
     *out_fields = fields;
     return dbs;
 }
