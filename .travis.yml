@@ -18,7 +18,6 @@ addons:
     - pkg-config
 
 script:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then export LDFLAGS="-L/usr/local/opt/libarchive/lib"
   - ./waf configure
   - ./waf build
   - ./waf test
