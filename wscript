@@ -61,7 +61,9 @@ def configure(cnf):
         else:
             os.environ["PKG_CONFIG_PATH"] = "/usr/local/opt/libarchive/lib/pkgconfig"
 
-    cnf.env.env = {'PKG_CONFIG_PATH': os.environ["PKG_CONFIG_PATH"]}
+    if "PKG_CONFIG_PATH" in os.environ:
+        cnf.env.env = {'PKG_CONFIG_PATH': os.environ["PKG_CONFIG_PATH"]}
+
     cnf.check_cfg(package="libarchive",
         args=["libarchive >= 3.0.0", "--cflags", "--libs"],
         uselib_store='ARCHIVE', errmsg=errmsg_libarchive)
