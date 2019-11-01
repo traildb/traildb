@@ -33,14 +33,38 @@ def configure(cnf):
     cnf.env.append_value("CFLAGS", "-g")
 
     # Find libarchive through pkg-config. We need at least version 3.
-    # On OSX, there is a very old pre-installed version which is not
-    # compatible, so and brew never overwrites standard libraries, so
-    # we need to explicitly tweak the PKG_CONFIG_PATH.
+    # 
+    # On macOS, libarchive is pre-installed but is not pkg-config-findable.
+    # Homebrew version is a keg-only package.
+    #
+    # We'll set the path so that we'll try to find that keg-package.
     if sys.platform == "darwin":
-        os.environ["PKG_CONFIG_PATH"] = "/usr/local/opt/libarchive/lib/pkgconfig"
+        cellar_dir = "/usr/local/Cellar/libarchive"
+        best_candidate = None
+        best_candidate_dir = None
+        try:
+            # Poor man's version checking, we'll look for version numbers inside
+            # a path, turn them into tuples (so they'll compare correctly)
+            # and look for highest match.
+            for dirname in list(os.listdir(cellar_dir)):
+                candidate = tuple(dirname.split('.'))
+                if best_candidate is None or best_candidate < candidate:
+                    best_candidate = candidate
+                    best_candidate_dir = dirname
+        except FileNotFoundError:
+            pass
+        except PermissionError:
+            pass
+        if best_candidate is not None:
+            pkg_path = os.path.join(cellar_dir, best_candidate_dir, 'lib', 'pkgconfig')
+            os.environ["PKG_CONFIG_PATH"] = pkg_path
+        else:
+            os.environ["PKG_CONFIG_PATH"] = "/usr/local/opt/libarchive/lib/pkgconfig"
+
+    cnf.env.env = {'PKG_CONFIG_PATH': os.environ["PKG_CONFIG_PATH"]}
     cnf.check_cfg(package="libarchive",
         args=["libarchive >= 3.0.0", "--cflags", "--libs"],
-        uselib_store="ARCHIVE", errmsg=errmsg_libarchive)
+        uselib_store='ARCHIVE', errmsg=errmsg_libarchive)
 
     # Judy does not support pkg-config. Do a normal dependeny
     # check.
