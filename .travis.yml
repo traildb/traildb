@@ -7,7 +7,7 @@ matrix:
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install libarchive traildb/judy/judy; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install libarchive traildb/judy/judy; brew link --force libarchive; fi
   - pip install --user cpp-coveralls
 
 addons:
