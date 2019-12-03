@@ -33,6 +33,12 @@ library and the `tdb` command line tool to a system-wide directory with
 ./waf install
 ```
 
+Rebuild the shared library cache:
+
+```sh
+ldconfig
+```
+
 That's all. See below for instructions for testing the installation.
 
 Alternatively, TrailDB provides an autotools-based build system which
