@@ -27,7 +27,20 @@ static const uint8_t *parse_uuid(const char *token,
     static uint8_t hexuuid[32];
     static uint8_t uuid[16];
 
-    if (len <= 32){
+    if (len == 36){
+        // 0         1         2         3
+        // 012345678901234567890123456789012345
+        // xxxxxxxx-xxxx-Mxxx-Nxxx-xxxxxxxxxxxx
+        if (token[8] != '-' || token[13] != '-' || token[23] != '-'){
+            DIE("Line %"PRIu64": Invalid UUID '%.*s'", lineno, (int)len, token);
+        }
+        memcpy(hexuuid, token, 8);
+        memcpy(hexuuid+8, token+9, 4);
+        memcpy(hexuuid+12, token+14, 4);
+        memcpy(hexuuid+16, token+19, 4);
+        memcpy(hexuuid+20, token+24, 12);
+        len = 32;
+    } else if (len <= 32){
         memset(hexuuid, '0', 32);
         memcpy(hexuuid, token, len);
     }
