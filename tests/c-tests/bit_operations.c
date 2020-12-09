@@ -51,7 +51,7 @@ int main(int argc, char **argv)
         for (width = 1; width < 65; width++){
             for (shift = 0; shift < 9; shift++){
                 uint64_t offs, popsum = 0;
-                /* substract the first shift bits from the sum */
+                /* subtract the first shift bits from the sum */
                 uint64_t popsum_shift = popcount(src_rand[0] & ((1 << shift) - 1));
 
                 memset(dst_rand, 0, (NUM_WORDS + 1) * 8);
