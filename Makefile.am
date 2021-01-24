@@ -17,10 +17,10 @@ libtraildb_la_CFLAGS = -std=c99 \
                        -Wshadow \
                        -Wstrict-prototypes
 
-AM_CPPFLAGS = -Isrc/xxhash -Isrc/dsfmt
+AM_CPPFLAGS = -Isrc/xxhash -Isrc/dsfmt -Isrc/pqueue
 AM_CFLAGS=-O3 -g -fvisibility=hidden
 
-libtraildb_la_LIBADD = src/xxhash/xxhash.lo src/dsfmt/dSFMT.lo
+libtraildb_la_LIBADD = src/xxhash/xxhash.lo src/dsfmt/dSFMT.lo src/pqueue/pqueue.lo
 libtraildb_la_SOURCES = \
   src/tdb.c \
   src/tdb_cons.c \
@@ -32,11 +32,12 @@ libtraildb_la_SOURCES = \
   src/tdb_huffman.c \
   src/tdb_cons_package.c \
   src/tdb_package.c \
+  src/tdb_multi_cursor.c \
   src/arena.c \
   src/judy_str_map.c \
   src/judy_128_map.c
 
-EXTRA_libtraildb_la_SOURCES = src/xxhash/xxhash.c src/dsfmt/dSFMT.c
+EXTRA_libtraildb_la_SOURCES = src/xxhash/xxhash.c src/dsfmt/dSFMT.c src/pqueue/pqueue.c
 
 include_HEADERS = \
   src/traildb.h \
