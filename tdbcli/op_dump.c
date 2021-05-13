@@ -66,6 +66,39 @@ static void dump_csv_event(FILE *output,
     SAFE_FPRINTF("\n");
 }
 
+/* Add a backslash before the given character. If no occurences of the
+   character was found, returns the original string. If escaping is
+   necessary, a new string is allocated which must later be freed. The
+   length of the new string is set in the 'outlen' argument. */
+
+uint8_t * escape(const uint8_t *s, uint64_t len, uint64_t *outlen, uint8_t c) {
+    /* How many chars do we need to escape? */
+    int num = 0;
+    for (int i = 0; i < len; i++)
+        if (s[i] == c)
+            num++;
+
+    if (!num)
+        return (uint8_t *) s;
+
+    /* Allocate a buffer with enough space */
+    uint8_t *buf = malloc(len+num);
+    if(!buf)
+        DIE("Out of memory.");
+
+    /* Iterate through the source string, copying characters and
+       adding escape characters as necessary. */
+    int j = 0;
+    for (int i = 0; i < len; i++) {
+        if (s[i] == c)
+            buf[j++] = '\\';
+
+        buf[j++] = s[i];
+    }
+    *outlen = j;
+    return buf;
+}
+
 static void dump_json_event(FILE *output,
                             const struct tdbcli_options *opt,
                             const char **out_values,
@@ -79,11 +112,20 @@ static void dump_json_event(FILE *output,
     SAFE_FPRINTF("{");
     for (i = 0; i < opt->num_fields; i++)
         if (out_lengths[i] || !opt->json_no_empty){
+
+            uint64_t len = out_lengths[i];
+            const uint8_t *str = out_values[i];
+            uint8_t *maybe_escaped = escape(str, len, &len, '"');
+
             SAFE_FPRINTF("%s\"%s\": \"%.*s\"",
                          prefix,
                          opt->field_names[i],
-                         (int)out_lengths[i],
-                         out_values[i]);
+                         (int)len,
+                         maybe_escaped);
+
+            if (str != maybe_escaped)
+                free(maybe_escaped);
+
             prefix = PREFIX2;
         }
     SAFE_FPRINTF("}\n");
